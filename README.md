@@ -1,18 +1,15 @@
 # pyivt
 
-Minimal Python library for Statistics Canada **Beyond 20/20** `.ivt` tables:
+Python library for Beyond 20/20 `.ivt` files.
 
-- extract **file summary** and **dimension** metadata (members, geographies, footnotes)
-- decode cell values into a tidy grid
-- write **Parquet** (plus a `_members` sidecar) and metadata CSVs
-
-Byte layout and decode geometry follow the reverse-engineered Beyond 20/20 format documented by [canivt](https://github.com/mountainMath/canivt). pyivt is an independent Python implementation, not an R binding.
-
-Beyond 20/20 Professional Browser (`ProBrowser.exe` installer → `Brwpro.exe`) is useful for visual ground truth (File Summary / dimension item lists). This library reads the `.ivt` bytes directly and does not automate the GUI.
+- Up to 100,000% faster than GUI automation for metadata
+- Export data to Apache Arrow, pandas, Parquet, or Polars
 
 ## Getting Started
 
 ### Installation
+
+Install `pyivt` using pip:
 
 ```bash
 pip install pyivt
@@ -22,35 +19,32 @@ pip install pyivt
 
 #### Quick Start
 
+Open an IVT file, inspect its metadata, and export its data to Parquet:
+
 ```python
 import pyivt
 
 ivt = pyivt.open("data.ivt")
+
+print(ivt.metadata.title.en)
 
 ivt.to_parquet("data.parquet")
 ```
 
-#### Opening `.ivt` Files
+#### Opening IVT Files
 
-##### By Path
-
-```python
-import pyivt
-
-ivt = pyivt.open("data.ivt")
-```
-
-or
+##### Local files
 
 ```python
 from pathlib import Path
 
 import pyivt
 
+ivt = pyivt.open("data.ivt")
 ivt = pyivt.open(Path("data.ivt"))
 ```
 
-##### By URL
+##### Remote URLs
 
 ```python
 import pyivt
@@ -58,22 +52,34 @@ import pyivt
 ivt = pyivt.open("https://example.com/data.ivt")
 ```
 
-##### By Bytes
-
-```python
-import pyivt
-
-ivt = pyivt.open(bytes)
-```
-
-or
+##### Bytes and file-like objects
 
 ```python
 from io import BytesIO
 
 import pyivt
 
-ivt = pyivt.open(BytesIO(bytes))
+ivt = pyivt.open(data)
+ivt = pyivt.open(BytesIO(data))
+
+with open("data.ivt", "rb") as file:
+    ivt = pyivt.open(file)
+```
+
+#### Exporting Data
+
+```python
+# Apache Arrow
+table = ivt.to_arrow()
+
+# pandas
+df = ivt.to_pandas()
+
+# Parquet
+ivt.to_parquet("data.parquet")
+
+# Polars
+df = ivt.to_polars()
 ```
 
 ## Beyond 20/20 Summary vs. `pyivt` Metadata
@@ -99,3 +105,8 @@ ivt = pyivt.open(BytesIO(bytes))
 ## License
 
 MIT
+
+## Acknowledgements
+
+- [canivt](https://github.com/mountainMath/canivt)
+- [REA: Reverse Engineer Anything](https://github.com/morluto/rea)
