@@ -3,20 +3,23 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
 from pyivt import read_metadata, read_table, write_metadata, write_parquet
-from pyivt.descriptor import parse_descriptor
 from pyivt.decode import build_layout
+from pyivt.descriptor import parse_descriptor
 from pyivt.header import read_header
 
 DEFAULT = Path(r"C:\Users\nateb\Downloads\98-400-X2016112.IVT")
 SAMPLE = Path(os.environ.get("PYIVT_TEST_IVT", DEFAULT))
 
 
-pytestmark = pytest.mark.skipif(not SAMPLE.is_file(), reason=f"sample IVT not found: {SAMPLE}")
+pytestmark = pytest.mark.skipif(
+    not SAMPLE.is_file(), reason=f"sample IVT not found: {SAMPLE}"
+)
 
 
 def test_header_signature():
@@ -47,6 +50,26 @@ def test_read_metadata():
     meta = read_metadata(SAMPLE)
     assert meta.product_id == "98-400-X2016112"
     assert meta.title_en and "Employment Income" in meta.title_en
+    assert meta.title_en.endswith("2006 Census")
+    assert meta.title_fr and "Tranches de revenu" in meta.title_fr
+    assert meta.author_en == "2016 Census - Statistics Canada"
+    assert meta.author_fr == "Recensement de 2016-Statistique Canada"
+    assert meta.category_en == "Data Tables"
+    assert meta.category_fr == "Tableaux de données"
+    assert meta.keywords == "98-400-X2016112"
+    assert meta.notes_en and "Historical comparison" in meta.notes_en
+    assert meta.notes_fr and "Comparaison historique" in meta.notes_fr
+    assert meta.notes == meta.notes_en
+    assert meta.file_name == SAMPLE.name
+    assert meta.directory and meta.directory.endswith(os.sep)
+    assert meta.file_size == SAMPLE.stat().st_size
+    assert meta.n_datapoints == 197_316
+    assert meta.time_series is False
+    assert meta.read_only is True
+    expected_mtime = datetime.fromtimestamp(
+        SAMPLE.stat().st_mtime, tz=timezone.utc
+    ).strftime("%Y/%m/%d %H:%M:%S")
+    assert meta.last_update == expected_mtime
     assert len(meta.dimensions) == 5
     age = meta.dimensions[1]
     assert age.members is not None and age.members[0].startswith("Total")
@@ -73,3 +96,7 @@ def test_read_table_and_parquet(tmp_path: Path):
     assert (meta_dir / "table_info.csv").is_file()
     assert (meta_dir / "dimension_members.csv").is_file()
     assert (meta_dir / "geographies.csv").is_file()
+    info = (meta_dir / "table_info.csv").read_text(encoding="utf-8")
+    assert "author_en" in info
+    assert "n_datapoints" in info
+    assert "read_only" in info

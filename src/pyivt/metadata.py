@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import math
+import os
 import re
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 from ._bytes import latin1, rd_pascal, u16, u32
@@ -16,6 +19,25 @@ from .header import (
 )
 
 PathLike = str | Path
+
+# FACET04 glued category suffixes (Beyond File Summary "Category")
+_FACET_CATEGORIES = (
+    "Data Tables",
+    "Tableaux de données",
+)
+# Author glued immediately before category on FACET04 runs
+_FACET_AUTHOR_RE = re.compile(
+    r"(?:"
+    r"\d{4} Census - Statistics Canada|"
+    r"Recensement de \d{4}-Statistique Canada"
+    r")$"
+)
+_TIME_SERIES_NAME_RE = re.compile(
+    r"timeseries|time\s*series|time\s*period", re.IGNORECASE
+)
+# File-flags trailer ``81 01 20 00``; bit 0x10 of the first payload byte tracks
+# Beyond's Summary "Read-Only" on published StatCan tables vs demo IVTs.
+_READONLY_FLAG_BIT = 0x10
 
 
 @dataclass
@@ -53,6 +75,20 @@ class IvtMetadata:
     geographies: dict = field(default_factory=dict)
     footnotes: list[Footnote] = field(default_factory=list)
     path: str | None = None
+    file_name: str | None = None
+    directory: str | None = None
+    author_en: str | None = None
+    author_fr: str | None = None
+    category_en: str | None = None
+    category_fr: str | None = None
+    keywords: str | None = None
+    notes_en: str | None = None
+    notes_fr: str | None = None
+    last_update: str | None = None
+    file_size: int | None = None
+    n_datapoints: int | None = None
+    time_series: bool | None = None
+    read_only: bool | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -61,6 +97,20 @@ class IvtMetadata:
             "title_fr": self.title_fr,
             "universe": self.universe,
             "notes": self.notes,
+            "notes_en": self.notes_en,
+            "notes_fr": self.notes_fr,
+            "file_name": self.file_name,
+            "directory": self.directory,
+            "author_en": self.author_en,
+            "author_fr": self.author_fr,
+            "category_en": self.category_en,
+            "category_fr": self.category_fr,
+            "keywords": self.keywords,
+            "last_update": self.last_update,
+            "file_size": self.file_size,
+            "n_datapoints": self.n_datapoints,
+            "time_series": self.time_series,
+            "read_only": self.read_only,
             "version": self.version,
             "signature": self.signature,
             "dimensions": [
@@ -110,9 +160,200 @@ def _frscore(s: str) -> int:
     return hits
 
 
+def _master_dir_entries(data: bytes, max_entries: int = 32) -> list[tuple[int, int]]:
+    """Return ``(offset, length)`` pairs from the master directory."""
+    master = u32(data, HDR_MASTER_PTR)
+    out: list[tuple[int, int]] = []
+    if not (0 < master < len(data) - 8):
+        return out
+    o = master
+    for _ in range(max_entries):
+        if o + 8 > len(data):
+            break
+        off, s1 = u32(data, o), u16(data, o + 4)
+        o += 8
+        if off == 0 and s1 == 0:
+            continue
+        if s1 <= 0 or off + s1 > len(data):
+            continue
+        out.append((off, s1))
+    return out
+
+
+def _split_facet_run(text: str) -> tuple[str | None, str | None, str | None]:
+    """Split a FACET04 printable run into title / author / category."""
+    text = text.strip()
+    if not text:
+        return None, None, None
+    category = None
+    rest = text
+    for cat in _FACET_CATEGORIES:
+        if rest.endswith(cat):
+            category = cat
+            rest = rest[: -len(cat)]
+            break
+    author = None
+    m = _FACET_AUTHOR_RE.search(rest)
+    if m:
+        author = m.group(0)
+        rest = rest[: m.start()]
+    title = rest.strip() or None
+    return title, author, category
+
+
+def parse_facet_summary(data: bytes) -> dict:
+    """
+    Beyond File Summary title / author / category from ``FACET04`` runs.
+
+    Each run concatenates short title + author + category without separators.
+    """
+    runs: list[str] = []
+    start = 0
+    while True:
+        i = data.find(b"FACET04", start)
+        if i < 0:
+            break
+        run = data[i + 7 :]
+        end = 0
+        while end < len(run) and run[end] >= 32:
+            end += 1
+        text = latin1(run[:end]).strip()
+        if text:
+            runs.append(text)
+        start = i + 7
+    title_en = title_fr = author_en = author_fr = category_en = category_fr = None
+    parsed = [_split_facet_run(r) for r in runs]
+    scored = sorted(
+        ((t, a, c) for t, a, c in parsed if t),
+        key=lambda x: _frscore(x[0] or ""),
+    )
+    if scored:
+        en = scored[0]
+        fr = None
+        if len(scored) > 1 and _frscore(scored[-1][0] or "") > _frscore(
+            scored[0][0] or ""
+        ):
+            fr = scored[-1]
+        title_en, author_en, category_en = en
+        if fr:
+            title_fr, author_fr, category_fr = fr
+        elif _frscore(en[0] or "") >= 2:
+            title_fr, author_fr, category_fr = en
+            title_en = author_en = category_en = None
+    return {
+        "title_en": title_en,
+        "title_fr": title_fr,
+        "author_en": author_en,
+        "author_fr": author_fr,
+        "category_en": category_en,
+        "category_fr": category_fr,
+    }
+
+
+def parse_identity_notes(data: bytes) -> dict:
+    """Full bilingual Notes text from master-directory identity blobs."""
+    notes_en = notes_fr = None
+    product_id = None
+    long_blobs: list[str] = []
+    for off, length in _master_dir_entries(data):
+        blk = data[off : off + length]
+        if blk[:2] != b"\x01\x01" or length < 40:
+            continue
+        payload = blk[4:]
+        i = 0
+        while i < len(payload) and payload[i] < 0x20:
+            i += 1
+        text = latin1(payload[i:]).rstrip("\x00").strip()
+        if not text or ("\n" not in text and "\r" not in text):
+            continue
+        long_blobs.append(text)
+        pid, _ = _identity_from_blob(text)
+        if pid and re.match(r"^[\dA-Za-z][\w./-]*$", pid):
+            product_id = product_id or pid
+    scored = sorted(long_blobs, key=_frscore)
+    if scored:
+        en = scored[0]
+        fr = None
+        if len(scored) > 1 and _frscore(scored[-1]) > _frscore(scored[0]):
+            fr = scored[-1]
+        notes_en = en
+        notes_fr = fr
+        if fr is None and _frscore(en) >= 2:
+            notes_fr = en
+            notes_en = None
+    return {"notes_en": notes_en, "notes_fr": notes_fr, "product_id": product_id}
+
+
+def parse_keywords(data: bytes, product_id: str | None = None) -> str | None:
+    """Keywords from short master-directory ``01 01`` product-id entries."""
+    candidates: list[str] = []
+    for off, length in _master_dir_entries(data):
+        if length > 40 or length < 8:
+            continue
+        blk = data[off : off + length]
+        if blk[:2] != b"\x01\x01":
+            continue
+        payload = blk[4:]
+        i = 0
+        while i < len(payload) and payload[i] < 0x20:
+            i += 1
+        if i < len(payload) and 0 < payload[i] < 64:
+            n = payload[i]
+            if i + 1 + n <= len(payload):
+                kw = latin1(payload[i + 1 : i + 1 + n]).rstrip("\x00").strip()
+                if kw:
+                    candidates.append(kw)
+                    continue
+        text = latin1(payload[i:]).rstrip("\x00").strip()
+        if text and "\n" not in text and len(text) <= 40:
+            candidates.append(text)
+    if not candidates:
+        return None
+    if product_id:
+        for c in candidates:
+            if c == product_id:
+                return c
+    return candidates[0]
+
+
+def _is_time_series(data: bytes, dimensions: list[Dimension]) -> bool:
+    """Beyond Summary Time Series flag."""
+    for d in dimensions:
+        if d.type == 6:
+            return True
+        if d.name and _TIME_SERIES_NAME_RE.search(d.name):
+            return True
+        if d.name_fr and _TIME_SERIES_NAME_RE.search(d.name_fr):
+            return True
+    o = 0
+    while True:
+        i = data.find(b"\x81\x02", o)
+        if i < 0 or i + 6 > len(data):
+            break
+        if data[i + 4 : i + 6] == b"\x08\x00":
+            return True
+        o = i + 2
+    return False
+
+
+def _read_only_flag(data: bytes) -> bool:
+    """
+    Beyond Summary Read-Only from the file-flags trailer ``81 01 20 00``.
+
+    Bit ``0x10`` of the first payload byte is set on published StatCan tables
+    (Summary Yes) and clear on Beyond demo IVTs (Summary No).
+    """
+    for off, length in _master_dir_entries(data):
+        if length < 5:
+            continue
+        blk = data[off : off + length]
+        if blk[:4] == b"\x81\x01\x20\x00":
+            return bool(blk[4] & _READONLY_FLAG_BIT)
+    return False
+
+
 def parse_table_identity(data: bytes) -> dict:
     """Read product id / bilingual titles from header text or master directory."""
-    # Classic labelled header (some vintages)
     head = latin1(data[:8000])
     grab = lambda re_s: m.group(1).strip() if (m := re.search(re_s, head)) else None
     info = {
@@ -123,45 +364,23 @@ def parse_table_identity(data: bytes) -> dict:
         "notes": None,
     }
 
-    # Master-directory identity blobs (modern 98-400 / FACET04 lineage)
-    master = u32(data, HDR_MASTER_PTR)
     blobs: list[str] = []
-    if 0 < master < len(data) - 8:
-        o = master
-        for _ in range(32):
-            if o + 8 > len(data):
-                break
-            off, s1, _ = u32(data, o), u16(data, o + 4), u16(data, o + 6)
-            o += 8
-            if off == 0 and s1 == 0:
-                continue
-            if s1 <= 4 or off + s1 > len(data):
-                continue
-            blk = data[off : off + s1]
-            if blk[:2] == b"\x01\x01" and s1 > 8:
-                # [01 01][u16 len][…] payload
-                payload = blk[4:]
-                # skip optional leading control bytes
-                i = 0
-                while i < len(payload) and payload[i] < 0x20:
-                    i += 1
-                text = latin1(payload[i:]).strip()
-                if text:
-                    blobs.append(text)
-            elif blk[:1] == b" " or (blk[:1].isalpha() if blk else False):
-                text = latin1(blk).strip()
-                if "98-" in text or "Title" in text:
-                    blobs.append(text)
+    for off, s1 in _master_dir_entries(data):
+        blk = data[off : off + s1]
+        if blk[:2] == b"\x01\x01" and s1 > 8:
+            payload = blk[4:]
+            i = 0
+            while i < len(payload) and payload[i] < 0x20:
+                i += 1
+            text = latin1(payload[i:]).strip()
+            if text:
+                blobs.append(text)
+        elif blk[:1] == b" " or (blk[:1].isalpha() if blk else False):
+            text = latin1(blk).strip()
+            if "98-" in text or "Title" in text:
+                blobs.append(text)
 
-    # FACET04 title lines in descriptor region
-    facet = data.find(b"FACET04")
-    facet_titles: list[str] = []
-    if facet >= 0:
-        run = data[facet + 7 : facet + 7 + 800]
-        end = 0
-        while end < len(run) and run[end] >= 32:
-            end += 1
-        facet_titles.append(latin1(run[:end]).strip())
+    facet = parse_facet_summary(data)
 
     pid = info["product_id"]
     title_en = info["title_en"]
@@ -175,42 +394,18 @@ def parse_table_identity(data: bytes) -> dict:
             and re.match(r"^[\dA-Za-z][\w./-]*$", p)
         ):
             pid = p
-        if t and _frscore(t) > _frscore(title_fr or ""):
-            if title_en is None and title_fr is None:
-                # assign later by score among candidates
-                pass
+        # Identity-blob titles are the long Notes line; keep only as fallback
+        if t and title_en is None and title_fr is None:
             if _frscore(t) >= 2:
                 title_fr = t
-            elif title_en is None or (
-                _frscore(title_en) < 2 and len(t) > len(title_en or "")
-            ):
+            else:
                 title_en = t
 
-    # Prefer scoring two largest identity blobs as EN/FR titles
-    long_blobs = sorted(
-        [b for b in blobs if "\n" in b or len(b) > 40],
-        key=len,
-        reverse=True,
-    )[:4]
-    scored = sorted(long_blobs, key=_frscore)
-    if len(scored) >= 2:
-        en_cand, fr_cand = scored[0], scored[-1]
-        if _frscore(fr_cand) > _frscore(en_cand):
-            pe, te = _identity_from_blob(en_cand)
-            pf, tf = _identity_from_blob(fr_cand)
-            if pe:
-                pid = pid or pe
-            if pf and not pid:
-                pid = pf
-            if te:
-                title_en = te
-            if tf:
-                title_fr = tf
+    if facet.get("title_en"):
+        title_en = facet["title_en"]
+    if facet.get("title_fr"):
+        title_fr = facet["title_fr"]
 
-    if facet_titles and title_en is None:
-        title_en = facet_titles[0]
-
-    # Product id fallback from filename-like tokens
     if pid is None:
         m = re.search(r"\b(\d{2}-\d{3}-[A-Z]\d{7,}|\d{8})\b", head)
         if m:
@@ -219,6 +414,10 @@ def parse_table_identity(data: bytes) -> dict:
     info["product_id"] = pid
     info["title_en"] = title_en
     info["title_fr"] = title_fr
+    info["author_en"] = facet.get("author_en")
+    info["author_fr"] = facet.get("author_fr")
+    info["category_en"] = facet.get("category_en")
+    info["category_fr"] = facet.get("category_fr")
     return info
 
 
@@ -233,7 +432,6 @@ def _read_member_array(block: bytes, expect: int) -> list[str]:
         return []
     if block[:2] not in (b"\x01\x01", b"\x81\x01"):
         return []
-    # 01 01 arrays: tag + two u16s then Pascals. 81 01 may insert a short mask.
     starts = (6, 7, 8, 4, 10, 12)
     for start in starts:
         labels: list[str] = []
@@ -249,7 +447,6 @@ def _read_member_array(block: bytes, expect: int) -> list[str]:
             p = rec["end"]
         if len(labels) == expect and _labels_plausible(labels):
             return labels
-    # 81 01 / masked blocks: scan for the first run of `expect` Pascal records
     if block[:2] == b"\x81\x01":
         for start in range(4, min(64, len(block) - expect)):
             labels = []
@@ -279,7 +476,8 @@ def _labels_plausible(labels: list[str]) -> bool:
         return False
     if "Incomplete enumeration" in joined:
         return False
-    return sum(1 for x in labels if len(x.strip()) <= 1) > max(1, len(labels) // 3)
+    # Reject arrays that are mostly empty/single-char slots
+    return sum(1 for x in labels if len(x.strip()) <= 1) <= max(1, len(labels) // 3)
 
 
 def _dim_dir_labels(
@@ -297,7 +495,6 @@ def _dim_dir_labels(
         block = bytes(data[off : off + length])
         if block[:2] == b"\x81\x02":
             continue
-        # Member arrays are almost always 01 01 / 81 01 framed
         labels = _read_member_array(block, dim.count)
         if len(labels) != dim.count:
             continue
@@ -310,7 +507,6 @@ def _dim_dir_labels(
         arrays.append(labels)
     if not arrays:
         return None, None, None
-    # Schema order: English Desc then Desc Francais
     en = arrays[0]
     fr = arrays[1] if len(arrays) > 1 else None
     name_fr = None
@@ -371,10 +567,8 @@ def _geo_from_dir(data: bytes, dim: DimDesc, slot_index: int = 0) -> dict:
 
 
 def _footnotes(data: bytes) -> list[Footnote]:
-    # Search near codebook / last 200 KB
     start = max(0, len(data) - 200_000)
     text_region = data[start:]
-    # Also scan early header notes
     regions = [data[:12000], text_region]
     out: list[Footnote] = []
     counts = {"en": 0, "fr": 0}
@@ -391,7 +585,6 @@ def _footnotes(data: bytes) -> list[Footnote]:
                 continue
             counts[lang] += 1
             out.append(Footnote(language=lang, number=counts[lang], text=body[:4000]))
-    # Deduplicate by text prefix
     seen: set[str] = set()
     uniq: list[Footnote] = []
     for f in out:
@@ -433,6 +626,7 @@ def read_metadata(path: PathLike) -> IvtMetadata:
     if hdr.signature not in (b"\x04\x00\x20\x00", b"\x02\x00\x20\x00"):
         raise ValueError(f"unrecognised IVT signature: {hdr.signature.hex()}")
     info = parse_table_identity(data)
+    notes_info = parse_identity_notes(data)
     desc = parse_descriptor(data)
     if desc is None:
         raise ValueError("could not parse IVT dimension descriptor")
@@ -440,24 +634,43 @@ def read_metadata(path: PathLike) -> IvtMetadata:
     gd = geo_dim_index(desc.dims)
     geographies = _geo_from_dir(data, desc.dims[gd - 1], gd - 1)
     footnotes = _footnotes(data)
-    # Attach notes from French/English identity blobs if present
-    notes = None
-    head = latin1(data[:6000])
-    for marker in ("Note on data quality", "Note sur la qualité"):
-        i = head.find(marker)
-        if i >= 0:
-            notes = re.sub(r"\s+", " ", head[i : i + 800]).strip()
-            break
+
+    product_id = info.get("product_id") or notes_info.get("product_id")
+    notes_en = notes_info.get("notes_en")
+    notes_fr = notes_info.get("notes_fr")
+    keywords = parse_keywords(data, product_id)
+
+    st = p.stat()
+    last_update = datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).strftime(
+        "%Y/%m/%d %H:%M:%S"
+    )
+    file_size = st.st_size
+    n_datapoints = int(math.prod(d.count for d in dimensions)) if dimensions else 0
+
     return IvtMetadata(
-        product_id=info.get("product_id"),
+        product_id=product_id,
         title_en=info.get("title_en"),
         title_fr=info.get("title_fr"),
         universe=info.get("universe"),
-        notes=notes,
+        notes=notes_en,
+        notes_en=notes_en,
+        notes_fr=notes_fr,
         version=hdr.version,
         signature=hdr.signature.hex(),
         dimensions=dimensions,
         geographies=geographies,
         footnotes=footnotes,
-        path=str(p),
+        path=str(p.resolve()),
+        file_name=p.name,
+        directory=str(p.resolve().parent) + os.sep,
+        author_en=info.get("author_en"),
+        author_fr=info.get("author_fr"),
+        category_en=info.get("category_en"),
+        category_fr=info.get("category_fr"),
+        keywords=keywords,
+        last_update=last_update,
+        file_size=file_size,
+        n_datapoints=n_datapoints,
+        time_series=_is_time_series(data, dimensions),
+        read_only=_read_only_flag(data),
     )

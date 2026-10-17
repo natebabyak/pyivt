@@ -83,13 +83,26 @@ def write_metadata(source: IvtMetadata | IvtTable | PathLike, dir: PathLike) -> 
             "product_id",
             "title_en",
             "title_fr",
+            "file_name",
+            "directory",
+            "author_en",
+            "author_fr",
+            "category_en",
+            "category_fr",
+            "keywords",
             "universe",
+            "notes_en",
+            "notes_fr",
+            "notes",
+            "last_update",
+            "file_size",
+            "n_datapoints",
+            "time_series",
+            "read_only",
             "version",
             "signature",
         ):
             w.writerow([field, getattr(meta, field, None)])
-        if meta.notes:
-            w.writerow(["notes", meta.notes])
 
     rows = members_table(meta)
     if rows:

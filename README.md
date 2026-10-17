@@ -39,13 +39,23 @@ python -m pyivt meta path/to/table.ivt -o ./metadata
 python -m pyivt parquet path/to/table.ivt -o ./table.parquet
 ```
 
-## Metadata ↔ Beyond 20/20
+## Metadata ↔ Beyond 20/20 File Summary
 
-| Beyond 20/20 concept | pyivt field |
+| Beyond 20/20 Summary field | pyivt field |
 | --- | --- |
-| File Summary / product id | `product_id` |
-| Table title (EN/FR) | `title_en`, `title_fr` |
-| Universe / notes | `universe`, `notes` |
+| Title (EN/FR) | `title_en`, `title_fr` (short FACET04 titles) |
+| File Name / Directory | `file_name`, `directory` |
+| Author (EN/FR) | `author_en`, `author_fr` |
+| Category (EN/FR) | `category_en`, `category_fr` |
+| Keywords | `keywords` |
+| Notes (EN/FR) | `notes_en`, `notes_fr` (`notes` aliases `notes_en`) |
+| Last Update | `last_update` (file mtime, UTC `YYYY/MM/DD HH:MM:SS`) |
+| File Size | `file_size` |
+| Number of Datapoints | `n_datapoints` |
+| Time Series | `time_series` |
+| Read-Only | `read_only` |
+| Product id (in notes / keywords) | `product_id` |
+| Universe | `universe` |
 | Dimension name + items | `dimensions[].name`, `.members` / `.members_fr` |
 | Geography codes / labels | `geographies` (`geo_name`, `geo_uid`, …) |
 | Footnotes | `footnotes` |
