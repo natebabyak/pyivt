@@ -1,29 +1,28 @@
-[build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "pyivt"
 version = "0.1.0"
 description = "Read Statistics Canada Beyond 20/20 .ivt tables: metadata and Parquet export"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
 authors = [{ name = "pyivt contributors" }]
 dependencies = [
   "numpy>=1.24",
   "pyarrow>=14",
 ]
 
-[project.optional-dependencies]
-dev = ["pytest>=7"]
-
 [project.scripts]
 pyivt = "pyivt.cli:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
 pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
