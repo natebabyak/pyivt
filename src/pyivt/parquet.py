@@ -79,30 +79,34 @@ def write_metadata(source: IvtMetadata | IvtTable | PathLike, dir: PathLike) -> 
     with (out_dir / "table_info.csv").open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["field", "value"])
-        for field in (
-            "product_id",
-            "title_en",
-            "title_fr",
-            "file_name",
-            "directory",
-            "author_en",
-            "author_fr",
-            "category_en",
-            "category_fr",
-            "keywords",
-            "universe",
-            "notes_en",
-            "notes_fr",
-            "notes",
-            "last_update",
-            "file_size",
-            "n_datapoints",
-            "time_series",
-            "read_only",
-            "version",
-            "signature",
-        ):
-            w.writerow([field, getattr(meta, field, None)])
+        rows: list[tuple[str, object]] = [
+            ("product_id", meta.product_id),
+            ("title.en", meta.title.en),
+            ("title.fr", meta.title.fr),
+            ("file_name", meta.file_name),
+            ("directory", meta.directory),
+            ("author.en", meta.author.en),
+            ("author.fr", meta.author.fr),
+            ("category.en", meta.category.en),
+            ("category.fr", meta.category.fr),
+            ("keywords.en", meta.keywords.en),
+            ("keywords.fr", meta.keywords.fr),
+            ("universe", meta.universe),
+            ("notes.en", meta.notes.en),
+            ("notes.fr", meta.notes.fr),
+            (
+                "last_update",
+                meta.last_update.isoformat() if meta.last_update else None,
+            ),
+            ("file_size", meta.file_size),
+            ("number_of_datapoints", meta.number_of_datapoints),
+            ("time_series", meta.time_series),
+            ("read_only", meta.read_only),
+            ("version", meta.version),
+            ("signature", meta.signature),
+        ]
+        for field, value in rows:
+            w.writerow([field, value])
 
     rows = members_table(meta)
     if rows:

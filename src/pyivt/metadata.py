@@ -63,52 +63,50 @@ class Footnote:
 
 
 @dataclass
+class LocalizedText:
+    en: str | None = None
+    fr: str | None = None
+
+    def to_dict(self) -> dict:
+        return {"en": self.en, "fr": self.fr}
+
+
+@dataclass
 class IvtMetadata:
     product_id: str | None
-    title_en: str | None
-    title_fr: str | None
+    title: LocalizedText
     universe: str | None
-    notes: str | None
+    notes: LocalizedText
     version: str
     signature: str
     dimensions: list[Dimension] = field(default_factory=list)
     geographies: dict = field(default_factory=dict)
     footnotes: list[Footnote] = field(default_factory=list)
-    path: str | None = None
     file_name: str | None = None
     directory: str | None = None
-    author_en: str | None = None
-    author_fr: str | None = None
-    category_en: str | None = None
-    category_fr: str | None = None
-    keywords: str | None = None
-    notes_en: str | None = None
-    notes_fr: str | None = None
-    last_update: str | None = None
+    author: LocalizedText = field(default_factory=LocalizedText)
+    category: LocalizedText = field(default_factory=LocalizedText)
+    keywords: LocalizedText = field(default_factory=LocalizedText)
+    last_update: datetime | None = None
     file_size: int | None = None
-    n_datapoints: int | None = None
-    time_series: bool | None = None
+    number_of_datapoints: int | None = None
+    time_series: str | None = None
     read_only: bool | None = None
 
     def to_dict(self) -> dict:
         return {
             "product_id": self.product_id,
-            "title_en": self.title_en,
-            "title_fr": self.title_fr,
+            "title": self.title.to_dict(),
             "universe": self.universe,
-            "notes": self.notes,
-            "notes_en": self.notes_en,
-            "notes_fr": self.notes_fr,
+            "notes": self.notes.to_dict(),
             "file_name": self.file_name,
             "directory": self.directory,
-            "author_en": self.author_en,
-            "author_fr": self.author_fr,
-            "category_en": self.category_en,
-            "category_fr": self.category_fr,
-            "keywords": self.keywords,
-            "last_update": self.last_update,
+            "author": self.author.to_dict(),
+            "category": self.category.to_dict(),
+            "keywords": self.keywords.to_dict(),
+            "last_update": self.last_update.isoformat() if self.last_update else None,
             "file_size": self.file_size,
-            "n_datapoints": self.n_datapoints,
+            "number_of_datapoints": self.number_of_datapoints,
             "time_series": self.time_series,
             "read_only": self.read_only,
             "version": self.version,
@@ -284,7 +282,7 @@ def parse_identity_notes(data: bytes) -> dict:
     return {"notes_en": notes_en, "notes_fr": notes_fr, "product_id": product_id}
 
 
-def parse_keywords(data: bytes, product_id: str | None = None) -> str | None:
+def parse_keywords(data: bytes, product_id: str | None = None) -> LocalizedText:
     """Keywords from short master-directory ``01 01`` product-id entries."""
     candidates: list[str] = []
     for off, length in _master_dir_entries(data):
@@ -308,23 +306,50 @@ def parse_keywords(data: bytes, product_id: str | None = None) -> str | None:
         if text and "\n" not in text and len(text) <= 40:
             candidates.append(text)
     if not candidates:
-        return None
+        return LocalizedText()
+    # Prefer product-id match as English; bilingual pair via frscore when distinct.
+    unique: list[str] = []
+    for c in candidates:
+        if c not in unique:
+            unique.append(c)
     if product_id:
-        for c in candidates:
+        for c in unique:
             if c == product_id:
-                return c
-    return candidates[0]
+                others = [x for x in unique if x != c]
+                if others:
+                    scored = sorted(others, key=_frscore)
+                    fr = scored[-1] if _frscore(scored[-1]) > _frscore(c) else None
+                    return LocalizedText(en=c, fr=fr)
+                return LocalizedText(en=c)
+    if len(unique) == 1:
+        return LocalizedText(en=unique[0])
+    scored = sorted(unique, key=_frscore)
+    en, fr = scored[0], None
+    if _frscore(scored[-1]) > _frscore(scored[0]):
+        fr = scored[-1]
+    return LocalizedText(en=en, fr=fr)
 
 
-def _is_time_series(data: bytes, dimensions: list[Dimension]) -> bool:
-    """Beyond Summary Time Series flag."""
+_FREQ_NAME_RE = re.compile(
+    r"\b(annual|yearly|quarterly|monthly|weekly|daily|"
+    r"annuel(?:le)?|trimestriel(?:le)?|mensuel(?:le)?|"
+    r"hebdomadaire|quotidien(?:ne)?)\b",
+    re.IGNORECASE,
+)
+
+
+def _time_dim(dimensions: list[Dimension]) -> Dimension | None:
     for d in dimensions:
         if d.type == 6:
-            return True
+            return d
         if d.name and _TIME_SERIES_NAME_RE.search(d.name):
-            return True
+            return d
         if d.name_fr and _TIME_SERIES_NAME_RE.search(d.name_fr):
-            return True
+            return d
+    return None
+
+
+def _has_time_series_marker(data: bytes) -> bool:
     o = 0
     while True:
         i = data.find(b"\x81\x02", o)
@@ -334,6 +359,46 @@ def _is_time_series(data: bytes, dimensions: list[Dimension]) -> bool:
             return True
         o = i + 2
     return False
+
+
+def _frequency_hint(dim: Dimension) -> str | None:
+    for name in (dim.name, dim.name_fr):
+        if not name:
+            continue
+        m = _FREQ_NAME_RE.search(name)
+        if m:
+            return m.group(1).capitalize()
+    return None
+
+
+def _time_series_label(data: bytes, dimensions: list[Dimension]) -> str:
+    """
+    Beyond Summary Time Series value.
+
+    Non-series tables show ``No``. Series tables usually show frequency plus
+    member range (inferred from the time dimension when present).
+    """
+    dim = _time_dim(dimensions)
+    if dim is None and not _has_time_series_marker(data):
+        return "No"
+    if dim is None:
+        return "Yes"
+    members = dim.members or []
+    freq = _frequency_hint(dim)
+    if len(members) >= 2:
+        start, end = members[0], members[-1]
+        if freq:
+            return f"{freq}, {start} to {end}"
+        return f"{start} to {end}"
+    if len(members) == 1:
+        if freq:
+            return f"{freq}, {members[0]}"
+        return members[0]
+    if freq:
+        return freq
+    if dim.name:
+        return dim.name
+    return "Yes"
 
 
 def _read_only_flag(data: bytes) -> bool:
@@ -636,41 +701,37 @@ def read_metadata(path: PathLike) -> IvtMetadata:
     footnotes = _footnotes(data)
 
     product_id = info.get("product_id") or notes_info.get("product_id")
-    notes_en = notes_info.get("notes_en")
-    notes_fr = notes_info.get("notes_fr")
     keywords = parse_keywords(data, product_id)
 
     st = p.stat()
-    last_update = datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).strftime(
-        "%Y/%m/%d %H:%M:%S"
-    )
+    last_update = datetime.fromtimestamp(st.st_mtime, tz=timezone.utc)
     file_size = st.st_size
-    n_datapoints = int(math.prod(d.count for d in dimensions)) if dimensions else 0
+    number_of_datapoints = (
+        int(math.prod(d.count for d in dimensions)) if dimensions else 0
+    )
 
     return IvtMetadata(
         product_id=product_id,
-        title_en=info.get("title_en"),
-        title_fr=info.get("title_fr"),
+        title=LocalizedText(en=info.get("title_en"), fr=info.get("title_fr")),
         universe=info.get("universe"),
-        notes=notes_en,
-        notes_en=notes_en,
-        notes_fr=notes_fr,
+        notes=LocalizedText(
+            en=notes_info.get("notes_en"), fr=notes_info.get("notes_fr")
+        ),
         version=hdr.version,
         signature=hdr.signature.hex(),
         dimensions=dimensions,
         geographies=geographies,
         footnotes=footnotes,
-        path=str(p.resolve()),
         file_name=p.name,
         directory=str(p.resolve().parent) + os.sep,
-        author_en=info.get("author_en"),
-        author_fr=info.get("author_fr"),
-        category_en=info.get("category_en"),
-        category_fr=info.get("category_fr"),
+        author=LocalizedText(en=info.get("author_en"), fr=info.get("author_fr")),
+        category=LocalizedText(
+            en=info.get("category_en"), fr=info.get("category_fr")
+        ),
         keywords=keywords,
         last_update=last_update,
         file_size=file_size,
-        n_datapoints=n_datapoints,
-        time_series=_is_time_series(data, dimensions),
+        number_of_datapoints=number_of_datapoints,
+        time_series=_time_series_label(data, dimensions),
         read_only=_read_only_flag(data),
     )

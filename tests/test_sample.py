@@ -49,26 +49,23 @@ def test_descriptor_dimensions():
 def test_read_metadata():
     meta = read_metadata(SAMPLE)
     assert meta.product_id == "98-400-X2016112"
-    assert meta.title_en and "Employment Income" in meta.title_en
-    assert meta.title_en.endswith("2006 Census")
-    assert meta.title_fr and "Tranches de revenu" in meta.title_fr
-    assert meta.author_en == "2016 Census - Statistics Canada"
-    assert meta.author_fr == "Recensement de 2016-Statistique Canada"
-    assert meta.category_en == "Data Tables"
-    assert meta.category_fr == "Tableaux de données"
-    assert meta.keywords == "98-400-X2016112"
-    assert meta.notes_en and "Historical comparison" in meta.notes_en
-    assert meta.notes_fr and "Comparaison historique" in meta.notes_fr
-    assert meta.notes == meta.notes_en
+    assert meta.title.en and "Employment Income" in meta.title.en
+    assert meta.title.en.endswith("2006 Census")
+    assert meta.title.fr and "Tranches de revenu" in meta.title.fr
+    assert meta.author.en == "2016 Census - Statistics Canada"
+    assert meta.author.fr == "Recensement de 2016-Statistique Canada"
+    assert meta.category.en == "Data Tables"
+    assert meta.category.fr == "Tableaux de données"
+    assert meta.keywords.en == "98-400-X2016112"
+    assert meta.notes.en and "Historical comparison" in meta.notes.en
+    assert meta.notes.fr and "Comparaison historique" in meta.notes.fr
     assert meta.file_name == SAMPLE.name
     assert meta.directory and meta.directory.endswith(os.sep)
     assert meta.file_size == SAMPLE.stat().st_size
-    assert meta.n_datapoints == 197_316
-    assert meta.time_series is False
+    assert meta.number_of_datapoints == 197_316
+    assert meta.time_series == "No"
     assert meta.read_only is True
-    expected_mtime = datetime.fromtimestamp(
-        SAMPLE.stat().st_mtime, tz=timezone.utc
-    ).strftime("%Y/%m/%d %H:%M:%S")
+    expected_mtime = datetime.fromtimestamp(SAMPLE.stat().st_mtime, tz=timezone.utc)
     assert meta.last_update == expected_mtime
     assert len(meta.dimensions) == 5
     age = meta.dimensions[1]
@@ -97,6 +94,7 @@ def test_read_table_and_parquet(tmp_path: Path):
     assert (meta_dir / "dimension_members.csv").is_file()
     assert (meta_dir / "geographies.csv").is_file()
     info = (meta_dir / "table_info.csv").read_text(encoding="utf-8")
-    assert "author_en" in info
-    assert "n_datapoints" in info
+    assert "title.en" in info
+    assert "author.en" in info
+    assert "number_of_datapoints" in info
     assert "read_only" in info
