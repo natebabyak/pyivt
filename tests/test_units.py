@@ -1,4 +1,7 @@
+import pytest
+
 from pyivt._bytes import nextpow2
+from pyivt._io import load_source
 from pyivt.decode import bit_layout, value_trailer
 from pyivt.tidy import label_depth, label_parent
 
@@ -29,3 +32,26 @@ def test_label_hierarchy():
     assert parents[1] == 1
     assert parents[2] == 2
     assert parents[3] == 1
+
+
+def test_load_source_bytes_origin():
+    data, origin = load_source(b"abc")
+    assert data == b"abc"
+    assert origin.file_name is None
+    assert origin.directory is None
+    assert origin.last_update is None
+    assert origin.file_size == 3
+
+
+def test_load_source_rejects_text_file_like():
+    class TextFile:
+        def read(self):
+            return "not bytes"
+
+    with pytest.raises(TypeError, match="binary mode"):
+        load_source(TextFile())
+
+
+def test_load_source_rejects_unsupported_type():
+    with pytest.raises(TypeError, match="path, URL, bytes"):
+        load_source(123)  # type: ignore[arg-type]

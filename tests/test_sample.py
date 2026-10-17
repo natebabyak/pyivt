@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pyivt import read_metadata, read_table, write_metadata, write_parquet
+import pyivt
+from pyivt import open as open_ivt
+from pyivt import read_metadata, write_metadata, write_parquet
 from pyivt.decode import build_layout
 from pyivt.descriptor import parse_descriptor
 from pyivt.header import read_header
@@ -74,22 +78,28 @@ def test_read_metadata():
     assert len(meta.geographies["member_id"]) == 174
 
 
-def test_read_table_and_parquet(tmp_path: Path):
-    tab = read_table(SAMPLE, complete=True)
-    assert len(tab.cells["value"]) == 197_316
-    # Canada / Total Age / Total Sex / Total Emp / 2015
-    cols = tab.to_columns(labels=True)
-    # first completed row in meshgrid order is all-1s coordinates
+def test_open_path_and_exports(tmp_path: Path):
+    ivt = open_ivt(SAMPLE, complete=True)
+    assert len(ivt.cells["value"]) == 197_316
+    cols = ivt.to_columns(labels=True)
     assert cols["geo"][0] == 1
     assert cols["value"][0] == pytest.approx(28_642_980.0)
 
+    table = ivt.to_arrow()
+    assert table.num_rows == 197_316
+    assert table.column("value")[0].as_py() == pytest.approx(28_642_980.0)
+
     out = tmp_path / "t.parquet"
-    write_parquet(tab, out)
+    path = ivt.to_parquet(out)
+    assert path == out
     assert out.is_file()
     assert out.with_name("t_members.parquet").is_file()
 
+    write_parquet(SAMPLE, tmp_path / "from_path.parquet")
+    assert (tmp_path / "from_path.parquet").is_file()
+
     meta_dir = tmp_path / "meta"
-    write_metadata(tab.metadata, meta_dir)
+    write_metadata(ivt.metadata, meta_dir)
     assert (meta_dir / "table_info.csv").is_file()
     assert (meta_dir / "dimension_members.csv").is_file()
     assert (meta_dir / "geographies.csv").is_file()
@@ -98,3 +108,43 @@ def test_read_table_and_parquet(tmp_path: Path):
     assert "author.en" in info
     assert "number_of_datapoints" in info
     assert "read_only" in info
+
+
+def test_open_bytes_and_file_like():
+    data = SAMPLE.read_bytes()
+    from_bytes = open_ivt(data)
+    from_bio = open_ivt(BytesIO(data))
+    from_path = open_ivt(SAMPLE)
+
+    assert len(from_bytes.cells["value"]) == len(from_path.cells["value"])
+    assert from_bytes.cells["value"][0] == pytest.approx(from_path.cells["value"][0])
+    assert from_bio.cells["value"][0] == pytest.approx(from_path.cells["value"][0])
+
+    for ivt in (from_bytes, from_bio):
+        assert ivt.metadata.file_name is None
+        assert ivt.metadata.directory is None
+        assert ivt.metadata.last_update is None
+        assert ivt.metadata.file_size == len(data)
+
+
+def test_open_path_string():
+    ivt = pyivt.open(str(SAMPLE))
+    assert ivt.metadata.file_name == SAMPLE.name
+    assert ivt.metadata.file_size == SAMPLE.stat().st_size
+
+
+def test_open_url_mocked():
+    data = SAMPLE.read_bytes()
+    resp = MagicMock()
+    resp.read.return_value = data
+    resp.__enter__.return_value = resp
+    resp.__exit__.return_value = None
+    url = "https://example.com/tables/98-400-X2016112.IVT"
+    with patch("pyivt._io.urlopen", return_value=resp) as mocked:
+        ivt = open_ivt(url)
+    mocked.assert_called_once_with(url)
+    assert ivt.metadata.file_name == "98-400-X2016112.IVT"
+    assert ivt.metadata.directory is None
+    assert ivt.metadata.last_update is None
+    assert ivt.metadata.file_size == len(data)
+    assert len(ivt.cells["value"]) == 197_316

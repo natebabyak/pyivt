@@ -8,25 +8,16 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from ._io import Source
 from .metadata import IvtMetadata, read_metadata
-from .reader import IvtTable, read_table
+from .reader import IvtTable, open as open_ivt
 from .tidy import members_table
 
 PathLike = str | Path
 
 
-def _columns_to_table(cols: dict) -> pa.Table:
-    arrays = {}
-    for k, v in cols.items():
-        if hasattr(v, "dtype"):
-            arrays[k] = pa.array(v)
-        else:
-            arrays[k] = pa.array(v)
-    return pa.table(arrays)
-
-
 def write_parquet(
-    source: IvtTable | PathLike,
+    source: IvtTable | Source,
     path: PathLike,
     *,
     labels: bool = True,
@@ -37,27 +28,30 @@ def write_parquet(
     """
     Write the published (or sparse) cell table to Parquet.
 
-    When ``source`` is a path, the file is decoded first. A ``_members.parquet``
-    sidecar is written next to ``path`` when ``members`` is True.
+    When ``source`` is a path, URL, bytes, or file-like object, the file is
+    decoded first. A ``_members.parquet`` sidecar is written next to ``path``
+    when ``members`` is True.
     """
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
     if isinstance(source, IvtTable):
         tab = source
     else:
-        tab = read_table(source, complete=complete, language=language)
-    cols = tab.to_columns(labels=labels, language=language)
-    pq.write_table(_columns_to_table(cols), out)
+        tab = open_ivt(source, complete=complete, language=language)
+    pq.write_table(tab.to_arrow(labels=labels, language=language), out)
     if members:
         mem_path = out.with_name(out.stem + "_members.parquet")
         rows = members_table(tab.metadata)
         if rows:
             mem_cols = {k: [r[k] for r in rows] for k in rows[0]}
-            pq.write_table(_columns_to_table(mem_cols), mem_path)
+            pq.write_table(
+                pa.table({k: pa.array(v) for k, v in mem_cols.items()}),
+                mem_path,
+            )
     return out
 
 
-def write_metadata(source: IvtMetadata | IvtTable | PathLike, dir: PathLike) -> Path:
+def write_metadata(source: IvtMetadata | IvtTable | Source, dir: PathLike) -> Path:
     """
     Write Beyond 20/20-style file-summary sidecars as CSV:
 

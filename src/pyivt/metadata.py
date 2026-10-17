@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import math
-import os
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import datetime
 
 from ._bytes import latin1, rd_pascal, u16, u32
+from ._io import Source, load_source
 from .descriptor import Descriptor, DimDesc, geo_dim_index, parse_descriptor
 from .header import (
     HDR_MASTER_PTR,
@@ -17,8 +16,6 @@ from .header import (
     read_block_dir,
     read_header,
 )
-
-PathLike = str | Path
 
 # FACET04 glued category suffixes (Beyond File Summary "Category")
 _FACET_CATEGORIES = (
@@ -129,10 +126,6 @@ class IvtMetadata:
                 for f in self.footnotes
             ],
         }
-
-
-def _load(path: PathLike) -> bytes:
-    return Path(path).read_bytes()
 
 
 def _identity_from_blob(text: str) -> tuple[str | None, str | None]:
@@ -683,10 +676,15 @@ def build_dimensions(data: bytes, desc: Descriptor) -> list[Dimension]:
     return dims
 
 
-def read_metadata(path: PathLike) -> IvtMetadata:
-    """Extract file summary + dimension codebook without decoding cell values."""
-    p = Path(path)
-    data = _load(p)
+def read_metadata_bytes(
+    data: bytes,
+    *,
+    file_name: str | None = None,
+    directory: str | None = None,
+    last_update: datetime | None = None,
+    file_size: int | None = None,
+) -> IvtMetadata:
+    """Extract file summary + dimension codebook from IVT bytes."""
     hdr = read_header(data)
     if hdr.signature not in (b"\x04\x00\x20\x00", b"\x02\x00\x20\x00"):
         raise ValueError(f"unrecognised IVT signature: {hdr.signature.hex()}")
@@ -702,10 +700,6 @@ def read_metadata(path: PathLike) -> IvtMetadata:
 
     product_id = info.get("product_id") or notes_info.get("product_id")
     keywords = parse_keywords(data, product_id)
-
-    st = p.stat()
-    last_update = datetime.fromtimestamp(st.st_mtime, tz=timezone.utc)
-    file_size = st.st_size
     number_of_datapoints = (
         int(math.prod(d.count for d in dimensions)) if dimensions else 0
     )
@@ -722,16 +716,26 @@ def read_metadata(path: PathLike) -> IvtMetadata:
         dimensions=dimensions,
         geographies=geographies,
         footnotes=footnotes,
-        file_name=p.name,
-        directory=str(p.resolve().parent) + os.sep,
+        file_name=file_name,
+        directory=directory,
         author=LocalizedText(en=info.get("author_en"), fr=info.get("author_fr")),
-        category=LocalizedText(
-            en=info.get("category_en"), fr=info.get("category_fr")
-        ),
+        category=LocalizedText(en=info.get("category_en"), fr=info.get("category_fr")),
         keywords=keywords,
         last_update=last_update,
-        file_size=file_size,
+        file_size=len(data) if file_size is None else file_size,
         number_of_datapoints=number_of_datapoints,
         time_series=_time_series_label(data, dimensions),
         read_only=_read_only_flag(data),
+    )
+
+
+def read_metadata(source: Source) -> IvtMetadata:
+    """Extract file summary + dimension codebook without decoding cell values."""
+    data, origin = load_source(source)
+    return read_metadata_bytes(
+        data,
+        file_name=origin.file_name,
+        directory=origin.directory,
+        last_update=origin.last_update,
+        file_size=origin.file_size,
     )
