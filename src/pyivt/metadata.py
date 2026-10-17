@@ -131,7 +131,7 @@ def parse_table_identity(data: bytes) -> dict:
         for _ in range(32):
             if o + 8 > len(data):
                 break
-            off, s1 = u32(data, o), u16(data, o + 4), u16(data, o + 6)
+            off, s1, _ = u32(data, o), u16(data, o + 4), u16(data, o + 6)
             o += 8
             if off == 0 and s1 == 0:
                 continue
