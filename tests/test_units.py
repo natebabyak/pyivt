@@ -1,7 +1,9 @@
+import io
+
 import pytest
 
 from pyivt._bytes import nextpow2
-from pyivt._io import as_bytes
+from pyivt._io import as_bytes, read_source
 from pyivt.decode import bit_layout, value_trailer
 from pyivt.tidy import label_depth, label_parent
 
@@ -35,7 +37,8 @@ def test_label_hierarchy():
 
 
 def test_as_bytes_coerces_buffers():
-    assert as_bytes(b"abc") == b"abc"
+    raw = b"abc"
+    assert as_bytes(raw) is raw
     assert as_bytes(bytearray(b"abc")) == b"abc"
     assert as_bytes(memoryview(b"abc")) == b"abc"
 
@@ -43,3 +46,9 @@ def test_as_bytes_coerces_buffers():
 def test_as_bytes_rejects_unsupported_type():
     with pytest.raises(TypeError, match="bytes, bytearray, or memoryview"):
         as_bytes(123)  # type: ignore[arg-type]
+
+
+def test_read_source_from_bytes_and_fileobj():
+    raw = b"ivt-bytes"
+    assert read_source(raw) is raw
+    assert read_source(io.BytesIO(raw)) == raw

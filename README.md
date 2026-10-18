@@ -21,39 +21,33 @@ Python library for Beyond 20/20 `.ivt` files.
 
 ## Usage
 
-`pyivt` is minimal by design, with one way to import and one way to export.
+`pyivt` is minimal by design: typed metadata for indexes, Arrow for data export.
 
 ### Quick Start
 
 Open an IVT file, read its metadata, and write its data to Parquet:
 
 ```python
-from pathlib import Path
-
 import pyarrow.parquet as pq
 import pyivt
 
-ivt = pyivt.from_bytes(Path("data.ivt").read_bytes())
+meta = pyivt.read_metadata("data.ivt")
+print(meta.title.en)
 
-print(ivt.metadata.title.en)
-print(ivt.metadata.notes.en)
-
+ivt = pyivt.open("data.ivt")
 pq.write_table(ivt.to_arrow(), "data.parquet")
 ```
 
 ### Opening IVT Files
 
-Use `pyivt.from_bytes` to open IVT files.
+Use `pyivt.open` for paths (or file objects). Use `pyivt.from_bytes` for in-memory buffers.
 
 #### From Path
 
 ```python
-from pathlib import Path
-
 import pyivt
 
-path = Path("data.ivt")
-ivt = pyivt.from_bytes(path.read_bytes())
+ivt = pyivt.open("data.ivt")
 ```
 
 #### From URL
@@ -72,6 +66,8 @@ ivt = pyivt.from_bytes(res.content)
 
 ### Reading Metadata
 
+`read_metadata` returns a typed `IvtMetadata` object. Summary fields are eager; heavy fields load on first access.
+
 | Beyond 20/20 Summary | `pyivt` Metadata             |
 | -------------------- | ---------------------------- |
 | Title                | `title.en`, `title.fr`       |
@@ -83,12 +79,20 @@ ivt = pyivt.from_bytes(res.content)
 | Time Series          | `time_series`                |
 | Read-Only            | `read_only`                  |
 | Dimensions           | `dimensions`                 |
+| Geographies          | `geographies`                |
 | Footnotes            | `footnotes`                  |
 | Missing Values       | `missing_values`             |
 
-#### Exporting Data
+```python
+import pyivt
 
-`IvtTable.to_arrow()` returns an Apache Arrow table. Convert from there:
+meta = pyivt.read_metadata("data.ivt")
+print(meta.product_id, meta.title.en)
+```
+
+### Exporting Data
+
+`Ivt.to_arrow()` returns an Apache Arrow table. Convert from there:
 
 ```python
 import polars as pl

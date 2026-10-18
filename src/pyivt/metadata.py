@@ -5,13 +5,15 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass, field
+from typing import Any
 
 from ._bytes import latin1, rd_pascal, u16, u32
-from ._io import as_bytes
+from ._io import Source, read_source
 from .descriptor import Descriptor, DimDesc, geo_dim_index, parse_descriptor
 from .header import (
     HDR_MASTER_PTR,
     HDR_STATUS_LEGEND,
+    HeaderLayout,
     dim_slots,
     read_block_dir,
     read_header,
@@ -64,9 +66,6 @@ class LocalizedText:
     en: str | None = None
     fr: str | None = None
 
-    def to_dict(self) -> dict:
-        return {"en": self.en, "fr": self.fr}
-
 
 @dataclass
 class MissingValue:
@@ -77,63 +76,74 @@ class MissingValue:
 
 @dataclass
 class IvtMetadata:
+    """
+    IVT file summary metadata.
+
+    Summary fields are eager. ``dimensions``, ``geographies``, ``footnotes``,
+    and ``missing_values`` load on first access and are cached.
+    """
+
     product_id: str | None
     title: LocalizedText
     universe: str | None
     notes: LocalizedText
     version: str
     signature: str
-    dimensions: list[Dimension] = field(default_factory=list)
-    geographies: dict = field(default_factory=dict)
-    footnotes: list[Footnote] = field(default_factory=list)
-    missing_values: list[MissingValue] = field(default_factory=list)
+    _data: bytes = field(repr=False, compare=False)
+    _desc: Descriptor = field(repr=False, compare=False)
     author: LocalizedText = field(default_factory=LocalizedText)
     category: LocalizedText = field(default_factory=LocalizedText)
     keywords: LocalizedText = field(default_factory=LocalizedText)
     number_of_datapoints: int | None = None
     time_series: str | None = None
     read_only: bool | None = None
+    _dimensions: list[Dimension] | None = field(
+        default=None, repr=False, compare=False
+    )
+    _geographies: dict[str, Any] | None = field(
+        default=None, repr=False, compare=False
+    )
+    _footnotes: list[Footnote] | None = field(default=None, repr=False, compare=False)
+    _missing_values: list[MissingValue] | None = field(
+        default=None, repr=False, compare=False
+    )
 
-    def to_dict(self) -> dict:
-        return {
-            "product_id": self.product_id,
-            "title": self.title.to_dict(),
-            "universe": self.universe,
-            "notes": self.notes.to_dict(),
-            "author": self.author.to_dict(),
-            "category": self.category.to_dict(),
-            "keywords": self.keywords.to_dict(),
-            "number_of_datapoints": self.number_of_datapoints,
-            "time_series": self.time_series,
-            "read_only": self.read_only,
-            "version": self.version,
-            "signature": self.signature,
-            "dimensions": [
-                {
-                    "name": d.name,
-                    "name_fr": d.name_fr,
-                    "count": d.count,
-                    "type": d.type,
-                    "is_geography": d.is_geography,
-                    "members": d.members,
-                    "members_fr": d.members_fr,
-                }
-                for d in self.dimensions
-            ],
-            "geographies": self.geographies,
-            "footnotes": [
-                {"language": f.language, "number": f.number, "text": f.text}
-                for f in self.footnotes
-            ],
-            "missing_values": [
-                {
-                    "symbol": m.symbol,
-                    "code": m.code,
-                    "label": m.label.to_dict(),
-                }
-                for m in self.missing_values
-            ],
-        }
+    @property
+    def dimensions(self) -> list[Dimension]:
+        self._ensure_dims_geo()
+        assert self._dimensions is not None
+        return self._dimensions
+
+    @property
+    def geographies(self) -> dict[str, Any]:
+        self._ensure_dims_geo()
+        assert self._geographies is not None
+        return self._geographies
+
+    @property
+    def footnotes(self) -> list[Footnote]:
+        if self._footnotes is None:
+            self._footnotes = _footnotes(self._data)
+        return self._footnotes
+
+    @property
+    def missing_values(self) -> list[MissingValue]:
+        if self._missing_values is None:
+            self._missing_values = _missing_values(self._data)
+        return self._missing_values
+
+    def _ensure_dims_geo(self) -> None:
+        if self._dimensions is not None and self._geographies is not None:
+            return
+        dims = build_dimensions(self._data, self._desc)
+        gd = geo_dim_index(self._desc.dims)
+        geos = _geo_from_dir(self._data, self._desc.dims[gd - 1], gd - 1)
+        self._dimensions = dims
+        self._geographies = geos
+
+    def _loaded(self, name: str) -> bool:
+        """Whether a lazy field has been materialized (for tests)."""
+        return getattr(self, f"_{name}") is not None
 
 
 def _identity_from_blob(text: str) -> tuple[str | None, str | None]:
@@ -339,13 +349,11 @@ _FREQ_NAME_RE = re.compile(
 )
 
 
-def _time_dim(dimensions: list[Dimension]) -> Dimension | None:
-    for d in dimensions:
+def _time_dim_desc(dims: list[DimDesc]) -> DimDesc | None:
+    for d in dims:
         if d.type == 6:
             return d
         if d.name and _TIME_SERIES_NAME_RE.search(d.name):
-            return d
-        if d.name_fr and _TIME_SERIES_NAME_RE.search(d.name_fr):
             return d
     return None
 
@@ -362,39 +370,26 @@ def _has_time_series_marker(data: bytes) -> bool:
     return False
 
 
-def _frequency_hint(dim: Dimension) -> str | None:
-    for name in (dim.name, dim.name_fr):
-        if not name:
-            continue
-        m = _FREQ_NAME_RE.search(name)
-        if m:
-            return m.group(1).capitalize()
-    return None
+def _frequency_hint_name(name: str | None) -> str | None:
+    if not name:
+        return None
+    m = _FREQ_NAME_RE.search(name)
+    return m.group(1).capitalize() if m else None
 
 
-def _time_series_label(data: bytes, dimensions: list[Dimension]) -> str:
+def _time_series_label(data: bytes, dims: list[DimDesc]) -> str:
     """
-    Beyond Summary Time Series value.
+    Beyond Summary Time Series value (eager; descriptor names/types only).
 
-    Non-series tables show ``No``. Series tables usually show frequency plus
-    member range (inferred from the time dimension when present).
+    Non-series tables show ``No``. Series tables usually show a frequency or
+    dimension name; member ranges require loading dimension members.
     """
-    dim = _time_dim(dimensions)
+    dim = _time_dim_desc(dims)
     if dim is None and not _has_time_series_marker(data):
         return "No"
     if dim is None:
         return "Yes"
-    members = dim.members or []
-    freq = _frequency_hint(dim)
-    if len(members) >= 2:
-        start, end = members[0], members[-1]
-        if freq:
-            return f"{freq}, {start} to {end}"
-        return f"{start} to {end}"
-    if len(members) == 1:
-        if freq:
-            return f"{freq}, {members[0]}"
-        return members[0]
+    freq = _frequency_hint_name(dim.name)
     if freq:
         return freq
     if dim.name:
@@ -806,26 +801,33 @@ def build_dimensions(data: bytes, desc: Descriptor) -> list[Dimension]:
     return dims
 
 
-def read_metadata_bytes(data: bytes) -> IvtMetadata:
-    """Extract file summary + dimension codebook from IVT bytes."""
-    hdr = read_header(data)
+def build_metadata(
+    data: bytes,
+    *,
+    desc: Descriptor | None = None,
+    hdr: HeaderLayout | None = None,
+) -> IvtMetadata:
+    """
+    Build lazy metadata from IVT bytes.
+
+    Parses the header and dimension descriptor when not provided. Heavy blocks
+    (dimensions, geographies, footnotes, missing values) load on first access.
+    """
+    if hdr is None:
+        hdr = read_header(data)
     if hdr.signature not in (b"\x04\x00\x20\x00", b"\x02\x00\x20\x00"):
         raise ValueError(f"unrecognised IVT signature: {hdr.signature.hex()}")
-    info = parse_table_identity(data)
-    notes_info = parse_identity_notes(data)
-    desc = parse_descriptor(data)
+    if desc is None:
+        desc = parse_descriptor(data)
     if desc is None:
         raise ValueError("could not parse IVT dimension descriptor")
-    dimensions = build_dimensions(data, desc)
-    gd = geo_dim_index(desc.dims)
-    geographies = _geo_from_dir(data, desc.dims[gd - 1], gd - 1)
-    footnotes = _footnotes(data)
-    missing_values = _missing_values(data)
 
+    info = parse_table_identity(data)
+    notes_info = parse_identity_notes(data)
     product_id = info.get("product_id") or notes_info.get("product_id")
     keywords = parse_keywords(data, product_id)
     number_of_datapoints = (
-        int(math.prod(d.count for d in dimensions)) if dimensions else 0
+        int(math.prod(d.count for d in desc.dims)) if desc.dims else 0
     )
 
     return IvtMetadata(
@@ -837,19 +839,23 @@ def read_metadata_bytes(data: bytes) -> IvtMetadata:
         ),
         version=hdr.version,
         signature=hdr.signature.hex(),
-        dimensions=dimensions,
-        geographies=geographies,
-        footnotes=footnotes,
-        missing_values=missing_values,
         author=LocalizedText(en=info.get("author_en"), fr=info.get("author_fr")),
         category=LocalizedText(en=info.get("category_en"), fr=info.get("category_fr")),
         keywords=keywords,
         number_of_datapoints=number_of_datapoints,
-        time_series=_time_series_label(data, dimensions),
+        time_series=_time_series_label(data, desc.dims),
         read_only=_read_only_flag(data),
+        _data=data,
+        _desc=desc,
     )
 
 
-def read_metadata(data: bytes | bytearray | memoryview) -> IvtMetadata:
-    """Extract file summary + dimension codebook without decoding cell values."""
-    return read_metadata_bytes(as_bytes(data))
+def read_metadata(source: Source) -> IvtMetadata:
+    """
+    Extract file summary metadata without decoding cell values.
+
+    Accepts a path, bytes-like buffer, or binary file object. Heavy fields
+    (``dimensions``, ``geographies``, ``footnotes``, ``missing_values``) are
+    loaded lazily on first access.
+    """
+    return build_metadata(read_source(source))

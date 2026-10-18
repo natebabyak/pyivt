@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from math import prod
 
-from pyivt import from_bytes, read_metadata
+from pyivt import from_bytes, open as open_ivt, read_metadata
 
 # Hardcoded expectations keyed by manifest id. Easy to scan / review.
 EXPECTED = {
@@ -123,7 +123,7 @@ EXPECTED = {
 
 def test_metadata_matches_expected(statcan_ivt):
     expect = EXPECTED[statcan_ivt.id]
-    meta = read_metadata(statcan_ivt.path.read_bytes())
+    meta = read_metadata(statcan_ivt.path)
 
     assert meta.product_id == expect["product_id"]
     assert meta.title.en and expect["title_en_contains"] in meta.title.en
@@ -135,6 +135,41 @@ def test_metadata_matches_expected(statcan_ivt):
     assert meta.read_only is expect["read_only"]
     assert any(d.is_geography for d in meta.dimensions) is expect["has_geography"]
     assert [m.symbol for m in meta.missing_values] == expect["missing_symbols"]
+
+
+def test_metadata_lazy_fields(statcan_ivt):
+    meta = read_metadata(statcan_ivt.path)
+    for name in ("dimensions", "geographies", "footnotes", "missing_values"):
+        assert not meta._loaded(name)
+
+    _ = meta.product_id
+    _ = meta.title
+    for name in ("dimensions", "geographies", "footnotes", "missing_values"):
+        assert not meta._loaded(name)
+
+    _ = meta.dimensions
+    assert meta._loaded("dimensions")
+    assert meta._loaded("geographies")
+    assert not meta._loaded("footnotes")
+    assert not meta._loaded("missing_values")
+
+    _ = meta.footnotes
+    _ = meta.missing_values
+    assert meta._loaded("footnotes")
+    assert meta._loaded("missing_values")
+
+
+def test_open_and_read_metadata_agree(statcan_ivt):
+    path = statcan_ivt.path
+    meta = read_metadata(path)
+    ivt = open_ivt(path)
+    assert ivt.metadata.product_id == meta.product_id
+    assert ivt.metadata.title == meta.title
+    assert ivt.metadata.number_of_datapoints == meta.number_of_datapoints
+    assert ivt.metadata.time_series == meta.time_series
+    assert ivt.metadata.read_only == meta.read_only
+    assert ivt.metadata.version == meta.version
+    assert ivt.metadata.signature == meta.signature
 
 
 def test_from_bytes_opens(statcan_ivt):

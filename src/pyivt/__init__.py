@@ -1,10 +1,23 @@
 """Beyond 20/20 IVT reader: metadata + Apache Arrow export."""
 
-from .metadata import read_metadata
-from .reader import IvtTable, from_bytes
+from .metadata import (
+    Dimension,
+    Footnote,
+    IvtMetadata,
+    LocalizedText,
+    MissingValue,
+    read_metadata,
+)
+from .reader import Ivt, from_bytes, open
 
 __all__ = [
-    "IvtTable",
+    "Ivt",
+    "IvtMetadata",
+    "LocalizedText",
+    "Dimension",
+    "Footnote",
+    "MissingValue",
+    "open",
     "from_bytes",
     "read_metadata",
 ]

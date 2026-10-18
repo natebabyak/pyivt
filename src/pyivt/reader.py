@@ -6,10 +6,11 @@ from dataclasses import dataclass, field
 
 import pyarrow as pa
 
-from ._io import as_bytes
+from ._io import Source, as_bytes, read_source
 from .decode import Layout, build_layout, complete_grid, decode_store
 from .descriptor import DimDesc, parse_descriptor
-from .metadata import IvtMetadata, read_metadata_bytes
+from .header import read_header
+from .metadata import IvtMetadata, build_metadata
 from .tidy import tidy_arrays
 
 
@@ -21,7 +22,7 @@ def _columns_to_arrow(cols: dict) -> pa.Table:
 
 
 @dataclass
-class IvtTable:
+class Ivt:
     metadata: IvtMetadata
     layout: Layout
     _data: bytes = field(repr=False)
@@ -94,17 +95,27 @@ class IvtTable:
         )
 
 
-def from_bytes(data: bytes | bytearray | memoryview) -> IvtTable:
+def open(source: Source) -> Ivt:
     """
-    Open an IVT file from a bytes buffer without decoding cell values.
+    Open an IVT file from a path, buffer, or binary file object.
 
-    Parses metadata and dimension layout only. Call ``to_arrow()`` (or access
-    ``.cells``) to decode the value grid.
+    Parses metadata and dimension layout only (descriptor once). Call
+    ``to_arrow()`` (or access ``.cells``) to decode the value grid.
     """
-    data = as_bytes(data)
-    meta = read_metadata_bytes(data)
+    data = read_source(source)
+    hdr = read_header(data)
     desc = parse_descriptor(data)
     if desc is None:
         raise ValueError("could not parse IVT dimension descriptor")
+    meta = build_metadata(data, desc=desc, hdr=hdr)
     lay = build_layout(desc.dims)
-    return IvtTable(metadata=meta, layout=lay, _data=data, _dims=desc.dims)
+    return Ivt(metadata=meta, layout=lay, _data=data, _dims=desc.dims)
+
+
+def from_bytes(data: bytes | bytearray | memoryview) -> Ivt:
+    """
+    Open an IVT file from a bytes buffer without decoding cell values.
+
+    Thin alias for ``open`` restricted to bytes-like inputs.
+    """
+    return open(as_bytes(data))
