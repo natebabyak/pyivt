@@ -10,4 +10,5 @@ venv/
 *.parquet
 *.IVT
 *.ivt
+tests/fixtures/statcan/*.zip
 .mypy_cache/
