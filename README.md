@@ -1,31 +1,25 @@
 # pyivt
 
-Python library for Beyond 20/20 `.ivt` files.
+`pyivt` is a library for Statistics Canada Beyond 20/20 `.ivt` files, written in Rust. It is design to be minimal and easily adaptable for existing codebases. Key features are:
 
-- Up to 100,000% faster than GUI automation for metadata
-- Export data to Apache Arrow (then pandas, Parquet, Polars, or anything Arrow supports)
+- **Fast**: Up to 100,000% faster than GUI automation for metadata
+- **Python**: Easily integrates into modern data workflows with a minimal API
+- **Typed**: Produces fully type-safe and predictable metadata
+- **Interoperable**: Exports `.ivt` file data to Apache Arrow
 
-## Getting Started
+## Installation
 
-### Prerequisites
+Install the latest pyivt version with:
 
-- Python 3.11+
-
-### Installation
-
-1. Install `pyivt` using pip
-
-   ```bash
-   pip install pyivt
-   ```
+```bash
+pip install pyivt
+```
 
 ## Usage
 
-`pyivt` is minimal by design: typed metadata for indexes, Arrow for data export.
-
 ### Quick Start
 
-Open an IVT file, read its metadata, and write its data to Parquet:
+Open an IVT file, read its metadata, and write its data to a Parquet file:
 
 ```python
 import pyarrow.parquet as pq
@@ -112,7 +106,7 @@ df = pl.from_arrow(table)
 
 ## License
 
-MIT
+`pyivt` is licensed under the [MIT License](LICENSE).
 
 ## Acknowledgements
 
