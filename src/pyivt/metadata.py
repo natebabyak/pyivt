@@ -12,6 +12,7 @@ from ._io import as_bytes
 from .descriptor import Descriptor, DimDesc, geo_dim_index, parse_descriptor
 from .header import (
     HDR_MASTER_PTR,
+    HDR_STATUS_LEGEND,
     dim_slots,
     read_block_dir,
     read_header,
@@ -69,6 +70,13 @@ class LocalizedText:
 
 
 @dataclass
+class MissingValue:
+    symbol: str
+    label: LocalizedText
+    code: int | None = None
+
+
+@dataclass
 class IvtMetadata:
     product_id: str | None
     title: LocalizedText
@@ -79,6 +87,7 @@ class IvtMetadata:
     dimensions: list[Dimension] = field(default_factory=list)
     geographies: dict = field(default_factory=dict)
     footnotes: list[Footnote] = field(default_factory=list)
+    missing_values: list[MissingValue] = field(default_factory=list)
     file_name: str | None = None
     directory: str | None = None
     author: LocalizedText = field(default_factory=LocalizedText)
@@ -124,6 +133,14 @@ class IvtMetadata:
             "footnotes": [
                 {"language": f.language, "number": f.number, "text": f.text}
                 for f in self.footnotes
+            ],
+            "missing_values": [
+                {
+                    "symbol": m.symbol,
+                    "code": m.code,
+                    "label": m.label.to_dict(),
+                }
+                for m in self.missing_values
             ],
         }
 
@@ -654,6 +671,128 @@ def _footnotes(data: bytes) -> list[Footnote]:
     return uniq[:200]
 
 
+def _parse_status_legend_record(blob: bytes) -> tuple[str, str] | None:
+    """Parse one ``82 01`` / ``02 01`` status-legend record into ``(symbol, text)``."""
+    if len(blob) < 8 or blob[:2] not in (b"\x82\x01", b"\x02\x01"):
+        return None
+    body = blob[4:]
+    for i in range(0, min(16, len(body) - 4)):
+        n = body[i]
+        if not (1 <= n <= 8) or i + 1 + n + 2 > len(body):
+            continue
+        sym = body[i + 1 : i + 1 + n]
+        if sym[-1] != 0:
+            continue
+        symbol = latin1(sym[:-1])
+        if not symbol or not all(32 < ord(c) < 127 for c in symbol):
+            continue
+        text_len = u16(body, i + 1 + n)
+        start = i + 1 + n + 2
+        take = min(text_len, len(body) - start)
+        if take < 1:
+            continue
+        raw = body[start : start + take]
+        out = bytearray()
+        for b in raw:
+            if b == 0 or b < 9 or b == 127:
+                break
+            out.append(b)
+        text = latin1(out).strip()
+        if len(text) < 3:
+            continue
+        return symbol, text
+    return None
+
+
+def _status_legend_dir(data: bytes, ptr: int, n_entries: int) -> list[tuple[int, int]]:
+    """
+    Read the ``@698`` entry array, keeping blank slots as ``(0, 0)``.
+
+    Unlike ``read_block_dir``, blanks mid-directory (entry 1) must be preserved
+    so code-index entry numbers stay aligned.
+    """
+    entries: list[tuple[int, int]] = []
+    o = ptr
+    for _ in range(n_entries):
+        if o + 8 > len(data):
+            break
+        off = u32(data, o)
+        s1 = u16(data, o + 4)
+        s2 = u16(data, o + 6)
+        o += 8
+        if off == 0 and s1 == 0:
+            entries.append((0, 0))
+            continue
+        ok = s1 == s2 or s2 == 4 * ((s1 + 3) // 4) or s2 >= s1
+        if not ok or s1 <= 0 or off + s1 > len(data):
+            break
+        entries.append((off, s1))
+    return entries
+
+
+def _missing_values(data: bytes) -> list[MissingValue]:
+    """Cell-status legend from header slot ``@698`` (Beyond Missing Values)."""
+    if len(data) < HDR_STATUS_LEGEND + 14:
+        return []
+    dir_ptr = u32(data, HDR_STATUS_LEGEND)
+    n_entries = u32(data, HDR_STATUS_LEGEND + 8)
+    if dir_ptr == 0 or n_entries < 1:
+        return []
+    entries = _status_legend_dir(data, dir_ptr, n_entries)
+    if not entries:
+        return []
+    # Entry 0 is the code index: ``04 02 | u16 n_codes | u16 per_code | …``
+    idx_off, idx_len = entries[0]
+    if idx_off == 0 or idx_len < 6:
+        return []
+    index = data[idx_off : idx_off + idx_len]
+    if index[:2] != b"\x04\x02":
+        return []
+    n_codes = u16(index, 2)
+    per_code = u16(index, 4)
+    if n_codes < 1 or per_code < 1:
+        return []
+    need = 6 + n_codes * per_code * 4
+    if len(index) < need:
+        return []
+
+    out: list[MissingValue] = []
+    pos = 6
+    for code in range(1, n_codes + 1):
+        eidxs = [u32(index, pos + 4 * j) for j in range(per_code)]
+        pos += 4 * per_code
+        labels: list[str | None] = []
+        symbol: str | None = None
+        for ei in eidxs:
+            if ei < 0 or ei >= len(entries):
+                labels.append(None)
+                continue
+            off, length = entries[ei]
+            if off == 0 or length < 1:
+                labels.append(None)
+                continue
+            rec = _parse_status_legend_record(data[off : off + length])
+            if rec is None:
+                labels.append(None)
+                continue
+            sym, text = rec
+            if symbol is None:
+                symbol = sym
+            labels.append(text)
+        if symbol is None or not any(labels):
+            continue
+        en = labels[0] if labels else None
+        fr = labels[1] if len(labels) > 1 else None
+        out.append(
+            MissingValue(
+                symbol=symbol,
+                label=LocalizedText(en=en, fr=fr),
+                code=code,
+            )
+        )
+    return out
+
+
 def build_dimensions(data: bytes, desc: Descriptor) -> list[Dimension]:
     gd = geo_dim_index(desc.dims)
     dims: list[Dimension] = []
@@ -697,6 +836,7 @@ def read_metadata_bytes(
     gd = geo_dim_index(desc.dims)
     geographies = _geo_from_dir(data, desc.dims[gd - 1], gd - 1)
     footnotes = _footnotes(data)
+    missing_values = _missing_values(data)
 
     product_id = info.get("product_id") or notes_info.get("product_id")
     keywords = parse_keywords(data, product_id)
@@ -716,6 +856,7 @@ def read_metadata_bytes(
         dimensions=dimensions,
         geographies=geographies,
         footnotes=footnotes,
+        missing_values=missing_values,
         file_name=file_name,
         directory=directory,
         author=LocalizedText(en=info.get("author_en"), fr=info.get("author_fr")),

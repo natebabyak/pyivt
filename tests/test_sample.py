@@ -8,8 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from pyivt import open as open_ivt
-from pyivt import read_metadata, write_metadata
+from pyivt import from_bytes, read_metadata
 from pyivt.decode import build_layout
 from pyivt.descriptor import parse_descriptor
 from pyivt.header import read_header
@@ -73,6 +72,23 @@ def test_read_metadata():
     assert age.members is not None and age.members[0].startswith("Total")
     assert meta.geographies["geo_name"][0] == "Canada"
     assert len(meta.geographies["member_id"]) == 174
+    assert len(meta.missing_values) == 5
+    assert [m.symbol for m in meta.missing_values] == ["-", "..", "x", "...", "F"]
+    assert [m.label.en for m in meta.missing_values] == [
+        "default Missing Value",
+        "not available for a specific reference period",
+        "suppressed to meet the confidentiality requirements of the Statistics Act",
+        "not applicable",
+        "too unreliable to be published",
+    ]
+    assert [m.label.fr for m in meta.missing_values] == [
+        "valeur manquante par défaut",
+        "indisponible pour une période de référence précise",
+        "confidentiel en vertu des dispositions de la Loi sur la statistique",
+        "n'ayant pas lieu de figurer",
+        "trop peu fiable pour être publié",
+    ]
+    assert [m.code for m in meta.missing_values] == [1, 2, 3, 4, 5]
 
 
 def test_read_metadata_origin_kwargs():
@@ -90,36 +106,31 @@ def test_read_metadata_origin_kwargs():
     assert meta.file_size == len(data)
 
 
-def test_open_bytes_and_exports(tmp_path: Path):
+def test_from_bytes_lazy_and_to_arrow():
     data = SAMPLE.read_bytes()
-    ivt = open_ivt(data, complete=True)
-    assert len(ivt.cells["value"]) == 197_316
+    ivt = from_bytes(data)
+    assert ivt.metadata.product_id == "98-400-X2016112"
     assert ivt.metadata.file_name is None
     assert ivt.metadata.directory is None
     assert ivt.metadata.last_update is None
     assert ivt.metadata.file_size == len(data)
+    assert ivt._cells is None
+    assert ivt.complete is None
+    assert ivt.layout.window_count == 2
 
     table = ivt.to_arrow()
+    assert ivt._cells is not None
+    assert ivt.complete is True
+    assert len(ivt.cells["value"]) == 197_316
     assert table.num_rows == 197_316
     assert table.column("value")[0].as_py() == pytest.approx(28_642_980.0)
     assert table.column("geo")[0].as_py() == 1
 
-    meta_dir = tmp_path / "meta"
-    write_metadata(ivt.metadata, meta_dir)
-    assert (meta_dir / "table_info.csv").is_file()
-    assert (meta_dir / "dimension_members.csv").is_file()
-    assert (meta_dir / "geographies.csv").is_file()
-    info = (meta_dir / "table_info.csv").read_text(encoding="utf-8")
-    assert "title.en" in info
-    assert "author.en" in info
-    assert "number_of_datapoints" in info
-    assert "read_only" in info
 
-
-def test_open_origin_kwargs():
+def test_from_bytes_origin_kwargs():
     data = SAMPLE.read_bytes()
     mtime = datetime.fromtimestamp(SAMPLE.stat().st_mtime, tz=timezone.utc)
-    ivt = open_ivt(
+    ivt = from_bytes(
         data,
         file_name=SAMPLE.name,
         directory=str(SAMPLE.resolve().parent) + os.sep,
@@ -129,3 +140,4 @@ def test_open_origin_kwargs():
     assert ivt.metadata.directory and ivt.metadata.directory.endswith(os.sep)
     assert ivt.metadata.last_update == mtime
     assert ivt.metadata.file_size == len(data)
+    assert ivt._cells is None

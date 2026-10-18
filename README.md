@@ -7,19 +7,25 @@ Python library for Beyond 20/20 `.ivt` files.
 
 ## Getting Started
 
+### Prerequisites
+
+- Python 3.11+
+
 ### Installation
 
-Install `pyivt` using pip:
+1. Install `pyivt` using pip
 
-```bash
-pip install pyivt
-```
+   ```bash
+   pip install pyivt
+   ```
 
-### Usage
+## Usage
 
-#### Quick Start
+`pyivt` is minimal by design, with one way to import and one way to export.
 
-Open an IVT file, inspect its metadata, and export its data to Parquet:
+### Quick Start
+
+Open an IVT file, read its metadata, and write its data to Parquet:
 
 ```python
 from pathlib import Path
@@ -27,44 +33,62 @@ from pathlib import Path
 import pyarrow.parquet as pq
 import pyivt
 
-path = Path("data.ivt")
-ivt = pyivt.open(path.read_bytes())
+ivt = pyivt.from_bytes(Path("data.ivt").read_bytes())
 
 print(ivt.metadata.title.en)
+print(ivt.metadata.notes.en)
 
 pq.write_table(ivt.to_arrow(), "data.parquet")
 ```
 
-#### Opening IVT Files
+### Opening IVT Files
 
-`pyivt.open` accepts IVT bytes only. Convert paths, URLs, or file objects first:
+Use `pyivt.from_bytes` to open IVT files.
+
+#### From Path
 
 ```python
-import os
 from pathlib import Path
-from urllib.request import urlopen
 
 import pyivt
 
-# Local file
 path = Path("data.ivt")
-ivt = pyivt.open(path.read_bytes())
-
-# Optional Beyond 20/20 summary fields from the filesystem
-ivt = pyivt.open(
-    path.read_bytes(),
-    file_name=path.name,
-    directory=str(path.resolve().parent) + os.sep,
-)
-
-# Remote URL
-with urlopen("https://example.com/data.ivt") as resp:
-    ivt = pyivt.open(resp.read())
-
-# File-like object
-with open("data.ivt", "rb") as file:
-    ivt = pyivt.open(file.read())
+ivt = pyivt.from_bytes(path.read_bytes())
 ```
+
+#### From URL
+
+```python
+import requests
+
+import pyivt
+
+url = "https://example.com/data.ivt"
+res = requests.get(url)
+res.raise_for_status()
+
+ivt = pyivt.from_bytes(res.content)
+```
+
+### Reading Metadata
+
+| Beyond 20/20 Summary | `pyivt` Metadata             |
+| -------------------- | ---------------------------- |
+| Title                | `title.en`, `title.fr`       |
+| File Name            | `file_name`                  |
+| Directory            | `directory`                  |
+| Author               | `author.en`, `author.fr`     |
+| Category             | `category.en`, `category.fr` |
+| Keywords             | `keywords.en`, `keywords.fr` |
+| Notes                | `notes.en`, `notes.fr`       |
+| Last Update          | `last_update`                |
+| File Size            | `file_size`                  |
+| Number of Datapoints | `number_of_datapoints`       |
+| Time Series          | `time_series`                |
+| Read-Only            | `read_only`                  |
+| Dimensions           | `dimensions`                 |
+| Footnotes            | `footnotes`                  |
+| Missing Values       | `missing_values`             |
 
 #### Exporting Data
 
@@ -85,26 +109,6 @@ pq.write_table(table, "data.parquet")
 # Polars
 df = pl.from_arrow(table)
 ```
-
-## Beyond 20/20 Summary vs. `pyivt` Metadata
-
-| Beyond 20/20 Summary | `pyivt` Metadata             |
-| -------------------- | ---------------------------- |
-| Title[^1]            | `title.en`, `title.fr`       |
-| File Name            | `file_name`                  |
-| Directory            | `directory`                  |
-| Author               | `author.en`, `author.fr`     |
-| Category             | `category.en`, `category.fr` |
-| Keywords             | `keywords.en`, `keywords.fr` |
-| Notes                | `notes.en`, `notes.fr`       |
-| Last Update          | `last_update`                |
-| File Size            | `file_size`                  |
-| Number of Datapoints | `number_of_datapoints`       |
-| Time Series          | `time_series`                |
-| Read-Only            | `read_only`                  |
-| Dimensions           | `dimensions`                 |
-| Footnotes            | `footnotes`                  |
-| Missing Values       | `missing_values`             |
 
 ## License
 
