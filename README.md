@@ -75,6 +75,8 @@ ivt = pyivt.open(res.content)
 | Footnotes            | `footnotes`                  |
 | Missing Values       | `missing_values`             |
 
+`geographies` is a `Geographies` object (`member_id`, `geo_label`, `geo_uid`, …), not a dict.
+
 ```python
 import pyivt
 

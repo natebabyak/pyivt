@@ -2,7 +2,7 @@
 
 use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyByteArray, PyBytes, PyDict, PyString};
+use pyo3::types::{PyByteArray, PyBytes, PyString};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -11,8 +11,9 @@ use crate::decode::{build_layout, complete_grid, decode_store, Layout};
 use crate::descriptor::parse_descriptor;
 use crate::header::read_header;
 use crate::metadata::{
-    self, Dimension as CoreDimension, Footnote as CoreFootnote, Geographies,
-    IvtMetadata as CoreMeta, LocalizedText as CoreLocalized, MissingValue as CoreMissing,
+    self, Dimension as CoreDimension, Footnote as CoreFootnote,
+    Geographies as CoreGeographies, IvtMetadata as CoreMeta, LocalizedText as CoreLocalized,
+    MissingValue as CoreMissing,
 };
 use crate::tidy::{tidy_arrays, Column};
 
@@ -147,28 +148,48 @@ impl From<CoreMissing> for MissingValue {
     }
 }
 
-fn geographies_to_dict(py: Python<'_>, g: &Geographies) -> PyResult<Py<PyDict>> {
-    let d = PyDict::new(py);
-    d.set_item("member_id", g.member_id.clone())?;
-    if let Some(v) = &g.geo_label {
-        d.set_item("geo_label", v.clone())?;
+#[pyclass(name = "Geographies", module = "pyivt")]
+#[derive(Clone)]
+pub struct Geographies {
+    #[pyo3(get)]
+    pub member_id: Vec<i64>,
+    #[pyo3(get)]
+    pub geo_label: Option<Vec<String>>,
+    #[pyo3(get)]
+    pub geo_name: Option<Vec<Option<String>>>,
+    #[pyo3(get)]
+    pub geo_uid: Option<Vec<Option<String>>>,
+    #[pyo3(get)]
+    pub geo_label_fr: Option<Vec<String>>,
+    #[pyo3(get)]
+    pub dqf_code: Option<Vec<Option<String>>>,
+    #[pyo3(get)]
+    pub tnr_short_form: Option<Vec<Option<String>>>,
+}
+
+impl From<CoreGeographies> for Geographies {
+    fn from(g: CoreGeographies) -> Self {
+        Self {
+            member_id: g.member_id,
+            geo_label: g.geo_label,
+            geo_name: g.geo_name,
+            geo_uid: g.geo_uid,
+            geo_label_fr: g.geo_label_fr,
+            dqf_code: g.dqf_code,
+            tnr_short_form: g.tnr_short_form,
+        }
     }
-    if let Some(v) = &g.geo_name {
-        d.set_item("geo_name", v.clone())?;
+}
+
+#[pymethods]
+impl Geographies {
+    fn __repr__(&self) -> String {
+        format!(
+            "Geographies(member_id_len={}, geo_label={})",
+            self.member_id.len(),
+            self.geo_label.is_some()
+        )
     }
-    if let Some(v) = &g.geo_uid {
-        d.set_item("geo_uid", v.clone())?;
-    }
-    if let Some(v) = &g.geo_label_fr {
-        d.set_item("geo_label_fr", v.clone())?;
-    }
-    if let Some(v) = &g.dqf_code {
-        d.set_item("dqf_code", v.clone())?;
-    }
-    if let Some(v) = &g.tnr_short_form {
-        d.set_item("tnr_short_form", v.clone())?;
-    }
-    Ok(d.into())
 }
 
 #[pyclass(name = "IvtMetadata", module = "pyivt")]
@@ -251,9 +272,8 @@ impl IvtMetadata {
     }
 
     #[getter]
-    fn geographies(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
-        let g = self.inner.lock().unwrap().geographies().clone();
-        geographies_to_dict(py, &g)
+    fn geographies(&self) -> Geographies {
+        self.inner.lock().unwrap().geographies().clone().into()
     }
 
     #[getter]

@@ -3,8 +3,10 @@
 from pyivt._native import (
     Dimension,
     Footnote,
+    Geographies,
     Ivt,
     IvtMetadata,
+    Layout,
     LocalizedText,
     MissingValue,
     open,
@@ -13,8 +15,10 @@ from pyivt._native import (
 __all__ = [
     "Dimension",
     "Footnote",
+    "Geographies",
     "Ivt",
     "IvtMetadata",
+    "Layout",
     "LocalizedText",
     "MissingValue",
     "open",
