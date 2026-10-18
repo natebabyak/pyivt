@@ -6,9 +6,8 @@ from .metadata import (
     IvtMetadata,
     LocalizedText,
     MissingValue,
-    read_metadata,
 )
-from .reader import Ivt, from_bytes, open
+from .reader import Ivt, open
 
 __all__ = [
     "Dimension",
@@ -17,9 +16,7 @@ __all__ = [
     "IvtMetadata",
     "LocalizedText",
     "MissingValue",
-    "from_bytes",
     "open",
-    "read_metadata",
 ]
 
 __version__ = "0.1.0"

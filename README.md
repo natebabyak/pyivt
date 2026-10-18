@@ -25,16 +25,14 @@ Open an IVT file, read its metadata, and write its data to a Parquet file:
 import pyarrow.parquet as pq
 import pyivt
 
-meta = pyivt.read_metadata("data.ivt")
-print(meta.title.en)
-
 ivt = pyivt.open("data.ivt")
+print(ivt.metadata.title.en)
 pq.write_table(ivt.to_arrow(), "data.parquet")
 ```
 
 ### Opening IVT Files
 
-Use `pyivt.open` for paths (or file objects). Use `pyivt.from_bytes` for in-memory buffers.
+`pyivt.open` accepts a path, bytes-like buffer, or binary file object. Summary metadata and layout are parsed immediately; cell values decode only when you call `to_arrow()` or access `.cells`.
 
 #### From Path
 
@@ -55,12 +53,12 @@ url = "https://example.com/data.ivt"
 res = requests.get(url)
 res.raise_for_status()
 
-ivt = pyivt.from_bytes(res.content)
+ivt = pyivt.open(res.content)
 ```
 
 ### Reading Metadata
 
-`read_metadata` returns a typed `IvtMetadata` object. Summary fields are eager; heavy fields load on first access.
+`ivt.metadata` is a typed `IvtMetadata` object. Summary fields are eager; heavy fields load on first access.
 
 | Beyond 20/20 Summary | `pyivt` Metadata             |
 | -------------------- | ---------------------------- |
@@ -80,8 +78,8 @@ ivt = pyivt.from_bytes(res.content)
 ```python
 import pyivt
 
-meta = pyivt.read_metadata("data.ivt")
-print(meta.product_id, meta.title.en)
+ivt = pyivt.open("data.ivt")
+print(ivt.metadata.product_id, ivt.metadata.title.en)
 ```
 
 ### Exporting Data

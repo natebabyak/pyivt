@@ -8,7 +8,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ._bytes import latin1, rd_pascal, u16, u32
-from ._io import Source, read_source
 from .descriptor import Descriptor, DimDesc, geo_dim_index, parse_descriptor
 from .header import (
     HDR_MASTER_PTR,
@@ -937,14 +936,3 @@ def build_metadata(
         _data=data,
         _desc=desc,
     )
-
-
-def read_metadata(source: Source) -> IvtMetadata:
-    """
-    Extract file summary metadata without decoding cell values.
-
-    Accepts a path, bytes-like buffer, or binary file object. Heavy fields
-    (``dimensions``, ``geographies``, ``footnotes``, ``missing_values``) are
-    loaded lazily on first access.
-    """
-    return build_metadata(read_source(source))

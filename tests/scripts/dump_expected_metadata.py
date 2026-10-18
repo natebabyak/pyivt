@@ -16,7 +16,7 @@ for path in (_SRC, _TESTS):
 
 from metadata_expected import EXPECTED_DIR, expected_path, snapshot_metadata
 
-from pyivt import read_metadata
+from pyivt import open as open_ivt
 
 FIXTURES_DIR = _TESTS / "fixtures" / "statcan"
 MANIFEST_PATH = FIXTURES_DIR / "manifest.json"
@@ -41,7 +41,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"skip {product_id}: missing {ivt_path.name}")
             skipped += 1
             continue
-        meta = read_metadata(ivt_path)
+        meta = open_ivt(ivt_path).metadata
         payload = snapshot_metadata(meta)
         out = expected_path(product_id)
         out.write_text(

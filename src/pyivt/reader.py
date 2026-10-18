@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 import pyarrow as pa
 
-from ._io import Source, as_bytes, read_source
+from ._io import Source, read_source
 from .decode import Layout, build_layout, complete_grid, decode_store
 from .descriptor import DimDesc, parse_descriptor
 from .header import read_header
@@ -97,10 +97,11 @@ class Ivt:
 
 def open(source: Source) -> Ivt:
     """
-    Open an IVT file from a path, buffer, or binary file object.
+    Open an IVT file from a path, bytes-like buffer, or binary file object.
 
-    Parses metadata and dimension layout only (descriptor once). Call
-    ``to_arrow()`` (or access ``.cells``) to decode the value grid.
+    Parses summary metadata and dimension layout only (descriptor once).
+    Access ``.metadata`` for typed metadata (heavy fields load on first use).
+    Call ``to_arrow()`` (or access ``.cells``) to decode the value grid.
     """
     data = read_source(source)
     hdr = read_header(data)
@@ -110,12 +111,3 @@ def open(source: Source) -> Ivt:
     meta = build_metadata(data, desc=desc, hdr=hdr)
     lay = build_layout(desc.dims)
     return Ivt(metadata=meta, layout=lay, _data=data, _dims=desc.dims)
-
-
-def from_bytes(data: bytes | bytearray | memoryview) -> Ivt:
-    """
-    Open an IVT file from a bytes buffer without decoding cell values.
-
-    Thin alias for ``open`` restricted to bytes-like inputs.
-    """
-    return open(as_bytes(data))
