@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Write golden metadata JSON for each downloaded StatCan IVT fixture."""
 
 from __future__ import annotations

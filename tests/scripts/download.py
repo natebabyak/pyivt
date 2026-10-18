@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Download StatCan IVT fixtures listed in tests/fixtures/statcan/manifest.json."""
 
 from __future__ import annotations
