@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
 
 import pyarrow as pa
 
@@ -95,32 +94,15 @@ class IvtTable:
         )
 
 
-def from_bytes(
-    data: bytes | bytearray | memoryview,
-    *,
-    file_name: str | None = None,
-    directory: str | None = None,
-    last_update: datetime | None = None,
-) -> IvtTable:
+def from_bytes(data: bytes | bytearray | memoryview) -> IvtTable:
     """
     Open an IVT file from a bytes buffer without decoding cell values.
 
     Parses metadata and dimension layout only. Call ``to_arrow()`` (or access
     ``.cells``) to decode the value grid.
-
-    Parameters
-    ----------
-    file_name, directory, last_update
-        Optional Beyond 20/20 summary fields; omit when not known.
     """
     data = as_bytes(data)
-    meta = read_metadata_bytes(
-        data,
-        file_name=file_name,
-        directory=directory,
-        last_update=last_update,
-        file_size=len(data),
-    )
+    meta = read_metadata_bytes(data)
     desc = parse_descriptor(data)
     if desc is None:
         raise ValueError("could not parse IVT dimension descriptor")

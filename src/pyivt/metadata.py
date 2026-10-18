@@ -5,7 +5,6 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
 
 from ._bytes import latin1, rd_pascal, u16, u32
 from ._io import as_bytes
@@ -88,13 +87,9 @@ class IvtMetadata:
     geographies: dict = field(default_factory=dict)
     footnotes: list[Footnote] = field(default_factory=list)
     missing_values: list[MissingValue] = field(default_factory=list)
-    file_name: str | None = None
-    directory: str | None = None
     author: LocalizedText = field(default_factory=LocalizedText)
     category: LocalizedText = field(default_factory=LocalizedText)
     keywords: LocalizedText = field(default_factory=LocalizedText)
-    last_update: datetime | None = None
-    file_size: int | None = None
     number_of_datapoints: int | None = None
     time_series: str | None = None
     read_only: bool | None = None
@@ -105,13 +100,9 @@ class IvtMetadata:
             "title": self.title.to_dict(),
             "universe": self.universe,
             "notes": self.notes.to_dict(),
-            "file_name": self.file_name,
-            "directory": self.directory,
             "author": self.author.to_dict(),
             "category": self.category.to_dict(),
             "keywords": self.keywords.to_dict(),
-            "last_update": self.last_update.isoformat() if self.last_update else None,
-            "file_size": self.file_size,
             "number_of_datapoints": self.number_of_datapoints,
             "time_series": self.time_series,
             "read_only": self.read_only,
@@ -815,14 +806,7 @@ def build_dimensions(data: bytes, desc: Descriptor) -> list[Dimension]:
     return dims
 
 
-def read_metadata_bytes(
-    data: bytes,
-    *,
-    file_name: str | None = None,
-    directory: str | None = None,
-    last_update: datetime | None = None,
-    file_size: int | None = None,
-) -> IvtMetadata:
+def read_metadata_bytes(data: bytes) -> IvtMetadata:
     """Extract file summary + dimension codebook from IVT bytes."""
     hdr = read_header(data)
     if hdr.signature not in (b"\x04\x00\x20\x00", b"\x02\x00\x20\x00"):
@@ -857,32 +841,15 @@ def read_metadata_bytes(
         geographies=geographies,
         footnotes=footnotes,
         missing_values=missing_values,
-        file_name=file_name,
-        directory=directory,
         author=LocalizedText(en=info.get("author_en"), fr=info.get("author_fr")),
         category=LocalizedText(en=info.get("category_en"), fr=info.get("category_fr")),
         keywords=keywords,
-        last_update=last_update,
-        file_size=len(data) if file_size is None else file_size,
         number_of_datapoints=number_of_datapoints,
         time_series=_time_series_label(data, dimensions),
         read_only=_read_only_flag(data),
     )
 
 
-def read_metadata(
-    data: bytes | bytearray | memoryview,
-    *,
-    file_name: str | None = None,
-    directory: str | None = None,
-    last_update: datetime | None = None,
-) -> IvtMetadata:
+def read_metadata(data: bytes | bytearray | memoryview) -> IvtMetadata:
     """Extract file summary + dimension codebook without decoding cell values."""
-    data = as_bytes(data)
-    return read_metadata_bytes(
-        data,
-        file_name=file_name,
-        directory=directory,
-        last_update=last_update,
-        file_size=len(data),
-    )
+    return read_metadata_bytes(as_bytes(data))

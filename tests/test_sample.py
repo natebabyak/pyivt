@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -60,10 +59,6 @@ def test_read_metadata():
     assert meta.keywords.en == "98-400-X2016112"
     assert meta.notes.en and "Historical comparison" in meta.notes.en
     assert meta.notes.fr and "Comparaison historique" in meta.notes.fr
-    assert meta.file_name is None
-    assert meta.directory is None
-    assert meta.last_update is None
-    assert meta.file_size == len(data)
     assert meta.number_of_datapoints == 197_316
     assert meta.time_series == "No"
     assert meta.read_only is True
@@ -91,29 +86,10 @@ def test_read_metadata():
     assert [m.code for m in meta.missing_values] == [1, 2, 3, 4, 5]
 
 
-def test_read_metadata_origin_kwargs():
-    data = SAMPLE.read_bytes()
-    mtime = datetime.fromtimestamp(SAMPLE.stat().st_mtime, tz=timezone.utc)
-    meta = read_metadata(
-        data,
-        file_name=SAMPLE.name,
-        directory=str(SAMPLE.resolve().parent) + os.sep,
-        last_update=mtime,
-    )
-    assert meta.file_name == SAMPLE.name
-    assert meta.directory and meta.directory.endswith(os.sep)
-    assert meta.last_update == mtime
-    assert meta.file_size == len(data)
-
-
 def test_from_bytes_lazy_and_to_arrow():
     data = SAMPLE.read_bytes()
     ivt = from_bytes(data)
     assert ivt.metadata.product_id == "98-400-X2016112"
-    assert ivt.metadata.file_name is None
-    assert ivt.metadata.directory is None
-    assert ivt.metadata.last_update is None
-    assert ivt.metadata.file_size == len(data)
     assert ivt._cells is None
     assert ivt.complete is None
     assert ivt.layout.window_count == 2
@@ -125,19 +101,3 @@ def test_from_bytes_lazy_and_to_arrow():
     assert table.num_rows == 197_316
     assert table.column("value")[0].as_py() == pytest.approx(28_642_980.0)
     assert table.column("geo")[0].as_py() == 1
-
-
-def test_from_bytes_origin_kwargs():
-    data = SAMPLE.read_bytes()
-    mtime = datetime.fromtimestamp(SAMPLE.stat().st_mtime, tz=timezone.utc)
-    ivt = from_bytes(
-        data,
-        file_name=SAMPLE.name,
-        directory=str(SAMPLE.resolve().parent) + os.sep,
-        last_update=mtime,
-    )
-    assert ivt.metadata.file_name == SAMPLE.name
-    assert ivt.metadata.directory and ivt.metadata.directory.endswith(os.sep)
-    assert ivt.metadata.last_update == mtime
-    assert ivt.metadata.file_size == len(data)
-    assert ivt._cells is None

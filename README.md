@@ -75,14 +75,10 @@ ivt = pyivt.from_bytes(res.content)
 | Beyond 20/20 Summary | `pyivt` Metadata             |
 | -------------------- | ---------------------------- |
 | Title                | `title.en`, `title.fr`       |
-| File Name            | `file_name`                  |
-| Directory            | `directory`                  |
 | Author               | `author.en`, `author.fr`     |
 | Category             | `category.en`, `category.fr` |
 | Keywords             | `keywords.en`, `keywords.fr` |
 | Notes                | `notes.en`, `notes.fr`       |
-| Last Update          | `last_update`                |
-| File Size            | `file_size`                  |
 | Number of Datapoints | `number_of_datapoints`       |
 | Time Series          | `time_series`                |
 | Read-Only            | `read_only`                  |
