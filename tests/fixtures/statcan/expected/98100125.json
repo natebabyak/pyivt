@@ -1,0 +1,195 @@
+{
+  "title": {
+    "en": "Marital status, age group and gender: Canada, provinces and territories and census metropolitan areasStatistics Canada",
+    "fr": "État matrimonial, groupe d’âge et genre : Canada, provinces et territoires et régions métropolitaines de recensementStatistique Canada"
+  },
+  "author": {
+    "en": null,
+    "fr": null
+  },
+  "category": {
+    "en": null,
+    "fr": null
+  },
+  "keywords": {
+    "en": null,
+    "fr": null
+  },
+  "notes": {
+    "en": {
+      "first": "Product ID: 98100125 Title: Marital status, age group and gender: Canada, provinces and territories and census metropolitan areas Archive Status: Current Frequency: Occasional Universe: Population 15 years of age and older, 2021, 2016, 2011 and 2006 censuses — 100% data Variable List: Marital status (13), Gender (3a), Census year (4), Age (16) Start Reference Period: 2021-01-01 End Reference Period: 2021-01-01 Survey Code: 3901 Survey Name: Census of Population Subjects: High Level Corrections: Footnotes : Footnote 1 The boundaries and names of census geographies can change from one census to the next.",
+      "last": "As well previous census data for some 2021 areas may not be available due to the fact that the concordance did not produce an accurate representation of the 2021 area."
+    },
+    "fr": {
+      "first": "Identificateur de produit : 98100125 Titre : État matrimonial, groupe d’âge et genre : Canada, provinces et territoires et régions métropolitaines de recensement Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Population âgée de 15 ans et plus, recensements de 2021, 2016, 2011 et 2006 — Données intégrales (100 %) Liste de variables : État matrimonial (13), Genre (3a), Année de recensement (4), Âge (16) Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois : Renvoi 1 Les limites et les noms des géographies du recensement peuvent changer d'un recensement à l'autre.",
+      "last": "De plus, des données de recensements antérieurs pour certaines régions de 2021 ne sont pas disponibles en raison d’une concordance qui n’aurait pas généré une représentation exacte de la région de 2021."
+    }
+  },
+  "number_of_datapoints": 137280,
+  "time_series": "Geography",
+  "read_only": true,
+  "dimensions": [
+    {
+      "name": "Geography",
+      "items": 55,
+      "type": "Normal",
+      "description": "Geography"
+    },
+    {
+      "name": "Gender (3a)",
+      "items": 3,
+      "type": "Normal",
+      "description": "Gender (3a)"
+    },
+    {
+      "name": "Census year (4)",
+      "items": 4,
+      "type": "Normal",
+      "description": "Census year (4)"
+    },
+    {
+      "name": "Marital status",
+      "items": 13,
+      "type": "Normal",
+      "description": "Marital status"
+    },
+    {
+      "name": "Age (16)",
+      "items": 16,
+      "type": "Normal",
+      "description": "Age (16)"
+    }
+  ],
+  "footnotes": [
+    {
+      "language": "en",
+      "number": 1,
+      "text": "The boundaries and names of census geographies can change from one census to the next. In order to facilitate data comparisons between censuses, previous census data have been adjusted to reflect as closely as possible the 2021 boundaries of these areas. The methodology used for this adjustment involved spatially linking blocks of previous censuses (concordance to the 1996 Census used the 1996 enumeration areas to the 2021 boundaries). A previous census block was linked to the 2021 area within which its representative point fell. A limited number of interactive linkages were completed to further enhance the adjustment in certain areas. For some census geographies, it was not possible to reflect the 2021 boundaries. The 2021 boundaries may not be reflected as there was no previous census block to assign to the 2021 area. As well previous census data for some 2021 areas may not be available due to the fact that the concordance did not produce an accurate representation of the 2021 area. �\u0001 ð €\u0003ÿÿÿ\u0014�\u0002\u0005 R �ˆ\u000fø ø #\"ƒÿ€ÿ ˆˆþÿþÿ \"\u0002ÿ?ÿ? ˆ ð�ð\u000f \u00027\u0006\u0001GeographyGeography\u0003\u0002\u0001Gender (3a)Gender (3a)\u0010\u0004\u0002\u0001Census year (4)Census year (4) \u0004\u0001Marital statusMarital status\u0010\u0004\u0001Age (16)Age (16)\b�\u0001\u0004\u0003ÿÿÿÿÿÿÿÿÿÿÿÿðÿ ÿ\u0003 þ FACET04Marital status, age group and gender: Canada, provinces and territories and census metropolitan areasStatistics Canada\u0001\u0001V\u0007Identificateur de produit : 98100125 Titre : État matrimonial, groupe d’âge et genre : Canada, provinces et territoires et régions métropolitaines de recensement Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Population âgée de 15 ans et plus, recensements de 2021, 2016, 2011 et 2006 — Données intégrales (100 %) Liste de variables : État matrimonial (13), Genre (3a), Année de recensement (4), Âge (16) Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois :",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 1,
+      "text": "Les limites et les noms des géographies du recensement peuvent changer d'un recensement à l'autre. Afin de faciliter la comparaison des données entre les recensements, les données des recensements précédents ont été ajustées pour refléter le plus fidèlement possible les limites de 2021 de ces régions. La méthodologie utilisée pour cet ajustement comprenait le couplage spatial d'îlots de recensements précédents (la concordance avec le Recensement de 2016 utilisait les secteurs de dénombrement de 2016 aux limites de 2021). Un îlot de recensement précédent était couplé à une région de 2021 dans laquelle se situait son point représentatif. Un nombre limité de couplages interactifs ont été effectués afin d'améliorer l'ajustement dans certaines régions. Pour certaines géographies du recensement, il n'a pas été possible de refléter la limite de 2021. Les limites de 2021 ne sont pas reflétées, car il n’y avait aucun îlot de recensements antérieurs à assigner à la région de 2021. De plus, des données de recensements antérieurs pour certaines régions de 2021 ne sont pas disponibles en raison d’une concordance qui n’aurait pas généré une représentation exacte de la région de 2021. äH\u0007 \u001b \u001bŽ9\u0007 V\u000fV\u000fÌ \u0007 Â\u001aÂ\u001aò\u000f\u0007 Ú\u000eÚ\u000e\bö\u0006 ê\u0019ê\u0019¾ç\u0006 J\u000eJ\u000e´Í\u0006 \u001a \u001a:¿\u0006 z\u000ez\u000e ¤\u0006 \u001b \u001bþ”\u0006 \u000f \u000fTz\u0006 ª\u001aª\u001a‚k\u0006 Ò\u000eÒ\u000eLP\u0006 6\u001b6\u001b.A\u0006 \u000f \u000f<'\u0006 ò\u0019ò\u0019\u0006\u0019\u0006 6\u000e6\u000eÀþ\u0005 F\u001aF\u001aBð\u0005 ~\u000e~\u000eHÖ\u0005 ú\u0019ú\u0019ÞÇ\u0005 j\u000ej\u000e„¬\u0005 Z\u001bZ\u001bB�\u0005 B\u000fB\u000fü‚\u0005 F\u001aF\u001aŽt\u0005 n\u000en\u000e8Y\u0005 V\u001bV\u001bþI\u0005 :\u000f:\u000fÈ.\u0005 6\u001b6\u001b¾ \u0005 \u000f \u000f\u0004\u0005\u0005 º\u001aº\u001a:ö\u0004 Ê\u000eÊ\u000eHÛ\u0004 ò\u001aò\u001abÌ\u0004 æ\u000eæ\u000e¼±\u0004 ¦\u001a¦\u001aÞ¢\u0004 Þ\u000eÞ\u000et‡\u0004 j\u001bj\u001b*x\u0004 J\u000fJ\u000f´]\u0004 v\u001av\u001a O\u0004 ª\u000eª\u000eà4\u0004 *\u001a*\u001aF&\u0004 š\u000eš\u000e` \u0004 æ\u0019æ\u0019æý\u0003 z\u000ez\u000edã\u0003 ‚\u001a‚\u001a²Ô\u0003 ²\u000e²\u000e€º\u0003 2\u001a2\u001a\u0016¬\u0003 j\u000ej\u000e\u0014‘\u0003 \u0002\u001b\u0002\u001b ‚\u0003 ö\u000eö\u000eÀg\u0003 ^\u001a^\u001a Y\u0003 ¢\u000e¢\u000ep>\u0003 ®\u001a®\u001a¢/\u0003 Î\u000eÎ\u000e¸\u0014\u0003 ê\u001aê\u001aÒ\u0005\u0003 æ\u000eæ\u000e8ë\u0002 š\u001aš\u001a~Ü\u0002 º\u000eº\u000e,Á\u0002 R\u001bR\u001b\u0002²\u0002 *\u000f*\u000fô—\u0002 \u000e\u001a\u000e\u001aŽ‰\u0002 f\u000ef\u000e n\u0002 î\u001aî\u001a¦_\u0002 ú\u000eú\u000elE\u0002 :\u001a:\u001aú6\u0002 r\u000er\u000e¤\u001b\u0002 V\u001bV\u001b~ \u0002 &\u000f&\u000f¼ñ\u0001 Â\u001aÂ\u001aêâ\u0001 Ò\u000eÒ\u000eÐÇ\u0001 \u001a\u001b\u001a\u001b¶¸\u0001 \u001a\u000f\u001a\u000f¼�\u0001 ú\u001aú\u001a¾Ž\u0001 þ\u000eþ\u000e¬s\u0001 \u0012\u001b\u0012\u001bšd\u0001 \u0012\u000f\u0012\u000f8J\u0001 b\u001ab\u001a²;\u0001 †\u000e†\u000e8!\u0001 z\u001az\u001aŽ\u0012\u0001 ª\u000eª\u000e<÷ R\u001bR\u001b\u000eè .\u000f.\u000fðÌ \u001b \u001bî½ \u0002\u000f\u0002\u000f¨¢ F\u001bF\u001b†“ \"\u000f\"\u000f°y Ö\u0019Ö\u0019Zk V\u000eV\u000etQ æ\u0019æ\u0019 C V\u000eV\u000eà' >\u001b>\u001b¦\u0018 :\u000f:\u000fäc\u0007 V\u001aV\u001a:~\u0007 Š\u000eŠ\u000eÄŒ\u0007 \u001a\u001a\u001a\u001aÞ¦\u0007 r\u000er\u000ePµ\u0007 *\u001a*\u001azÏ\u0007 ¢\u000e¢\u000e Þ\u0007 ‚\u001a‚\u001ažø\u0007 ¶\u000e¶\u000eT\u0007\b ú\u0019ú\u0019N!\b r\u000er\u000eÀ/\b J\u001bJ\u001b K\b .\u000f.\u000f8Z\b Æ\u001aÆ\u001aþt\b â\u000eâ\u000eàƒ\b Ò\u0018Ò\u0018²œ\b 4\b4\bæ¤\b f\u0018f\u0018L½\b \u0006\b\u0006\bRÅ\b b b ´Ñ\b ˜\u0007˜\u0007 ¤\u0001‚\bÿÿÿÿÿÿÿÿÿÿÿ¿ÿ¿ÿ¿ÿÿÿÿÿ¿ÿ¿ÿ¿ ÿÿÿÿÿÿÿÿÿÿÿ¿ÿ¿ÿ¿ÿÿÿÿÿ¿ÿ¿ÿ¿ ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ¿ÿÿÿÿÿÿÿÿÿÿ ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ \u0003À‹Ã\u0003À\u0003Àÿÿÿÿÿÿÿÿ À\u0003�! MÞ\u0001 )/\u0002 ¹Š\u0002 Ì½\u0002 ÿ·\u0002 Á}\u0002 \u0003s\u0002 á™\u0002 \u0011Î\u0002 XÒ\u0002 ,‹\u0002 «*\u0002 's\u0001 ï \u0001 \u0013 \u0001 mÕ\u0012 ¾\u0005 ÈZ ,#\u0001 Ê\u0001 ,ú\u0001 ðÑ\u0001 ³Ã\u0001 Ñ\u0001 †ë\u0001 „ã\u0001 õ¤\u0001 ŽM\u0001 tÂ Lh ß9 H”\u000f \u0004\u0001 L a� ÝD\u0001 š›\u0001 ÎŠ\u0001 Ä…\u0001 í“\u0001 Ž¬\u0001 ’­\u0001 \u0001 ò4\u0001 a· d ÿ7 %A\u0003 µ\u0004 |= Ë“ C… ’^ \"G ï= ¸= ø> ÷5 Õ% —\u0018 \u0013 G\u0004 Û\u0001 {_\u0002 º\u0004 ,= _‘ B| WN Ö3 \u0002& @ \u0015 ¼ ï\u0006 S\u0002 æ } X # ð Š\u0002 \u0001\u0004 œ\u0004 °\u0004 ì\u0004 t\u0004 /\u0003 †\u0001 á P \u0019 –ª ( r\u0001 @\u0006 Â \u0010\u000e M\u0012 À\u0017 Š\u001b õ\u0019 Ý\u0013 \\ È\u0005 Ñ\u0001 ‡ ¼\u0016 \u0005 \u000f 2 s › õ Ç\u0001 Õ\u0002 Å\u0003 »\u0003 p\u0003 ž\u0002 r\u0001 Í ›«\u000e ”Ø\u0001 aÔ\u0001 ˆg\u0001 ±ó Ø½ Ñ« U¯ <È ‹â Ïî 7æ \"Ý ³° ž˜ 9ä a\b �Ø\u0001 ÈÑ\u0001 À\\\u0001 çÖ 9Š Zd \u0005P \u0017M ÏI è? n- — t\u000e ƒ ; ¼÷ m\u0001 á\u0005 $\u000e f\u0017 3 € ±! ž �\u001b \u0014\u0014  +\u0007 §\u0003 ó\u0002 g¥\u0002 æ \u0006\u0004 * \u0019 Ð% \u00147 }K u] ¾d ^ ÈP —1 ‹\u001a \u0014\u0014 Î¬\u0002 F Ü |\u0001 ”\u0002 y\u0004 ·\u0007 ÷ ¤\u001a š. ‘F ?a ‚i ép ÷Á ¡\b ì\u0001 ©\"\u0002 wO\u0002 ûk\u0002 ýK\u0002 \u0016V\u0002 €Œ\u0002 &È\u0002 ¨Í\u0002 ÝŽ\u0002 CB\u0002 ³–\u0001 ã*\u0001 'Ý ; \u0001 ®�\u0011 ¼\u0007 à` Ö\u0019\u0001 Ê¢\u0001 «­\u0001 .·\u0001 Ô\u0001 €ö\u0001 øñ\u0001 š¾\u0001 }w\u0001 üó À™ \u0019U \u00151 \u0012¼\u000e æ Ú\u001b mœ þ<\u0001 •d\u0001 Yx\u0001 \u001a”\u0001 ¾³\u0001 z¶\u0001 Þ“\u0001 +[\u0001 çå b“ ”R ¼/ œÔ\u0002 Ö\u0006 E n} Ìe \u0016I Ð> ÷? ÇB ƒ; Á* R \u0010\u000e c\u0006 …\u0002 Y\u0001 ô\u0001 Ö\u0006 §D \bz Y[ b9 ¾( \u001a\" ¿ Ð\u0016 Ê ¨\u0007 ý\u0002 1\u0001 x K ú# 7 E\u0001 \u0011\u0003 j\u0004 i\u0005 \u000e\u0006 '\u0006 Ä\u0004 Š\u0002 E\u0001 ‘ 2 \u000f \u0005 \b§ # \u0002 +\u0007 ë \u000e\u0010 {\u0016 Ï ¶ Ð\u0016 \u0004\u0010 ²\u0007 ø\u0002 Ü U �\u0015 \u0005 \u000f 7 _ O\u0001 \u0017\u0002 4\u0003 �\u0003 f\u0003 Ë\u0002 \b\u0002 '\u0001 ´ ów `ä\u0001 ÄÁ\u0001 —5\u0001 1É Mž íž o¸ ¡Ñ «Û CÐ ÆÊ ·¢ ‘ ˆ &Ù 1†\u0007 `ä\u0001 &¿\u0001 ;(\u0001 ˆ© m §S \u001aO \"L Î@ \u0013. | Ü\u000f j \u0004\u0006 X\u0007 ;ì �\u0001 5\u0007 \u0018\u0010 Š\u0016 ’ [\" \u0005# Ò ™\u0016 E\u0010 \u0010 \u0005 R\u0003 :\u0002 ‹r\u0002 á P\u0005 L\u000e j\u0018 T) {> +R ^ I\\ âT Ü7 “! �\u0013 _\u000f ÷’\u0002 7 × J\u0001 N\u0002 [\u0004 z\b J\u0010 ñ I/ #F êQ †` +k 5À 23 w \u0002 ?\u0019\u0002 ™7\u0002 Ó%\u0002 \u00078\u0002 z\u0002 4¿\u0002 \u001bÉ\u0002 ø‡\u0002 °C\u0002 k¢\u0001 E\u0001 È\u0004\u0001 ½Ó hì :y\u0010 Ü :k Ç\u0019\u0001 «q\u0001 ò�\u0001 ôÍ\u0001 Œù\u0001 5û\u0001 ŠÉ\u0001 MŽ\u0001 {\u0010\u0001 ”À Ç~ ¼H �& ‚\u0006\u000e ¤\u0001 ¬& #¯ F\"\u0001 Š`\u0001 ¡�\u0001 M¶\u0001 ñ¼\u0001 ›\u0001 hn\u0001 J \u0001 ˆ¸ Æz ÃF ”% ³r\u0002 8 “D ¤j eO h= N> :C D> �. å 6\u0010 \b \u0001\u0004 ù\u0001 \u0001 ¢\u0001 . D ]f .E Ä, T$ ä s\u0019 –\u000f a\b W\u0003 ‹\u0001 È d A j\" \u0005 P �\u0001 \u0016\u0003 É\u0004 \u0006 à\u0006 ‘\u0005 9\u0003 ³\u0001 ´ U # À™ \u0005 7 ž\u0002 ï\u0006 † $\u0013 Í\u0019 § «\u0018 ±\u0012 ` ã\u0003 �\u0001 › 2 \u0014\u0014 \u0005 \u0019 - U × ®\u0001 �\u0002 \u0002\u0003 %\u0003 Ë\u0002 I\u0002 š\u0001 ð › ø¹ ›þ\u0001 \u0005®\u0001 Ò \u0001 -´ \u0015š &¬ ­Å áÍ n¾ cµ ð‘ … \u0001† \u0001‹ ËÅ P\u0012\u0007 Aþ\u0001 A©\u0001 ¶ \u0001 •’ Xa ~T »N þB ó/ € ?\u0011 õ Ú\u0007 à\u0006 “\b fä \u0019 Á\u0002 º ½\u0010 \u0005\u0019 ­ ½$ V\" F\u0019 €\u0011 Ò \u0012\u0007 É\u0004 ø\u0002 ê\u0001 ¡C\u0002 # Y\u0001 ¸\u0006 ‡\u000f V ’1 ïG ¥U ÂV \u001aT f: “& ç\u0018 –\u000f \u0018 ¦\u0002 # ¥ ª O\u0001 b\u0002 d\u0005 F è\u0012 s N/ y; rL w` “q 1",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 2,
+      "text": "Âge « Âge » réfère à l'âge de la personne (ou du sujet) d'intérêt à son dernier anniversaire (ou relativement à une date de référence précise et bien définie). \u0001\u0001¡",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 2,
+      "text": "Age 'Age' refers to the age of a person (or subject) of interest at last birthday (or relative to a specified, well-defined reference date). \u0001\u0001ó \u0010 Total - Âge 15 à 19 ans 20 à 24 ans 25 à 29 ans 30 à 34 ans 35 à 39 ans 40 à 44 ans 45 à 49 ans 50 à 54 ans 55 à 59 ans 60 à 64 ans 65 à 69 ans 70 à 74 ans 75 à 79 ans 80 à 84 ans \u0010 85 ans et plus \u0004\u0001\u0001 \u0007 \u0001\u0001 \u0001\u0010 Total - Age \u0010 15 to 19 years \u0010 20 to 24 years \u0010 25 to 29 years \u0010 30 to 34 years \u0010 35 to 39 years \u0010 40 to 44 years \u0010 45 to 49 years \u0010 50 to 54 years \u0010 55 to 59 years \u0010 60 to 64 years \u0010 65 to 69 years \u0010 70 to 74 years \u0010 75 to 79 years \u0010 80 to 84 years \u0013 85 years and over \u0004\u0001\u0001 \u0005 �\u0002\u0002 V ÿ \"À¿ ü\u0003ˆ ÿ\u0002 Age (16)\u0001\b2Age (16)Âge (16)\u0002 2Âge (16)�\u0002\u0010 \u0016 À \u0003 0À \u0003 0 À€\u0003\u000e 8à \u0003 € \u000e8 \u00011\u00012\u00013\u00014\u00015\u00016\u00017\u00018\u00019\u000210\u000211\u000212\u000213\u000214\u000215\u000216\u0004\u0001\u0001 \u0002 �\u0002\u0003 \" ø\"8þ¿ˆ ÿ¯¢Â (\u0004Code@\u0001 \u0001P\u0002 English Desc\u0001\b\u0001\u0004È\u0002 Desc Français\u0001\b\u0002\u0006È\u0002à; F F Ø; \b \b ˆ; P P .; Z Z &; \b \b #9 \u0003\u0002\u0003\u0002\u001b9 \b \b þ6 \u0002 \u0002 \u0001\u0001\u0019\u0002\u0010 \u0018Total - État matrimonial Marié ou vivant en union libre Marié \u0019 Vivant en union libre * Vivant en union libre - Jamais marié $ Vivant en union libre - Séparé % Vivant en union libre - Divorcé \" Vivant en union libre - Veuf + Non marié et ne vivant pas en union libre < Non marié et ne vivant pas en union libre - Jamais marié 6 Non marié et ne vivant pas en union libre - Séparé 7 Non marié et ne vivant pas en union libre - Divorcé 4 Non marié et ne vivant pas en union libre - Veuf \u0004\u0001\u0001 \u0007 \u0001\u0001ÿ\u0001\u0010 \u0016Total - Marital status Married or living common-law Married \u0015 Living common-law ' Living common law - Never married # Living common law - Separated \" Living common law - Divorced ! Living common law - Widowed ' Not married and not living common-law 9 Not married and not living common law - Never married 5 Not married and not living common law - Separated 4 Not married and not living common law - Divorced 3 Not married and not living common law - Widowed \u0004\u0001\u0001 \u0005 �\u0002\u0002 V üÿ ÿ¿ ÿ\u0003€øÿ\u0002 þ Marital status\u00012Marital statusÉtat matrimonia\u00022État matrimonia�\u0002\u0010 \u0016 À \u0003 0À \u0003 0 À€\u0003\u000e 8à \u00011\u00012\u00013\u00014\u00015\u00016\u00017\u00018\u00019\u000210\u000211\u000212\u000213\u0004\u0001\u0001 \u0002 �\u0002\u0003 \" ø\"8þ¿ˆ ÿ¯¢Â (\u0004Code@\u0001 \u0001P\u0002 English Desc\u0001\b\u0001\u0004È\u0002 Desc Français\u0001\b\u0002\u0006È\u0002n= F F f= \b \b L= \u001a \u001a ð< \\ \\ è< \b \b Ë< Ã< \b \b ¦< �\u0001\u001a û¾€ï\u0004\u00042021\u00042016\u00042011\u00042006\u0004\u0001\u0001 \u0007 �\u0001\u001a û¾€ï\u0004\u00042021\u00042016\u00042011\u00042006\u0004\u0001\u0001 \u0005 �\u0002\u0002 V þÿ ÿ¿ € ÿ\u0003€øÿ\u0002 þ Census year (4)\u00012Census year (4)Année de recens\u00022Année de recens�\u0002\u0004 \u0016 À \u0003 0 \u00011\u00012\u00013\u00014\u0004\u0001\u0001 \u0002 �\u0002\u0003 \" ø\"8þ¿ˆ ÿ¯¢Â (\u0004Code@\u0001 \u0001P\u0002 English Desc\u0001\b\u0001\u0004È\u0002 Desc Français\u0001\b\u0002\u0006È\u0002\u0001\u0001\u0001\b",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 3,
+      "text": "Genre Genre réfère à l'identité personnelle et sociale d'un individu en tant qu'homme, femme ou personne non binaire (une personne qui n'est pas exclusivement homme ni femme). Le genre comprend les concepts suivants : l'identité de genre correspond au genre qu'une personne ressent intimement et individuellement; l'expression de genre désigne la manière dont une personne présente son genre à travers son langage corporel, des choix esthétiques ou des accessoires (p. ex. vêtements, coiffure et maquillage) qui peuvent avoir été traditionnellement associés à un genre particulier, et ce, sans égard à son identité de genre. Le genre d'une personne peut différer de son sexe à la naissance et de la mention qui figure sur ses pièces d'identité ou documents juridiques actuels tels que son certificat de naissance, son passeport ou son permis de conduire. Le genre d'une personne peut changer au fil du temps. Certaines personnes peuvent ne pas s'identifier à un genre en particulier.",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 4,
+      "text": "Étant donné que la taille de la population non binaire est petite, il est parfois nécessaire d’agréger les données dans une variable sur le genre à deux catégories pour protéger la confidentialité des réponses fournies. Dans ces cas, les personnes dans la catégorie « personnes non binaires » sont réparties dans les deux autres catégories de genre et sont désignées par le signe +. La variable « sexe » dans les années de recensement antérieures à 2021 et la variable sur le genre à deux catégories dans le Recensement de 2021 sont incluses ensemble dans [le tableau de données]. Bien que le sexe et le genre soient deux concepts différents, l’introduction du genre ne devrait pas avoir d’incidence importante sur l’analyse de données et la comparabilité historique, étant donné la petite taille des populations transgenre et non binaire. Pour obtenir de plus amples renseignements sur les changements dans les concepts au fil du temps, veuillez consulter le Guide de référence sur l’âge, le sexe à la naissance et le genre. \u0001\u0001Î\u0006",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 3,
+      "text": "Gender Gender refers to an individual's personal and social identity as a man, woman or non-binary person (a person who is not exclusively a man or a woman). Gender includes the following concepts: gender identity, which refers to the gender that a person feels internally and individually; gender expression, which refers to the way a person presents their gender, regardless of their gender identity, through body language, aesthetic choices or accessories (e.g., clothes, hairstyle and makeup), which may have traditionally been associated with a specific gender. A person's gender may differ from their sex at birth, and from what is indicated on their current identification or legal documents such as their birth certificate, passport or driver's licence. A person's gender may change over time. Some people may not identify with a specific gender.",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 4,
+      "text": "Given that the non-binary population is small, data aggregation to a two-category gender variable is sometimes necessary to protect the confidentiality of responses provided. In these cases, individuals in the category “non-binary persons” are distributed into the other two gender categories and are denoted by the “+” symbol. The sex variable in census years prior to 2021 and the two-category gender variable in the 2021 Census are included together in the [data table]. Although sex and gender refer to two different concepts, the introduction of gender is not expected to have a significant impact on data analysis and historical comparability, given the small size of the transgender and non-binary populations. For additional information on changes of concepts over time, please consult the Age, Sex at Birth and Gender Reference Guide. \u0001\u0001Õ \u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 5,
+      "text": "Avant le Recensement de 2021, cette catégorie fait référence au sexe féminin. À compter de 2021, cette catégorie comprend les femmes (et/ou les filles) de même que certaines personnes non binaires. \u0001\u0001¯ \u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 5,
+      "text": "Prior to the 2021 Census, this category refers to females. Starting in 2021, this category includes women (and/or girls), as well as some non-binary persons. \u0001\u0001× \u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 6,
+      "text": "Avant le Recensement de 2021, cette catégorie fait référence au sexe masculin. À compter de 2021, cette catégorie comprend les hommes (et/ou les garçons) de même que certaines personnes non binaires. „\u0001\u0004 ` \u000f \u0004\u0001\u0001 \u0001\u0001ª \u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 6,
+      "text": "Prior to the 2021 Census, this category refers to males. Starting in 2021, this category includes men (and/or boys), as well as some non-binary persons. „\u0001\u0004 ` \u000e \u0004\u0001\u0001 \u0001\u0001) \u0004 Total - Genre Hommes+ Femmes+ \u0004\u0001\u0001 \u0007 \u0001\u0001& \u0004 \u000eTotal - Gender \u0006 Men+ \b Women+ \u0004\u0001\u0001 \u0005 �\u0002\u0002 V àÿ *ø¿ ÿ\u0003¨ ÿ\u0002 À Gender (3a)\u0001\u0003\u00102Gender (3a)Genre (3a)\u0002\u0004\u00112Genre (3a)�\u0002\u0004 \u0016 À \u0003 \u00011\u00012\u00013\u0004\u0001\u0001 \u0002 �\u0001 ð €€\u0003ÿÿÿ\u0014\u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    }
+  ],
+  "missing_values": [
+    {
+      "symbol": "..",
+      "code": 1,
+      "label": {
+        "en": "Not available for a specific reference period",
+        "fr": "Indisponible pour une période de référence précise"
+      }
+    },
+    {
+      "symbol": "X",
+      "code": 2,
+      "label": {
+        "en": "Suppressed to meet the confidentiality requirements of the Statistics Act",
+        "fr": "Confidentiel en vertu des dispositions de la Loi sur la statistique"
+      }
+    },
+    {
+      "symbol": "...",
+      "code": 3,
+      "label": {
+        "en": "Not applicable",
+        "fr": "N'ayant pas lieu de figurer"
+      }
+    },
+    {
+      "symbol": "F",
+      "code": 4,
+      "label": {
+        "en": "Too unreliable to be published",
+        "fr": "Trop peu fiable pour être publié"
+      }
+    }
+  ]
+}

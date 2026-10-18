@@ -1,0 +1,167 @@
+{
+  "title": {
+    "en": "Type of collective dwelling and collective dwellings occupied by usual residents and population in collective dwellings: Canada, provinces and territoriesStatistics Canada",
+    "fr": "Type de logement collectif et logements collectifs occupés par des résidents habituels et population dans les logements collectifs : Canada, provinces et territoiresStatistique Canada"
+  },
+  "author": {
+    "en": null,
+    "fr": null
+  },
+  "category": {
+    "en": null,
+    "fr": null
+  },
+  "keywords": {
+    "en": null,
+    "fr": null
+  },
+  "notes": {
+    "en": {
+      "first": "Product ID: 98100044 Title: Type of collective dwelling and collective dwellings occupied by usual residents and population in collective dwellings: Canada, provinces and territories Archive Status: Current Frequency: Occasional Universe: Persons in collective dwellings and collective dwellings occupied by usual residents, 2021 Census — 100% data Variable List: Type of collective dwelling (16), Collective dwellings occupied by usual residents and population in collective dwellings (2) Start Reference Period: 2021-01-01 End Reference Period: 2021-01-01 Survey Code: 3901 Survey Name: Census of Population Subjects: High Level Corrections: Footnotes : Footnote 1 Historical comparability of collective dwelling data Changes in the collection and processing procedures of collective dwelling data as a result of the COVID-19 pandemic may have had an impact on the historical comparability of collective dwelling data.",
+      "last": "98-500-X."
+    },
+    "fr": {
+      "first": "Identificateur de produit : 98100044 Titre : Type de logement collectif et logements collectifs occupés par des résidents habituels et population dans les logements collectifs : Canada, provinces et territoires Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Personnes dans les logements collectifs et logements collectifs occupés par des résidents habituels, Recensement de 2021 — Données intégrales (100 %) Liste de variables : Type de logement collectif (16), Logements collectifs occupés par des résidents habituels et population dans les logements collectifs (2) Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois : Renvoi 1 Comparabilité historique des données sur les logements collectifs Les modifications apportées aux procédures de collecte et de traitement des données sur les logements collectifs à la suite de la pandémie de COVID-19 peuvent avoir eu une incidence sur la comparabilité historique des données sur les logements collectifs.",
+      "last": "Pour de plus amples renseignements sur la qualité des données sur les logements collectifs, consultez le Guide de référence sur les types de logements, Recensement de la population, 2021, produit no 98-500-X au catalogue de Statistique Canada."
+    }
+  },
+  "number_of_datapoints": 448,
+  "time_series": "No",
+  "read_only": true,
+  "dimensions": [
+    {
+      "name": "Geography",
+      "items": 14,
+      "type": "Normal",
+      "description": "Geography"
+    },
+    {
+      "name": "Type of collect",
+      "items": 16,
+      "type": "Normal",
+      "description": "Type of collect"
+    },
+    {
+      "name": "Collective dwel",
+      "items": 2,
+      "type": "Normal",
+      "description": "Collective dwel"
+    }
+  ],
+  "footnotes": [
+    {
+      "language": "en",
+      "number": 1,
+      "text": "Historical comparability of collective dwelling data Changes in the collection and processing procedures of collective dwelling data as a result of the COVID-19 pandemic may have had an impact on the historical comparability of collective dwelling data. Consequently, caution must be used when making historical comparisons. For more information about data quality for collective dwellings, refer to the Type of Dwelling Reference Guide, Census of Population, 2021, Statistics Canada Catalogue no. 98-500-X. �\u0001 ð €\u0003ÿÿÿ\u0014�\u0002\u0003 R �ˆ\u000fø ø #\"ûÿøÿ ˆˆþÿþÿ \u000e\u0004\u0001GeographyGeography\u0010\u0004\u0001Type of collectType of collect\u0012\u0002\u0001\u0001Collective dwelCollective dwel�\u0001\u0004\u0003ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ € ÿ\u0003 þ FACET04Type of collective dwelling and collective dwellings occupied by usual residents and population in collective dwellings: Canada, provinces and territoriesStatistics Canada\u0001\u0001à\u0005Identificateur de produit : 98100044 Titre : Type de logement collectif et logements collectifs occupés par des résidents habituels et population dans les logements collectifs : Canada, provinces et territoires Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Personnes dans les logements collectifs et logements collectifs occupés par des résidents habituels, Recensement de 2021 — Données intégrales (100 %) Liste de variables : Type de logement collectif (16), Logements collectifs occupés par des résidents habituels et population dans les logements collectifs (2) Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois :",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 1,
+      "text": "Comparabilité historique des données sur les logements collectifs Les modifications apportées aux procédures de collecte et de traitement des données sur les logements collectifs à la suite de la pandémie de COVID-19 peuvent avoir eu une incidence sur la comparabilité historique des données sur les logements collectifs. Par conséquent, il faut faire preuve de prudence lors des comparaisons historiques. Pour de plus amples renseignements sur la qualité des données sur les logements collectifs, consultez le Guide de référence sur les types de logements, Recensement de la population, 2021, produit no 98-500-X au catalogue de Statistique Canada. R\u0016 u u J\u0016 \b \b ñ\u0015 Y Y ‘\u0015 ` ` ‰\u0015 \b \b ö\u0012 “\u0002“\u0002)$ \b \b ð 9\u00039\u0003è \b \b Ö \u0012 \u0012 Š L\u0001L\u0001‚ \b \b p \u0012 \u0012 Ö š\u0001š\u0001q e e ±L ˆ ˆ \u001bL – – ^K ½ ½ ,I 2\u00022\u0002,F \u0003 \u0003 \u0001\u0001�\u0002\u0010 #Total - Type of collective dwelling $ Health care and related facilities Hospitals \u0011 Nursing homes \" Residences for senior citizens X Facilities that are a mix of both a nursing home and a residence for senior citizens ` Residential care facilities such as group homes for persons with disabilities and addictions ' Correctional and custodial facilities Shelters Service collective dwellings Lodging and rooming houses Q Hotels, motels and other establishments with temporary accommodation services & Other service collective dwellings \u001a Religious establishments \u0014 Hutterite colonies Other collective dwellings \u0004\u0001\u0001 \u0005 �\u0002\u0002 V þÿ *ÿ¿ € ÿ\u0003¨øÿ\u0002 þ Type of collect\u0001\u0003\u00122Type of collectType de logemen\u0002\u0004\u00132Type de logemen�\u0002\u0010 \u0016 À \u0003 0À \u0003 0 À€\u0003\u000e 8à \u0003 € \u000e8 \u00011\u00012\u00013\u00014\u00015\u00016\u00017\u00018\u00019\u000210\u000211\u000212\u000213\u000214\u000215\u000216\u0004\u0001\u0001 \u0002 �\u0002\u0005 \" ø\"8þ¿ˆ ÿ¯¢Âÿ+ààÿ‹8ðÀ\"\u0004Code@\u0001 \u0001P\u0002 English Desc\u0001\b\u0001\u0004È\u0002 Desc Français\u0001\b\u0002\u0006È\u0002 _Description\u0004\u0003 \bP\u0001@ _ItemNotes2\u0004\u0003 P\u0001@h2 o\u0002o\u0002×4 \b \b ß4 S S 25 F F x5 \b \b €5 Ê Ê J6 \b \b R6 Ù Ù +7 \b \b 37 Ê Ê ý7 \b \b \u00058 Ù Ù Þ8 \b \b æ8 ˜ ˜ ~9 \b \b †9 ˜ ˜ : \b \b &: D D j: \b \b r: A A ³: \b \b »: >\u0001>\u0001ù; \b \b \u0001< H\u0001H\u0001I= \b \b Q= \\ \\ ­= \b \b µ= a a \u0016> \b \b > Ã Ã á> \b \b é> Ã Ã ¬? \b \b ´? 7 7 ë? \b \b ó? 7 7 *@ \b \b 2@ 7 7 i@ \b \b q@ 7 7 ¨@ \b \b °@ g g \u0017A \b \b A g g †A \b \b ŽA Ž\u0002Ž\u0002i \b \b o\u0019 ú\u0003ú\u0003g\u0019 \b \b \u0019 H H \u0017\u0019 \b \b Ï\u0018 H H Ç\u0018 \b \b b2 \u0006 \u0006 \u0004\u0001\u0001 5 �\u0001M ï½Þ{½÷{ï ß\u0010\u00033,1\u00033,1\u00032,4\u00032,9\u00033,2\u00032,9\u00032,8\u00033,5\u00034,5\u00033,6\u00033,5\u00034,3\u00038,2\u000420,2\u0004\u0001\u0001 3 �\u0001M ï½Þ{½÷{ï ß\u0010\u00033.1\u00033.1\u00032.4\u00032.9\u00033.2\u00032.9\u00032.8\u00033.5\u00034.5\u00033.6\u00033.5\u00034.3\u00038.2\u000420.2\u0004\u0001\u0001 1 \u0001\u0001ö\u0003\u0010 ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... \u0003... \u0004\u0001\u0001 / \u0001\u0001a \u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 2,
+      "text": "Refers to school residences, training centre residences, campgrounds and parks. \u0001\u0001–\u0001\u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 2,
+      "text": "Désigne les établissements pour personnes âgées qui fournissent des services de soins de santé à certains résidents (c.-à-d. aux résidents qui ne sont pas capables d'accomplir seuls la plupart des activités quotidiennes), mais seulement des services de soutien ou d'aide aux autres résidents (c.-à-d. aux résidents qui sont capables d'accomplir seuls la plupart des activités quotidiennes). „\u0001\u0010 \u0004 \u000f \u0011 \u0004\u0001\u0001 \u0001\u0001H\u0001\u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 3,
+      "text": "Facilities for elderly residents that provide health care services to some residents (i.e., to residents that are not independent in most activities of daily living), but only support services or assisted services to other residents (i.e., to residents that are independent in most activities of daily living). „\u0001\u0010 \u0004 \u000e \u0010 \u0004\u0001\u0001 \u0001\u00015\u0003\u0010 \"Total - Type de logement collectif = Établissements de soins de santé et établissements connexes Hôpitaux & Établissements de soins infirmiers # Résidences pour personnes âgées z Établissements qui sont une combinaison d’un établissement de soins infirmiers et d’une résidence pour personnes âgées † Établissements de soins pour bénéficiaires internes comme un foyer collectif pour personnes ayant une incapacité ou une dépendance / Établissements correctionnels et de détention Refuges + Logements collectifs offrant des services # Maisons de chambres et pensions Y Hôtels, motels et autres établissements offrant des services d'hébergement temporaire 4 Autres logements collectifs offrant des services \u001a Établissements religieux \u0015 Colonies huttérites Autres logements collectifs \u0004\u0001\u0001 \u0007 A$ l\u0007l\u0007 „\u0001@\bÿÿÿÿÿÿóÿÿ÷ó?ÿÿóÿÿÿóÿÿÿóÿÿÿóÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿLñÃÿ ÿÓó ñ ÿ ~ L^ Ü2 Èg\u0007 ,\u0001 u+ ƒ :Ò\u0002 É \u0006p\u0002 Ë\u0002 \u0001 ž\u001b \u000eñ \u0001 z€ Š\u0002 \u00101 D \u0001 Š\u0007 ç@ š\u0010 ÀX \b ôo Æ\u0002 Å! †\u0001 Î• 4\u0003 v/ w\u0001 ä Í ©\u001a \u000f J\u0001 - l - Š\u0007 X\u0002 U \u0003 \u000f ó\u0002 _ } ù\u0001 A T\u0001 ( Z \u000f K P \u0014 › ¾ û\u000e K „\b \u0019 \u000f °\u0004 |\u0001 \u0005 \u0001 # \u0001 \u0005 F d þ\u0001 7 P ¤\u0001 Ù\u0003 \u0005 Z C\u0003 \u00124 \u0002 Á* \u000f ª i \u001a 7 Í\u0005 ¤\u0001 O\u0001 „\b 4\u0003 \u0014 s ú Ó\u0004 < ¸\u0001 ‡ \b\u0002 7 \u0018\u0001 2 \u0019 ¥ a\u0003 Ê? 0\u0002 þ3 \u0005 @\u0001 ‚ 6\u0015 x í # Q\u0004 \u000e\u0001 O \u000f )\u0004 \u000f ¥ õ \"\u0006 Z ”\u0002 n N\u0002 - @\u0001 \u0019 7 æ\u0014 �ï\u0002 \u0017 Õ‚\u0002 ( \u001a �\u0002 À¨ B\u0004 í*\u0001 \u000e\u0001 ™z \u0015\u0004 z+ 7 •\u0015 ‚ U\u0005 '\u0006 Ü2 N\u0002 ý\u0011 Š\u0002 8 O\u0001 §\u0017 c\u0001 æ\u0014 ‡ û “ ïà\u0002 Z\u000f ´?\u0002 d ¹\u000f Š\u0002 È\u0004\u0001 \u0002 i– ¥ ÿ< ° ÐW K o' × <\u0014 } _P …\u0002 %\u0012 ì\u0004 b\u001b \u0003 Ý\" › \u0005 \u0004\u0001 '\u0010 -\u0005 ˆ Õ\u0002 ´A c\u0001 ‡ º\" < 5\u0011 Â\u0001 ï\u0001 › \u0014 Ã # ¯ |\u0001 ú s �\u0003 ¾ ‡\u0005 F Ñ\u0001 \u0014 A s –- +\u0002 º\u0004 \u0015r ß\u0002 „? \u000f 6\u0001 Ò ›# i ¤ # \u0005\u0005 r\u0001 \u0019 ³ \u0014 ¹ O\u0001 ¢\b \u0014 x ë ý\u0002 P #\u0005 \u000f P P è U O ÍJ\u0001 Ò\u0005 2¾ ( h\u0006 Ò nA æ ˜: Z $\" “\u0003 ¥\u0019 ‚\u0014 2 D\u0007 \u0003 – ³\u0006 \b\u0002 ä á t 2 ë ¾ ýH ¾ Ý \u0015\u000e ¯J\u0001 w\u0006 2á E\u0006 \u0013\u0001 @[ ú C: F ü\u0003 Ê& ä ‡ v 6\u0006 ˆE ¹ \u0017 ¶\u0003 z\u0017 Ç\u0001 ÷! < T\u0001 \u0005 S\u0002 ‚ ù\u0006 P Š\u0002 O\u0001 Ò 2 K 2 2 ª \u0005 - – # 2 £\u0002 \u000f ;\u0001 \u0005 \u0014 \u0005 Z } K \u0005 n \u0005 d \u000f x A \u0005 2 \u000f \u0005 \u0014 # ÿ - \u0014 \u0005 \u0014 U \u0005 P \u0014 ( \u0005 \u0005 \u000f \u0019 \b À \u000e³ < à ,\u000eà ÿ×+ ½+ \u001a \u001a �\u0002\u0003 \u000e ` - ¶s\u0001Z\u0001\u0002s\u0001Z\u0001s\u0001Z\u0001\u0001�\u0001\u0012 ˆ €\u0001d\u0001ì, . . \u001a- @ @ Z- , , †- F F Ì- ^ ^ *. X X ‚. . . . Î. . . ü. 0 0 ,/ Ž Ž b, Š Š ‚\u0001v ÿÿÿÿÿÿàÿ \u00040 s n valeur arrondie à 0 (zéro) là où il y a une distinction importante entre le zéro absolu et la valeur arrondie \u0004\u0002\u0005 \u0002 \u0002 \u0004 \u0005 \u0006 \u0007 \b ‚\u00015 ÿÿÀÿ \u0003.. . Not available for a specific reference period‚\u0001\" ÿÿ € \u0002- Valeur manquante par défaut ‚\u0001: ÿÿøÿ \u0003.. 3 Indisponible pour une période de référence précise ‚\u0001P ÿÿÿÿ ÿ \u0002X J Suppressed to meet the confidentiality requirements of the Statistics Act ‚\u0001J ÿÿÿÿ ø \u0002X D Confidentiel en vertu des dispositions de la Loi sur la statistique ‚\u0001\u0017 àÿ \u0004... \u000f Not applicable‚\u0001$ ÿÿ À \u0004... N'ayant pas lieu de figurer ‚\u0001% ÿÿ À \u0002F To",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 5,
+      "text": "Logement collectif Logement collectif désigne un logement de nature commerciale, institutionnelle ou communautaire dans lequel une personne ou un groupe de personnes réside ou pourrait résider. Il doit fournir des soins ou des services ou disposer de certaines installations communes, telles qu'une cuisine ou une salle de bain, qui sont partagées par les occupants. Les logements collectifs comprennent, par exemple, les pensions et maisons de chambres, les hôtels, les motels, les établissements pour touristes, les établissements de soins infirmiers, les résidences pour personnes âgées, les hôpitaux, les résidences de personnel, les bases militaires, les campements de travailleurs, les établissements correctionnels et les foyers collectifs. \u0001\u0001.\u0002",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 7,
+      "text": "Collective dwelling Collective dwelling refers to a dwelling of a commercial, institutional, or communal nature in which a person or group of persons reside or could reside. It must provide care or services or have certain common facilities, such as a kitchen or bathroom, which are shared by the occupants. Examples include lodging or rooming houses, hotels, motels, tourist establishments, nursing homes, residences for senior citizens, hospitals, staff residences, military bases, work camps, correctional facilities and group homes. \u0001\u0001¹ \u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 6,
+      "text": "Désigne les campements de travailleurs, les bases militaires, les navires commerciaux ou de l'État, et les autres logements collectifs tels que les camps de pourvoyeurs. \u0001\u0001’ \u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 8,
+      "text": "Refers to work camps, military bases, commercial and government vessels, and other collective dwellings such as outfitter camps. \u0001\u0001„ \u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 7,
+      "text": "Désigne les résidences pour étudiants, les résidences de centres de formation, les terrains de camping et les parcs. �\u0001 ð €€\u0003ÿÿÿ\u0014\u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    }
+  ],
+  "missing_values": [
+    {
+      "symbol": "..",
+      "code": 1,
+      "label": {
+        "en": "Not available for a specific reference period",
+        "fr": "Indisponible pour une période de référence précise"
+      }
+    },
+    {
+      "symbol": "X",
+      "code": 2,
+      "label": {
+        "en": "Suppressed to meet the confidentiality requirements of the Statistics Act",
+        "fr": "Confidentiel en vertu des dispositions de la Loi sur la statistique"
+      }
+    },
+    {
+      "symbol": "...",
+      "code": 3,
+      "label": {
+        "en": "Not applicable",
+        "fr": "N'ayant pas lieu de figurer"
+      }
+    },
+    {
+      "symbol": "F",
+      "code": 4,
+      "label": {
+        "en": "Too unreliable to be published",
+        "fr": "Trop peu fiable pour être publié"
+      }
+    }
+  ]
+}

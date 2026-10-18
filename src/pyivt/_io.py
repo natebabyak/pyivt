@@ -19,8 +19,7 @@ def as_bytes(data: bytes | bytearray | memoryview) -> bytes:
     if isinstance(data, (bytearray, memoryview)):
         return bytes(data)
     raise TypeError(
-        "IVT data must be bytes, bytearray, or memoryview; "
-        f"got {type(data).__name__}"
+        f"IVT data must be bytes, bytearray, or memoryview; got {type(data).__name__}"
     )
 
 
@@ -37,8 +36,7 @@ def read_source(source: Source) -> bytes:
         data = read()
         if not isinstance(data, (bytes, bytearray, memoryview)):
             raise TypeError(
-                "file-like source must return bytes; "
-                f"got {type(data).__name__}"
+                f"file-like source must return bytes; got {type(data).__name__}"
             )
         return as_bytes(data)
     raise TypeError(

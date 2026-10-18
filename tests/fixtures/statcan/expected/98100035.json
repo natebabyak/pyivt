@@ -1,0 +1,119 @@
+{
+  "title": {
+    "en": "Broad age groups and sex: Canada and census metropolitan areasStatistics Canada",
+    "fr": "Grands groupes d’âge et sexe : Canada et régions métropolitaines de recensementStatistique Canada"
+  },
+  "author": {
+    "en": null,
+    "fr": null
+  },
+  "category": {
+    "en": null,
+    "fr": null
+  },
+  "keywords": {
+    "en": null,
+    "fr": null
+  },
+  "notes": {
+    "en": {
+      "first": "Product ID: 98100035 Title: Broad age groups and sex: Canada and census metropolitan areas Archive Status: Current Frequency: Occasional Universe: Total population, including institutional residents, 2021 Census — 100% data Variable List: Broad age groups (5), Sex (3) Start Reference Period: 2021-01-01 End Reference Period: 2021-01-01 Survey Code: 3901 Survey Name: Census of Population Subjects: High Level Corrections: Footnotes :",
+      "last": "Product ID: 98100035 Title: Broad age groups and sex: Canada and census metropolitan areas Archive Status: Current Frequency: Occasional Universe: Total population, including institutional residents, 2021 Census — 100% data Variable List: Broad age groups (5), Sex (3) Start Reference Period: 2021-01-01 End Reference Period: 2021-01-01 Survey Code: 3901 Survey Name: Census of Population Subjects: High Level Corrections: Footnotes :"
+    },
+    "fr": {
+      "first": "Identificateur de produit : 98100035 Titre : Grands groupes d’âge et sexe : Canada et régions métropolitaines de recensement Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Population totale, incluant les résidents institutionnels, Recensement de 2021 — Données intégrales (100 %) Liste de variables : Grands groupes d’âge (5), Sexe (3) Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois :",
+      "last": "Identificateur de produit : 98100035 Titre : Grands groupes d’âge et sexe : Canada et régions métropolitaines de recensement Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Population totale, incluant les résidents institutionnels, Recensement de 2021 — Données intégrales (100 %) Liste de variables : Grands groupes d’âge (5), Sexe (3) Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois :"
+    }
+  },
+  "number_of_datapoints": 660,
+  "time_series": "Geography",
+  "read_only": true,
+  "dimensions": [
+    {
+      "name": "Geography",
+      "items": 44,
+      "type": "Normal",
+      "description": "Geography"
+    },
+    {
+      "name": "Broad age group",
+      "items": 5,
+      "type": "Normal",
+      "description": "Broad age group"
+    },
+    {
+      "name": "Sex (3)",
+      "items": 3,
+      "type": "Normal",
+      "description": "Sex (3)"
+    }
+  ],
+  "footnotes": [
+    {
+      "language": "fr",
+      "number": 1,
+      "text": "Âge « Âge » réfère à l'âge de la personne (ou du sujet) d'intérêt à son dernier anniversaire (ou relativement à une date de référence précise et bien définie). \u0001\u0001¡",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 1,
+      "text": "Age 'Age' refers to the age of a person (or subject) of interest at last birthday (or relative to a specified, well-defined reference date). \u0001\u0001X \b Total - Âge 0 à 14 ans 15 à 64 ans \u0010 65 ans et plus \u0012 85 ans et plus \u0004\u0001\u0001 \u0007 |\u000f T T „\u0001 \bîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî àîî à ìs4\u0002û\u0001\u0016\u0001ñq \u0001{¿[ \u0005 / {², ‘m\u0001Ç´µ 9Ü· v#k 4@1 =ã9 Ó$ uà\u0004 YD\b d>\u0003 ò“\u0001 rª\u0001 M{ /? #< @,\u0002 4\u0011\u0001 \u0007\u001b\u0001 ×– �C HS \u0001\u000e µ\u0004 G )\u001b\u0007 ÿu\u0003 *¥\u0003 á\u000e\u0001 “Š S„ XÐ\u0004 s]\u0002 år\u0002 ë;\u0001 ù� ò­ 0 ‹ ª\u0014 B¨\u0001 :Ï \bÙ †B í! ” 4\u0016\u0001 ‰ \u0018� �O 6$ \\+ W\b \u0002\u0003 P\u0005 \u0013h\u0002 ©-\u0001 j:\u0001 ¥_ k0 5/ �\u0001 QÇ OÉ Ów í5 æA \u000e ñ\u0004 \u001a 2þ\u0001 ˜ø Ÿ\u0005\u0001 íN Z( “& :G\u0001 – ¤¦ \u0010h £/ m8 } ¢\u0003 Û\u0006 êŒ\u0001 �Æ MÆ cB \u0006\" b \u0012ò »{ Wv uX Ü( ™/ t 9\u0003 @\u0006 ’|A \u000f ˆ`! B\u0003 À£\u0005 }_\u0005 Ë¯* �B\u0015 Am\u0015 …É À5\u0005 Ê“\u0006 õ•\u0001 Ï� +\u0006\u0001 ŽÎ œI\u0006 ÷„\u0006 à \u0002 Ö \u0001 ÿ rþ\u0007 \u0011\u0004\u0004 aú\u0003 AÆ\u0002 °:\u0001 Œ‹\u0001 ÙS �\u001b J8 \"w\u0002 Œ;\u0001 ‘;\u0001 ë_ \u00061 å. }\u0001 œÂ �º \u0015š êG &R S\u0011 ÿ\u0005 T Hx\u0003 ,´\u0001 Ä\u0001 ªŒ ßH ËC C$\u0002 ¢\u0011\u0001 ¡\u0012\u0001 VÇ °Y «m 5\u001b ~ ·\u0011 Òv\u0002 Ë3\u0001 \u0007C\u0001 à[ ]/ ~, y\u0001 ¼ \u0001½ ê¡ ]H ˆY |\u0015 \u0007 [\u000e w?\u0003 <š\u0001 6¥\u0001 h� ýH pD ‡+\u0002 ù\u0014\u0001 Ž\u0016\u0001 ˆ† F< BJ Á\u0011 |\u0006 E Q²\u0001 4Õ Ý qC µ\" ¼ C \u0001 ¬… œ† ˜b Î, Å5 ¨ Ä\u0004 ä\u0007 %3\u0002 ‹\u0014\u0001 š \u0001 c` e1 \u0003/ ýe\u0001 ä± \u0019´ Ål B1 ~; \u000e â\u0004 ) hš\u0002 ÁG\u0001 ¬R\u0001 éf î4 ö1 ó«\u0001 HÕ «Ö ‘‡ ‹= \u0006J {\u0011 \u0018\u0006 c Ö†\u0002 Y<\u0001 }J\u0001 7i Q6 æ2 g°\u0001 ãÕ ‰Ú 3m \u001b0 \u0018= n\u000f i\u0005 !û ,Ø\u0005 õ\"\u0006 wë\u0001 vü \u0001ï 'Ç\u0007 eØ\u0003 Âî\u0003 ~H\u0002 Q\u0003\u0001 -E\u0001 ~T ¯ Ê5 \u0001¢\u0002 ¦I\u0001 `X\u0001 ê` °1 :/ ­°\u0001 ¦Ö Ú j� KA \u001aO “\u0012 \b\u0007 ‹ jÉ\b \u001a_\u0004 Kj\u0004 �\u0001 ·Å g» Þé\u0005 “û\u0002 Kî\u0002 i^\u0001 Ú� ”À (- w\u0010 ¬ >K\b ‰\u000e\u0004 µ<\u0004 s^\u0001 -´ Kª ;e\u0005 \\«\u0002 ß¹\u0002 �‡\u0001 ¯ �Ø ;3 §\u0012 ™ SV\u0006 9\u0019\u0003 \u0015=\u0003 -,\u0001 p™ ½’ †*\u0004 ‚ \u0002 \u0002 ›ÿ Lr O� é q }\u0014 ±µ\u0016 e\u0017 Lž ÌÕ\u0003 yó\u0001 Xâ\u0001 ä\u0002\u000f ûa\u0007 î \u0007 üÜ\u0003 ûÁ\u0001 \u0006\u001b\u0002 ¿w \u0007+ ½L §Q\u0011 Sr\b Tß\b ªÚ\u0002 \u0013s\u0001 ’g\u0001 vy è£\u0005 ‰Õ\u0005 Œý\u0002 S[\u0001 9¢\u0001 Ö` ÿ# Ü< d\u0005 \u0012¥\u0002 ø¾\u0002 'û a€ Ëz n‰\u0003 \u000e¾\u0001 eË\u0001 uß £f Íx é\u0016 \b\u0007 æ\u000f qö\u0001 wñ ú\u0004\u0001 òI ·% ;$ K1\u0001 ” +� 4{ 7 ”C ?\u0011 c\u0006 × Å�\u0006 f7\u0003 Zf\u0003 Kõ ¹} —w \u0016\u0018\u0004 ª\u0003\u0002 q\u0014\u0002 d�\u0001 ¶ WÚ 6 Ä\u0013 G\" |á\u0001 ”í ãó üD s# ‰! Û2\u0001 \u0011™ Ê™ ¥i \u00101 �8 À K\u0005 u\b q£^ &. f}0 ¿¹\u000e ±�\u0007 ,\u0007 '�@ —¼ ‹à �L\u000f ÃÛ\u0006 Òp\b \b\u0002 ¤Ä C\u0001 ær\u0006 ƒ3\u0003 c?\u0003 ¶ \u0001 WŠ d‚ §'\u0004 Z\u0017\u0002 R\u0010\u0002 „>\u0001 ×‘ ²¬ ç' ’\u000e U\u0019 s¼ jI\u0006 \u000es\u0006 @'\u0002 X\u001a\u0001 í \u0001 Ãp\b ¶;\u0004 \u00125\u0004 p$\u0002 Wó \u00191\u0001 rG 8\u0018 ?/ Í\u0003 ªà\u0001 Úì\u0001 â¸ o^ xZ C~\u0002 j?\u0001 Ù>\u0001 Z– ÖB „S ú\u0014 !\u0007 Ù -Ø\u0004 ¸c\u0002 ut\u0002 ïì Sz œr ¦3\u0003 /˜\u0001 |›\u0001 “· ;Q ]f ï\u001a ˜\b R\u0012 Rœ\u0016 ì: fa \u000e/\u0004 ¡%\u0002 r \u0002 �`\u000f ¸©\u0007 Ó¶\u0007 ¯ \u0003 ˜k\u0001 ¡\u0001 øW Ð -7 ˆ£\u0015 Ã jà ‘\u0006\u0004 \u0012\u000f\u0002 „÷\u0001 F~\u000e yC\u0007 Ò:\u0007 ¬ \u0003 ˜p\u0001 \u0019®\u0001 K_ ´# —; Êã\u0001 Vï oô ô[ 5/ ¿, a4\u0001 )š 3š uS ó% ‚- õ =\u0004 ¸\u0006 è‰\u0001 jÂ ƒÇ ÂG ô$ Î\" ß\u0006\u0001 ƒ Öƒ L; m\u001a ß ½\u0006 g\u0002 Q\u0004 �ü\u0002 ¾|\u0001 Ï\u0001 ‡ µE KA Åí\u0001 òø Øô È‡ > ¬I \b\u0011 •\u0006 s e¼\u0001 QÛ \u0019á ¦O \u0004) ¢& \u000f\u000e\u0001 $† ë‡ °^ ), Œ2 T —\u0004 ¸\u0006 Ü½\u0001 }Ü dá JB Ô! q U \u0001 ÚŽ {Ž =^ Å+ x2 Ñ ’\u0004 D\u0007 Õc\u0003 í§\u0001 è»\u0001 ’w á< ¶: S(\u0002 &\u0010\u0001 2\u0018\u0001 ðÃ ëZ i }\u0019 ( Z\u000f ÿÂ\u0001 \u0015Û ïç \u0006@ ó \u0018 ï\u0014\u0001 ¥‡ J� n }2 �; p 7\u0005 9\b ‰S( ¿\u0013 ‰”\u0014 M­\u0005 Aî\u0002 \u0011¿\u0002 Fž\u001b =— \u0004\u0007\u000e ö\u0007\u0007 ‚9\u0003 yÎ\u0003 \u000eç \u0003\\ ‹ ³\u000f\u0006 òì\u0002 Æ\"\u0003 ?Å Fd ô` †ß\u0003 Zå\u0001 ,ú\u0001 ój\u0001 M£ ¦Ç ±0 ˜\u0012 ú\u001a à\u001a \u001a \u001a �\u0002\u0003 \u000e ` - ¶s\u0001Z\u0001\u0002s\u0001Z\u0001s\u0001Z\u0001\u0001�\u0001\u0012 ˆ €\u0001d\u0001\u000f . . = @ @ } , , © F F ï ^ ^ M X X ¥ Ã . . ñ . . 0 0 O Ž Ž …\u001b Š Š ‚\u0001v ÿÿÿÿÿÿàÿ \u00040 s n valeur arrondie à 0 (zéro) là où il y a une distinction importante entre le zéro absolu et la valeur arrondie \u0004\u0002\u0005 \u0002 \u0002 \u0004 \u0005 \u0006 \u0007 \b ‚\u00015 ÿÿÀÿ \u0003.. . Not available for a specific reference period‚\u0001\" ÿÿ € \u0002- Valeur manquante par défaut ‚\u0001: ÿÿøÿ \u0003.. 3 Indisponible pour une période de référence précise ‚\u0001P ÿÿÿÿ ÿ \u0002X J Suppressed to meet the confidentiality requirements of the Statistics Act ‚\u0001J ÿÿÿÿ ø \u0002X D Confidentiel en vertu des dispositions de la Loi sur la statistique ‚\u0001\u0017 àÿ \u0004... \u000f Not applicable‚\u0001$ ÿÿ À \u0004... N'ayant pas lieu de figurer ‚\u0001% ÿÿ À \u0002F Too unreliable to be published‚\u0001' ÿÿ à \u0002F ! Trop peu fiable pour être publié‚\u0001{ ÿÿÿÿÿÿøÿ \u00040 s s value rounded to 0 (zero) where there is a meaningful distinction between true zero and the value that was roundedu > > ³ & & Ù 0 0 & & / 0 0 _  , , « & & Ñ 0 0 \u0001! ! & & E! \u0014 \u0014 Y! \u0012 \u0012 k! \u001a \u001a ] \u0018 \u0018 ‚\u0001\u0011 ÿ \u0002P Provisoire\u0004\u0002\u0007 \u0002 \u0002 \u0003 \u0004 \u0005 \u0006 \u0007 \b \u000e \u000f ‚\u0001 þÿ \u0002A \u0018 Data quality: excellent ‚\u0001' ÿÿ à \u0002A ! Qualité des données : excellente‚\u0001 þÿ \u0002B \u0018 Data quality: very good ‚\u0001' ÿÿ à \u0002B ! Qualité des données : très bonne‚\u0001\u0019 ðÿ \u0002C \u0013 Data quality: good‚\u0001\" ÿÿ € \u0002C Qualité des données : bonne ‚\u0001 þÿ \u0002D \u0019 Data quality: acceptable‚\u0001' ÿÿ à \u0002D ! Qualité des données : acceptable‚\u0001\u0017 àÿ \u0002E \u0011 use with caution‚\u0001 þÿ \u0002E \u0019 À utiliser avec prudence‚\u0001\u000e þ \u0002R \b Revised ‚\u0001 ü ",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 3,
+      "text": "Sexe à la naissance Sexe à la naissance réfère au sexe assigné à la naissance. Le sexe à la naissance d'une personne est habituellement assigné en fonction de son système reproducteur et d'autres caractéristiques physiques. Le sexe à la naissance peut également être compris comme étant le sexe enregistré à la naissance (p. ex. ce qui est enregistré sur le certificat de naissance). \u0001\u0001F\u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 3,
+      "text": "Sex at birth Sex at birth refers to sex assigned at birth. Sex at birth is typically assigned based on a person's reproductive system and other physical characteristics. Sex at birth may also be understood as the sex recorded at a person's birth (for example, what was recorded on their birth certificate). \u0001\u00013 \u0004 Total - Sexe \u000f Sexe masculin \u000e Sexe féminin \u0004\u0001\u0001 \u0007 \u0001\u0001# \u0004 Total - Sex \u0006 Male \b Female \u0004\u0001\u0001 \u0005 �\u0001 ð €€\u0003ÿÿÿ\u0014\u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    }
+  ],
+  "missing_values": [
+    {
+      "symbol": "..",
+      "code": 1,
+      "label": {
+        "en": "Not available for a specific reference period",
+        "fr": "Indisponible pour une période de référence précise"
+      }
+    },
+    {
+      "symbol": "X",
+      "code": 2,
+      "label": {
+        "en": "Suppressed to meet the confidentiality requirements of the Statistics Act",
+        "fr": "Confidentiel en vertu des dispositions de la Loi sur la statistique"
+      }
+    },
+    {
+      "symbol": "...",
+      "code": 3,
+      "label": {
+        "en": "Not applicable",
+        "fr": "N'ayant pas lieu de figurer"
+      }
+    },
+    {
+      "symbol": "F",
+      "code": 4,
+      "label": {
+        "en": "Too unreliable to be published",
+        "fr": "Trop peu fiable pour être publié"
+      }
+    }
+  ]
+}

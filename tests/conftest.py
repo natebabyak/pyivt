@@ -26,7 +26,5 @@ def statcan_ivt(request) -> SimpleNamespace:
     entry = request.param
     path = FIXTURES_DIR / entry["filename"]
     if not path.is_file():
-        pytest.skip(
-            f"missing {path.name}; run: python tests/scripts/download.py"
-        )
+        pytest.skip(f"missing {path.name}; run: python tests/scripts/download.py")
     return SimpleNamespace(id=entry["id"], path=path, entry=entry)

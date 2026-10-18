@@ -1,0 +1,119 @@
+{
+  "title": {
+    "en": "Broad age groups and gender: Canada, provinces and territoriesStatistics Canada",
+    "fr": "Grands groupes d’âge et genre : Canada, provinces et territoiresStatistique Canada"
+  },
+  "author": {
+    "en": null,
+    "fr": null
+  },
+  "category": {
+    "en": null,
+    "fr": null
+  },
+  "keywords": {
+    "en": null,
+    "fr": null
+  },
+  "notes": {
+    "en": {
+      "first": "Product ID: 98100036 Title: Broad age groups and gender: Canada, provinces and territories Archive Status: Current Frequency: Occasional Universe: Persons 15 years of age and older in private households, 2021 Census — 100% data Variable List: Broad age groups (3), Gender (8) Start Reference Period: 2021-01-01 End Reference Period: 2021-01-01 Survey Code: 3901 Survey Name: Census of Population Subjects: High Level Corrections: Footnotes :",
+      "last": "Product ID: 98100036 Title: Broad age groups and gender: Canada, provinces and territories Archive Status: Current Frequency: Occasional Universe: Persons 15 years of age and older in private households, 2021 Census — 100% data Variable List: Broad age groups (3), Gender (8) Start Reference Period: 2021-01-01 End Reference Period: 2021-01-01 Survey Code: 3901 Survey Name: Census of Population Subjects: High Level Corrections: Footnotes :"
+    },
+    "fr": {
+      "first": "Identificateur de produit : 98100036 Titre : Grands groupes d’âge et genre : Canada, provinces et territoires Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Personnes de 15 ans et plus dans les ménages privés, Recensement de 2021 — Données intégrales (100 %) Liste de variables : Grands groupes d’âge (3), Genre (8) Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois :",
+      "last": "Identificateur de produit : 98100036 Titre : Grands groupes d’âge et genre : Canada, provinces et territoires Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Personnes de 15 ans et plus dans les ménages privés, Recensement de 2021 — Données intégrales (100 %) Liste de variables : Grands groupes d’âge (3), Genre (8) Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois :"
+    }
+  },
+  "number_of_datapoints": 336,
+  "time_series": "No",
+  "read_only": true,
+  "dimensions": [
+    {
+      "name": "Geography",
+      "items": 14,
+      "type": "Normal",
+      "description": "Geography"
+    },
+    {
+      "name": "Broad age group",
+      "items": 3,
+      "type": "Normal",
+      "description": "Broad age group"
+    },
+    {
+      "name": "Gender (8)",
+      "items": 8,
+      "type": "Normal",
+      "description": "Gender (8)"
+    }
+  ],
+  "footnotes": [
+    {
+      "language": "fr",
+      "number": 1,
+      "text": "Âge « Âge » réfère à l'âge de la personne (ou du sujet) d'intérêt à son dernier anniversaire (ou relativement à une date de référence précise et bien définie). \u0001\u0001¡",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 1,
+      "text": "Age 'Age' refers to the age of a person (or subject) of interest at last birthday (or relative to a specified, well-defined reference date). \u0001\u00012 \u0004 Total - Âge 15 à 34 ans \u0010 35 ans et plus \u0004\u0001\u0001 \u0007 \"\u000f D\u0006D\u0006 „\u0001@\bÿÿ ÿÿÿ ÿÿÿ ÿÿÿ ÿÿÿ ÿÿÿ ÿÿÿ ÿÿÿ ÿÿÿ ÿÿÿ ÿÿÿ ÿÿÿ ÿÿÿ ÿýý ý \u0004 ‡äÎ\u0001¸ZÍ\u0001\u001b â ¢Në Dè ül C{ †¡ ÌŠŠ q–‰ ÎÍE £ÈC Sz 8E 5 \bz ¶YD\u0001GÄC\u0001M>œ ÿ…§ ñm É' (F ~' (Ÿ\u0006 â™\u0006 l6\u0003 vc\u0003 “\u0003 ¸\u0001 à\u0001 ®\u0001 3”\u0001 ‘\u0001 …Ê Æ Ñ\u0001 \u000e\u0001 È Y\u0001 ð \u0005 Þ\b\u0005 âk\u0002 üœ\u0002 ½\u0001 ª \u0018\u0001 U ´ï\u0001 î\u0001 Gï Äþ \u0004\u0001 } Œ ï� ðŒ †G jE } P 2 ‚ Åa\u0001 \u001ba\u0001 Á§ Z¹ ‚ - Z ( n€ q z\u0002\u0006 �n\u0006 W\b 8\u0004 \u0004 \u0007 äm\u0003 ™c\u0003 \u001b¶\u0001 ~­\u0001 Ä\u0004 ä\u0002 à\u0001 ‡\u0005 Š\u0012 l dL\u0004 \u0012Á\u0004 “\u0003 O\u0001 D\u0002 †\u0001 ™ä \u0015Ü \u001aÒ\u0004 û \u0005 U\u0005 £\u0002 ·\u0002 /\u0003 �†\u0002 O�\u0002 OF\u0001 û:\u0001 Æ\u0002 ³\u0001 \u0013\u0001 €\u0002 ^\u0007 ÆZ\u0007 Æ‹\u0003 Ï\u0003 ”\u0002 ë ¤\u0001 ´ @’i äRi {û3 dW5 ‰& a\u0012 (\u0014 Ø\u0018 …ž Úv Aâ\u000e ž”\u000e n\u0014 c =\u0013 »óK \u0005ÜK 5\u0019% ËÂ& \u001b\u0012 þ\u0006 \u0018 ›\u0005 ½Ê³ ¨0³ Ä4W äû[ \u0015^ ü+ 2 < \u001am7 ö\u000e7 \u0015\u0006 á\b\u001b \u00101 ­\u001b c\u0015 \u0019- £]| ·!| ¯.; \u0003ó@ \u0005- J\u0010 » ç\u000e ƒ&\u0010 Z\u0018\u0010 jò\u0007 ú%\b é\u0007 í\u0003 ü\u0003 ;\u0006 \u001bN\u0005 òD\u0005 ª²\u0002 H’\u0002 e\u0004 ¨\u0002 ½\u0001 Ä\u0004 hØ mÓ »?\u0005 ²“\u0005 „\u0003 J\u0001 ?\u0002 r\u0001 \\x n ¯¤\u0006 ËÉ\u0006 ¯\u0005 ™\u0002 \u0016\u0003 .\u0004 –=\u0004 37\u0004 Ö\"\u0002 ]\u0014\u0002 *\u0003 Ì\u0001 c\u0001 4\u0003 Ë: G7 Ô�\u0004 sµ\u0004 €\u0002 Í ¸\u0001 ÿ \u0006€3 PO3 ¶{\u0019 •Ó\u0019 ‰ a (\u000f -\u0014 É…\u0010 ˜f\u0010 6I\b b \b x\u000f ã\b š\u0006 ´\u000f =ú\" ³è\" €2\u0011 3¶\u0011 y\u0004 “\b ~\u0004 9\u0018@ šÐ? ¶ é¯ ¶& l\u0011 J\u0015 ä ÝÓ\u0012 ‹¨\u0012 îv ˜1 ¦\u0013 ´ ò\b ±\u0017 WD- \u0014(- Ã©\u0015 L~\u0017 \u0010\u0013 ¸\u0006 X 3 \u0007€ q ß> �@ A # Z Î' j' ˆ\u0013 â\u0013 # \u000f \u000f A >X X W+ «, \u0014 \u0014 ¦| B| Õ> r= 7 \u0019 2 - Ó, ™\u0016 :\u0016 # \u000f \u000f - �O jO <( 3' \u0014 \u000f \u0005 Ü_ ¯_ a0 N/ \u0014 \u000f \u0014 ^. E. 9\u0017 \u0011\u0017 \u000f \u000f y1 j1 (\u0019 B\u0018 \u0005 \u0005 \u0002\u0002\u0002 �\u0015 v\u0015 \u001a \u001a �\u0002\u0003 \u000e ` - ¶s\u0001Z\u0001\u0002s\u0001Z\u0001s\u0001Z\u0001\u0001�\u0001\u0012 ˆ €\u0001d\u0001¥\u0016 . . Ó\u0016 @ @ \u0013\u0017 , , ?\u0017 F F …\u0017 ^ ^ ã\u0017 X X ;\u0018 Y\u0018 . . ‡\u0018 . . µ\u0018 0 0 å\u0018 Ž Ž \u001b\u0016 Š Š ‚\u0001v ÿÿÿÿÿÿàÿ \u00040 s n valeur arrondie à 0 (zéro) là où il y a une distinction importante entre le zéro absolu et la valeur arrondie \u0004\u0002\u0005 \u0002 \u0002 \u0004 \u0005 \u0006 \u0007 \b ‚\u00015 ÿÿÀÿ \u0003.. . Not available for a specific reference period‚\u0001\" ÿÿ € \u0002- Valeur manquante par défaut ‚\u0001: ÿÿøÿ \u0003.. 3 Indisponible pour une période de référence précise ‚\u0001P ÿÿÿÿ ÿ \u0002X J Suppressed to meet the confidentiality requirements of the Statistics Act ‚\u0001J ÿÿÿÿ ø \u0002X D Confidentiel en vertu des dispositions de la Loi sur la statistique ‚\u0001\u0017 àÿ \u0004... \u000f Not applicable‚\u0001$ ÿÿ À \u0004... N'ayant pas lieu de figurer ‚\u0001% ÿÿ À \u0002F Too unreliable to be published‚\u0001' ÿÿ à \u0002F ! Trop peu fiable pour être publié‚\u0001{ ÿÿÿÿÿÿøÿ \u00040 s s value rounded to 0 (zero) where there is a meaningful distinction between true zero and the value that was rounded \u001a > > I\u001a & & o\u001a 0 0 Ÿ\u001a & & Å\u001a 0 0 õ\u001a \u0015\u001b , , A\u001b & & g\u001b 0 0 —\u001b µ\u001b & & Û\u001b \u0014 \u0014 ï\u001b \u0012 \u0012 \u0001 \u001a \u001a ó\u0019 \u0018 \u0018 ‚\u0001\u0011 ÿ \u0002P Provisoire\u0004\u0002\u0007 \u0002 \u0002 \u0003 \u0004 \u0005 \u0006 \u0007 \b \u000e \u000f ‚\u0001 þÿ \u0002A \u0018 Data quality: excellent ‚\u0001' ÿÿ à \u0002A ! Qualité des données : excellente‚\u0001 þÿ \u0002B \u0018 Data quality: very good ‚\u0001' ÿÿ à \u0002B ! Qualité des données : très bonne‚\u0001\u0019 ðÿ \u0002C \u0013 Data quality: good‚\u0001\" ÿÿ € \u0002C Qualité des données : bonne ‚\u0001 þÿ \u0002D \u0019 Data quality: acceptable‚\u0001' ÿÿ à \u0002D ! Qualité des données : acceptable‚\u0001\u0017 àÿ \u0002E \u0011 use with caution‚\u0001 þÿ \u0002E \u0019 À utiliser avec prudence‚\u0001\u000e þ \u0002R \b Revised ‚\u0001 ü \u0002R \u0007 Révisé‚\u0001\u0012 €ÿ \u0002P Preliminary ! o\u0002o\u0002� \b \b ˜ S S ë F F 1! \b \b 9! Ê Ê \u0003\" \b \b \" Ù Ù ä\" \b \b ì\" Ê Ê ¶# \b \b ¾# Ù Ù —$ \b \b Ÿ$ ˜ ˜ 7% \b \b ?% ˜ ˜ ×% \b \b ß% D D #& \b \b +& A A l& \b \b t& >\u0001>\u0001²' \b \b º' H\u0001H\u0001\u0002) \b \b ) \\ \\ f) \b \b n) a a Ï) \b \b ×) Ã Ã š* \b \b ¢* Ã Ã e+ \b \b m+ 7 7 ¤+ \b \b ¬+ 7 7 ã+ \b \b ë+ 7 7 \", \b \b *, 7 7 a, \b \b i, g g Ð, \b \b Ø, g g ?- \b \b G- Ž\u0002Ž\u0002Õ/ \b \b Ý/ ú\u0003ú\u0003×3 \b \b ß3 H H '4 \b \b /4 H H w4 \b \b \u001b \u0006 \u0006 ‚\u0001\u0010 �\u0002\u001a \" ø\"8þ¿ˆ ÿ¯¢Âÿ+¨ÀÿŠ*ð¿\"êÿ¯ˆúÿ+¢þÿŠ¨ÿÿ\"ªÿ¿ˆêÿ¯¢úÿ+¨àÿŠ*ø¿\" à¯ˆ\u0002ø+¢üÿŠ¨ÿÿ\"*ø¿ˆ þ¯¢\u0002ÿ+¨ÀÿŠ*ð¿\" ü¯ˆ\u0002ÿ+¢þÿŠ¨ÿÿ\"ªð¿\b\u000e °\u0004Code@\u0001 \u0001P\u0002 English Desc\u0001\b\u0001\u0004È\u0002 Desc Français\u0001\b\u0002\u0006È\u0002 GEO_NAME_EN\u0001\b\u0001\bÈ\u0002 GEO_NAME_FR\u0001\b\u0002 È\u0002\u0010GEO_TYPE_DESC_EN\u0001\b\u0001 È\u0002\u0010GEO_TYPE_DESC_FR\u0001\b\u0002\u000eÈ\u0002\u0010GEO_TYPE_ABBR_EN\u0001\b\u0001\u0010È\u0002\u0010GEO_TYPE_ABBR_FR\u0001\b\u0002\u0012È\u0002\u0010GEO_LEVEL_DES_EN\u0001\b\u0001\u0014È\u0002\u0010GEO_LEVEL_DES_FR\u0001\b\u0002\u0016È\u0002 PROV_ABBR_EN\u0001\b\u0001\u0018È\u0002 PROV_ABBR_FR\u0001\b\u0002\u001aÈ\u0002\bDGUID_EN\u0001\b\u0001 È\u0002\bDGUID_FR\u0001\b\u0002 È\u0002\u000fALT_GEO_CODE_EN\u0001\b\u0001 È\u0002\u000fALT_GEO_CODE_FR\u0001\b\u0002\"È\u0002 PR_CODE_EN\u0001\b\u0001$È\u0002 PR_CODE_FR\u0001\b\u0002&È\u0002 DQF_CODE_EN\u0001\b\u0001(È\u0002 DQF_CODE_FR\u0001\b\u0002*È\u0002 DQF_NOTE_EN\u0001\b\u0001,È\u0002 DQF_NOTE_FR\u0001\b\u0002.È\u0002\u0010TNR_SHORT_FOR_EN\u0001\b\u00010È\u0002\u0010TNR_SHORT_FOR_FR\u0001\b\u00022È\u0002 _Decimals\u0002\u0003 4P\u0001@\u0004\u0001\u0001 \u0002 �\u0002\u0010 \u0016 À \u0003 0À \u0003 0 À€\u0003\u000e 8à \u0003 € \u00011\u00012\u00013\u00014\u00015\u00016\u00017\u00018\u00019\u000210\u000211\u000212\u000213\u000214�\u0002\u0002 V €ÿ à¿ ÿ\u0003€ ÿ\u0002 À Geography\u00012GeographyGéographie\u00022Géographie\u0004\u0001\u0001 \u0005 \u0001\u0001Æ \u0010 \u0006Canada \u0019Newfoundland and Labrador \u0014Prince Edward Island Nova Scotia New Brunswick \u0006Quebec \u0007Ontario \bManitob",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 3,
+      "text": "Genre Genre réfère à l'identité personnelle et sociale d'un individu en tant qu'homme, femme ou personne non binaire (une personne qui n'est pas exclusivement homme ni femme). Le genre comprend les concepts suivants : l'identité de genre correspond au genre qu'une personne ressent intimement et individuellement; l'expression de genre désigne la manière dont une personne présente son genre à travers son langage corporel, des choix esthétiques ou des accessoires (p. ex. vêtements, coiffure et maquillage) qui peuvent avoir été traditionnellement associés à un genre particulier, et ce, sans égard à son identité de genre. Le genre d'une personne peut différer de son sexe à la naissance et de la mention qui figure sur ses pièces d'identité ou documents juridiques actuels tels que son certificat de naissance, son passeport ou son permis de conduire. Le genre d'une personne peut changer au fil du temps. Certaines personnes peuvent ne pas s'identifier à un genre en particulier. \u0001\u0001r\u0003",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 3,
+      "text": "Gender Gender refers to an individual's personal and social identity as a man, woman or non-binary person (a person who is not exclusively a man or a woman). Gender includes the following concepts: gender identity, which refers to the gender that a person feels internally and individually; gender expression, which refers to the way a person presents their gender, regardless of their gender identity, through body language, aesthetic choices or accessories (e.g., clothes, hairstyle and makeup), which may have traditionally been associated with a specific gender. A person's gender may differ from their sex at birth, and from what is indicated on their current identification or legal documents such as their birth certificate, passport or driver's licence. A person's gender may change over time. Some people may not identify with a specific gender. \u0001\u0001· \b Total - Genre \u0015 Personnes cisgenres \u0014 Hommes cisgenres \u0014 Femmes cisgenres \u0017 Personnes transgenres \u0016 Hommes transgenres \u0016 Femmes transgenres \u0018 Personnes non binaires \u0004\u0001\u0001 \u0007 \u0001\u0001¨ \b \u000eTotal - Gender \u0013 Cisgender persons \u0011 Cisgender men \u0013 Cisgender women \u0015 Transgender persons \u0013 Transgender men \u0015 Transgender women \u0014 Non-binary persons \u0004\u0001\u0001 \u0005 �\u0001 ð €€\u0003ÿÿÿ\u0014\u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    }
+  ],
+  "missing_values": [
+    {
+      "symbol": "..",
+      "code": 1,
+      "label": {
+        "en": "Not available for a specific reference period",
+        "fr": "Indisponible pour une période de référence précise"
+      }
+    },
+    {
+      "symbol": "X",
+      "code": 2,
+      "label": {
+        "en": "Suppressed to meet the confidentiality requirements of the Statistics Act",
+        "fr": "Confidentiel en vertu des dispositions de la Loi sur la statistique"
+      }
+    },
+    {
+      "symbol": "...",
+      "code": 3,
+      "label": {
+        "en": "Not applicable",
+        "fr": "N'ayant pas lieu de figurer"
+      }
+    },
+    {
+      "symbol": "F",
+      "code": 4,
+      "label": {
+        "en": "Too unreliable to be published",
+        "fr": "Trop peu fiable pour être publié"
+      }
+    }
+  ]
+}

@@ -1,0 +1,189 @@
+{
+  "title": {
+    "en": "Broad age groups, gender and census year: Canada, provinces and territories, census metropolitan areas and census agglomerations with partsStatistics Canada",
+    "fr": "Grands groupes d’âge, genre et année de recensement : Canada, provinces et territoires, régions métropolitaines de recensement et agglomérations de recensement y compris les partiesStatistique Canada"
+  },
+  "author": {
+    "en": null,
+    "fr": null
+  },
+  "category": {
+    "en": null,
+    "fr": null
+  },
+  "keywords": {
+    "en": null,
+    "fr": null
+  },
+  "notes": {
+    "en": {
+      "first": "Product ID: 98100030 Title: Broad age groups, gender and census year: Canada, provinces and territories, census metropolitan areas and census agglomerations with parts Archive Status: Current Frequency: Occasional Universe: Total population, including institutional residents, 2021 and 2016 censuses — 100% data Variable List: Broad age groups (5), Gender (3a), View Start Reference Period: 2021-01-01 End Reference Period: 2021-01-01 Survey Code: 3901 Survey Name: Census of Population Subjects: High Level Corrections: Footnotes : Footnote 1 Historical comparison of geographic areas The boundaries and names of census geographies can change from one census to the next.",
+      "last": "As well previous census data for some 2021 areas may not be available due to the fact that the concordance did not produce an accurate representation of the 2021 area."
+    },
+    "fr": {
+      "first": "Identificateur de produit : 98100030 Titre : Grands groupes d’âge, genre et année de recensement : Canada, provinces et territoires, régions métropolitaines de recensement et agglomérations de recensement y compris les parties Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Population totale, incluant les résidents institutionnels, recensements de 2021 et 2016 — Données intégrales (100 %) Liste de variables : Grands groupes d’âge (5), Genre (3a), Vue Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois : Renvoi 1 Comparaison historique de régions géographiques Les limites et les noms des géographies du recensement peuvent changer d'un recensement à l'autre.",
+      "last": "De plus, des données de recensements antérieurs pour certaines régions de 2021 ne sont pas disponibles en raison d’une concordance qui n’aurait pas généré une représentation exacte de la région de 2021."
+    }
+  },
+  "number_of_datapoints": 10440,
+  "time_series": "No",
+  "read_only": true,
+  "dimensions": [
+    {
+      "name": "Geography",
+      "items": 174,
+      "type": "Normal",
+      "description": "Geography"
+    },
+    {
+      "name": "Gender (3a)",
+      "items": 3,
+      "type": "Normal",
+      "description": "Gender (3a)"
+    },
+    {
+      "name": "Broad age group",
+      "items": 5,
+      "type": "Normal",
+      "description": "Broad age group"
+    },
+    {
+      "name": "View",
+      "items": 4,
+      "type": "Normal",
+      "description": "View"
+    }
+  ],
+  "footnotes": [
+    {
+      "language": "en",
+      "number": 1,
+      "text": "Historical comparison of geographic areas The boundaries and names of census geographies can change from one census to the next. In order to facilitate data comparisons between censuses, previous census data have been adjusted to reflect as closely as possible the 2021 boundaries of these areas. The methodology used for this adjustment involved spatially linking blocks of previous censuses. A previous census block was linked to the 2021 area within which its representative point fell. A limited number of interactive linkages were completed to further enhance the adjustment in certain areas. For some census geographies, it was not possible to reflect the 2021 boundaries. The 2021 boundaries may not be reflected as there was no previous census block to assign to the 2021 area. As well previous census data for some 2021 areas may not be available due to the fact that the concordance did not produce an accurate representation of the 2021 area. �\u0001 ð €\u0003ÿÿÿ\u0014�\u0002\u0004 R �ˆ\u000fø ø #\"ƒÿ€ÿ ˆˆþÿþÿ \"\" < < ®\b\u0001GeographyGeography\u0003\u0002\u0001Gender (3a)Gender (3a)\u0010\u0005\u0003\u0001Broad age groupBroad age group\b\u0004\u0002\u0001ViewView�\u0001\u0004\u0003ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ À ÿ\u0003 þ FACET04Broad age groups, gender and census year: Canada, provinces and territories, census metropolitan areas and census agglomerations with partsStatistics Canada\u0001\u0001J\u0007Identificateur de produit : 98100030 Titre : Grands groupes d’âge, genre et année de recensement : Canada, provinces et territoires, régions métropolitaines de recensement et agglomérations de recensement y compris les parties Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Population totale, incluant les résidents institutionnels, recensements de 2021 et 2016 — Données intégrales (100 %) Liste de variables : Grands groupes d’âge (5), Genre (3a), Vue Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois :",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 1,
+      "text": "Comparaison historique de régions géographiques Les limites et les noms des géographies du recensement peuvent changer d'un recensement à l'autre. Afin de faciliter la comparaison des données entre les recensements, les données des recensements précédents ont été ajustées pour refléter le plus fidèlement possible les limites de 2021 de ces régions. La méthodologie utilisée pour cet ajustement comprenait le couplage spatial d'îlots de recensements précédents. Un îlot de recensement précédent était couplé à une région de 2021 dans laquelle se situait son point représentatif. Un nombre limité de couplages interactifs ont été effectués afin d'améliorer l'ajustement dans certaines régions. Pour certaines géographies du recensement, il n'a pas été possible de refléter la limite de 2021. Les limites de 2021 ne sont pas reflétées, car il n’y avait aucun îlot de recensements antérieurs à assigner à la région de 2021. De plus, des données de recensements antérieurs pour certaines régions de 2021 ne sont pas disponibles en raison d’une concordance qui n’aurait pas généré une représentation exacte de la région de 2021. É\u0003\u0002 o\u0002o\u00028\u0006\u0002 \b \b @\u0006\u0002 \u0012\u0005\u0012\u0005R \u0002 F F ˜ \u0002 \b \b \u0002 Ü\u0010Ü\u0010| \u0002 \b \b „ \u0002 \u0002\u0011\u0002\u0011†-\u0002 \b \b Ž-\u0002 { { 7\u0002 \b \b \u00117\u0002 Å Å Ö@\u0002 \b \b Þ@\u0002 Ì\u000fÌ\u000fªP\u0002 \b \b “‹ š\u0015š\u0015‹‹ \b \b Òˆ ¹\u0002¹\u0002Êˆ \b \b \u0014† ¶\u0002¶\u0002 † \b \b šu r\u0010r\u0010’u \b \b H_ J\u0016J\u0016@_ \b \b ñZ O\u0004O\u0004éZ \b \b µV 4\u00044\u0004­V \b \b ‡L & & L \b \b YB & & QB \b \b \u0010? A\u0003A\u0003\b? \b \b Ç; A\u0003A\u0003¿; \b \b D9 {\u0002{\u0002<9 \b \b Á6 {\u0002{\u0002¹6 \b \b ò1 Ç\u0004Ç\u0004ê1 \b \b #- Ç\u0004Ç\u0004\u001b- \b \b ¼# _ _ ´# \b \b ¾\u0016 ö ö ¶\u0016 \b \b `¦ @\u0003@\u0003X¦ \b \b \u0018£ @\u0003@\u0003\u0010£ \b \b I\u0002\u0002 €\u0001€\u0001 \u0004\u0001\u0001 1 \u0001\u0001ò \u0001‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... \u0003... \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. ‰Ne comprend pas les données d",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 3,
+      "text": "Âge « Âge » réfère à l'âge de la personne (ou du sujet) d'intérêt à son dernier anniversaire (ou relativement à une date de référence précise et bien définie). \u0001\u0001¡",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 3,
+      "text": "Age 'Age' refers to the age of a person (or subject) of interest at last birthday (or relative to a specified, well-defined reference date). \u0001\u0001X \b Total - Âge 0 à 14 ans 15 à 64 ans \u0010 65 ans et plus \u0012 85 ans et plus \u0004\u0001\u0001 \u0007 \u0001\u0001d \b Total - Age \u000f 0 to 14 years \u0010 15 to 64 years \u0013 65 years and over \u0015 85 years and over \u0004\u0001\u0001 \u0005 �\u0002\u0002 V þÿ \"ÿ¿ € ÿ\u0003ˆðÿ\u0002 ü Broad age group\u0001\b2Broad age groupGrands groupes\u0002 2Grands groupes�\u0002\b \u0016 À \u0003 0À \u00011\u00012\u00013\u00014\u00015\u0004\u0001\u0001 \u0002 �\u0002\u0003 \" ø\"8þ¿ˆ ÿ¯¢Â (\u0004Code@\u0001 \u0001P\u0002 English Desc\u0001\b\u0001\u0004È\u0002 Desc Français\u0001\b\u0002\u0006È\u0002\u0001\u0001\u0004\b",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 4,
+      "text": "Genre Genre réfère à l'identité personnelle et sociale d'un individu en tant qu'homme, femme ou personne non binaire (une personne qui n'est pas exclusivement homme ni femme). Le genre comprend les concepts suivants : l'identité de genre correspond au genre qu'une personne ressent intimement et individuellement; l'expression de genre désigne la manière dont une personne présente son genre à travers son langage corporel, des choix esthétiques ou des accessoires (p. ex. vêtements, coiffure et maquillage) qui peuvent avoir été traditionnellement associés à un genre particulier, et ce, sans égard à son identité de genre. Le genre d'une personne peut différer de son sexe à la naissance et de la mention qui figure sur ses pièces d'identité ou documents juridiques actuels tels que son certificat de naissance, son passeport ou son permis de conduire. Le genre d'une personne peut changer au fil du temps. Certaines personnes peuvent ne pas s'identifier à un genre en particulier.",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 5,
+      "text": "Étant donné que la taille de la population non binaire est petite, il est parfois nécessaire d’agréger les données dans une variable sur le genre à deux catégories pour protéger la confidentialité des réponses fournies. Dans ces cas, les personnes dans la catégorie « personnes non binaires » sont réparties dans les deux autres catégories de genre et sont désignées par le signe +. La variable « sexe » dans les années de recensement antérieures à 2021 et la variable sur le genre à deux catégories dans le Recensement de 2021 sont incluses ensemble dans [le tableau de données]. Bien que le sexe et le genre soient deux concepts différents, l’introduction du genre ne devrait pas avoir d’incidence importante sur l’analyse de données et la comparabilité historique, étant donné la petite taille des populations transgenre et non binaire. Pour obtenir de plus amples renseignements sur les changements dans les concepts au fil du temps, veuillez consulter le Guide de référence sur l’âge, le sexe à la naissance et le genre. \u0001\u0001Ò\u0006",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 4,
+      "text": "Gender Gender refers to an individual's personal and social identity as a man, woman or non-binary person (a person who is not exclusively a man or a woman). Gender includes the following concepts: gender identity, which refers to the gender that a person feels internally and individually; gender expression, which refers to the way a person presents their gender, regardless of their gender identity, through body language, aesthetic choices or accessories (e.g., clothes, hairstyle and makeup), which may have traditionally been associated with a specific gender. A person's gender may differ from their sex at birth, and from what is indicated on their current identification or legal documents such as their birth certificate, passport or driver's licence. A person's gender may change over time. Some people may not identify with a specific gender.",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 5,
+      "text": "Given that the non-binary population is small, data aggregation to a two-category gender variable is sometimes necessary to protect the confidentiality of responses provided. In these cases, individuals in the category “non-binary persons” are distributed into the other two gender categories and are denoted by the “+” symbol. The sex variable in census years prior to 2021 and the two-category gender variable in the 2021 Census are included together in the [data table]. Although sex and gender refer to two different concepts, the introduction of gender is not expected to have a significant impact on data analysis and historical comparability, given the small size of the transgender and non-binary populations. For additional information on changes of concepts over time, please consult the Age, Sex at Birth and Gender Reference Guide. \u0001\u0001Î \u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 6,
+      "text": "Avant le Recensement de 2021, cette catégorie faisait référence au sexe féminin. Depuis 2021, cette catégorie comprend les femmes et les filles, de même que certaines personnes non binaires. \u0001\u0001ª \u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 6,
+      "text": "Prior to the 2021 Census, this category refers to females. Starting in 2021, this category includes women and girls, as well as some non-binary persons. \u0001\u0001Ð \u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 7,
+      "text": "Avant le Recensement de 2021, cette catégorie faisait référence au sexe masculin. Depuis 2021, cette catégorie comprend les hommes et les garçons, de même que certaines personnes non binaires. „\u0001\u0004 ` \u000f \u0004\u0001\u0001 \u0001\u0001¥ \u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 7,
+      "text": "Prior to the 2021 Census, this category refers to males. Starting in 2021, this category includes men and boys, as well as some non-binary persons. „\u0001\u0004 ` \u000e \u0004\u0001\u0001 \u0001\u0001) \u0004 Total - Genre Hommes+ Femmes+ \u0004\u0001\u0001 \u0007 \u0001\u0001& \u0004 \u000eTotal - Gender \u0006 Men+ \b Women+ \u0004\u0001\u0001 \u0005 �\u0001 ð €€\u0003ÿÿÿ\u0014\u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    }
+  ],
+  "missing_values": [
+    {
+      "symbol": "..",
+      "code": 1,
+      "label": {
+        "en": "Not available for a specific reference period",
+        "fr": "Indisponible pour une période de référence précise"
+      }
+    },
+    {
+      "symbol": "X",
+      "code": 2,
+      "label": {
+        "en": "Suppressed to meet the confidentiality requirements of the Statistics Act",
+        "fr": "Confidentiel en vertu des dispositions de la Loi sur la statistique"
+      }
+    },
+    {
+      "symbol": "...",
+      "code": 3,
+      "label": {
+        "en": "Not applicable",
+        "fr": "N'ayant pas lieu de figurer"
+      }
+    },
+    {
+      "symbol": "F",
+      "code": 4,
+      "label": {
+        "en": "Too unreliable to be published",
+        "fr": "Trop peu fiable pour être publié"
+      }
+    }
+  ]
+}

@@ -11,14 +11,14 @@ from .metadata import (
 from .reader import Ivt, from_bytes, open
 
 __all__ = [
+    "Dimension",
+    "Footnote",
     "Ivt",
     "IvtMetadata",
     "LocalizedText",
-    "Dimension",
-    "Footnote",
     "MissingValue",
-    "open",
     "from_bytes",
+    "open",
     "read_metadata",
 ]
 

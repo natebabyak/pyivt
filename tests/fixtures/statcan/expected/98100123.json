@@ -1,0 +1,205 @@
+{
+  "title": {
+    "en": "Census family structure, presence of children and average number of persons per census family: Canada, provinces and territories, census metropolitan areas and census agglomerationsStatistics Canada",
+    "fr": "Structure de la famille de recensement, présence d’enfants et nombre moyen de personnes par famille de recensement : Canada, provinces et territoires, régions métropolitaines de recensement et agglomérations de recensementStatistique Canada"
+  },
+  "author": {
+    "en": null,
+    "fr": null
+  },
+  "category": {
+    "en": null,
+    "fr": null
+  },
+  "keywords": {
+    "en": null,
+    "fr": null
+  },
+  "notes": {
+    "en": {
+      "first": "Product ID: 98100123 Title: Census family structure, presence of children and average number of persons per census family: Canada, provinces and territories, census metropolitan areas and census agglomerations Archive Status: Current Frequency: Occasional Universe: Census families in private households, 2021, 2016 and 2011 censuses — 100% Data Variable List: Census family structure (7A), Census year (3), Presence of children (4) Start Reference Period: 2021-01-01 End Reference Period: 2021-01-01 Survey Code: 3901 Survey Name: Census of Population Subjects: High Level Corrections: Footnotes : Footnote 1 The boundaries and names of census geographies can change from one census to the next.",
+      "last": "As well previous census data for some 2021 areas may not be available due to the fact that the concordance did not produce an accurate representation of the 2021 area."
+    },
+    "fr": {
+      "first": "Identificateur de produit : 98100123 Titre : Structure de la famille de recensement, présence d’enfants et nombre moyen de personnes par famille de recensement : Canada, provinces et territoires, régions métropolitaines de recensement et agglomérations de recensement Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Familles de recensement dans les ménages privés, recensements de 2021, 2016 et 2011 — Données intégrales (100 %) Liste de variables : Structure de la famille de recensement (7A), Année de recensement (3), Présence d'enfants (4) Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois : Renvoi 1 Les limites et les noms des géographies du recensement peuvent changer d'un recensement à l'autre.",
+      "last": "De plus, des données de recensements antérieurs pour certaines régions de 2021 ne sont pas disponibles en raison d’une concordance qui n’aurait pas généré une représentation exacte de la région de 2021."
+    }
+  },
+  "number_of_datapoints": 13944,
+  "time_series": "No",
+  "read_only": true,
+  "dimensions": [
+    {
+      "name": "Geography",
+      "items": 166,
+      "type": "Normal",
+      "description": "Geography"
+    },
+    {
+      "name": "Census year (3)",
+      "items": 3,
+      "type": "Normal",
+      "description": "Census year (3)"
+    },
+    {
+      "name": "Census family s",
+      "items": 7,
+      "type": "Normal",
+      "description": "Census family s"
+    },
+    {
+      "name": "Presence of chi",
+      "items": 4,
+      "type": "Normal",
+      "description": "Presence of chi"
+    }
+  ],
+  "footnotes": [
+    {
+      "language": "en",
+      "number": 1,
+      "text": "The boundaries and names of census geographies can change from one census to the next. In order to facilitate data comparisons between censuses, previous census data have been adjusted to reflect as closely as possible the 2021 boundaries of these areas. The methodology used for this adjustment involved spatially linking blocks of previous censuses (concordance to the 1996 Census used the 1996 enumeration areas to the 2021 boundaries). A previous census block was linked to the 2021 area within which its representative point fell. A limited number of interactive linkages were completed to further enhance the adjustment in certain areas. For some census geographies, it was not possible to reflect the 2021 boundaries. The 2021 boundaries may not be reflected as there was no previous census block to assign to the 2021 area. As well previous census data for some 2021 areas may not be available due to the fact that the concordance did not produce an accurate representation of the 2021 area. �\u0001 ð €\u0003ÿÿÿ\u0014�\u0002\u0004 R �ˆ\u000fø ø #\"ûÿøÿ ˆ\bþÿþÿ \"\"ÿ?ÿ¿ € \b¦\b\u0001GeographyGeography\u0003\u0002\u0001Census year (3)Census year (3)\u0007\u0003\u0001Census family sCensus family s\u0010\u0004\u0002\u0001Presence of chiPresence of chi\b�\u0001\u0004\u0003ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿðÿ ÿ\u0003 þ FACET04Census family structure, presence of children and average number of persons per census family: Canada, provinces and territories, census metropolitan areas and census agglomerationsStatistics Canada\u0001\u0001à\u0007Identificateur de produit : 98100123 Titre : Structure de la famille de recensement, présence d’enfants et nombre moyen de personnes par famille de recensement : Canada, provinces et territoires, régions métropolitaines de recensement et agglomérations de recensement Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Familles de recensement dans les ménages privés, recensements de 2021, 2016 et 2011 — Données intégrales (100 %) Liste de variables : Structure de la famille de recensement (7A), Année de recensement (3), Présence d'enfants (4) Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois :",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 1,
+      "text": "Les limites et les noms des géographies du recensement peuvent changer d'un recensement à l'autre. Afin de faciliter la comparaison des données entre les recensements, les données des recensements précédents ont été ajustées pour refléter le plus fidèlement possible les limites de 2021 de ces régions. La méthodologie utilisée pour cet ajustement comprenait le couplage spatial d'îlots de recensements précédents (la concordance avec le Recensement de 2016 utilisait les secteurs de dénombrement de 2016 aux limites de 2021). Un îlot de recensement précédent était couplé à une région de 2021 dans laquelle se situait son point représentatif. Un nombre limité de couplages interactifs ont été effectués afin d'améliorer l'ajustement dans certaines régions. Pour certaines géographies du recensement, il n'a pas été possible de refléter la limite de 2021. Les limites de 2021 ne sont pas reflétées, car il n’y avait aucun îlot de recensements antérieurs à assigner à la région de 2021. De plus, des données de recensements antérieurs pour certaines régions de 2021 ne sont pas disponibles en raison d’une concordance qui n’aurait pas généré une représentation exacte de la région de 2021. Âc\u0002 ¥\u0002¥\u0002gf\u0002 \b \b of\u0002 ò\u0004ò\u0004ak\u0002 F F §k\u0002 \b \b ¯k\u0002 œ\u000fœ\u000fK{\u0002 \b \b S{\u0002 “\u000f“\u000fæŠ\u0002 \b \b îŠ\u0002 s\bs\ba“\u0002 \b \b ©ª €\b€\b¡ª \b \b ¥› ü\u000eü\u000e�› \b \b =‡ `\u0014`\u00145‡ \b \b ˜„ �\u0002�\u0002�„ \b \b ø� ˜\u0002˜\u0002ð� \b \b Nr ¢\u000f¢\u000fFr \b \b 6] \u0010\u0015\u0010\u0015.] \b \b Y !\u0004!\u0004\u0005Y \b \b ùT \u0004 \u0004ñT \b \b QK IK \b \b ©A ¡A \b \b ”> \u0003 \u0003Œ> \b \b ; \u0003 \u0003w; \b \b \u00169 a\u0002a\u0002\u000e9 \b \b ­6 a\u0002a\u0002¥6 \b \b \u00142 ‘\u0004‘\u0004 2 \b \b {- ‘\u0004‘\u0004s- \b \b ’$ á\bá\bŠ$ \b \b 2\u0018 X X *\u0018 \b \b /½ \u0003 \u0003'½ \b \b º \u0003 \u0003\u0001º \b \b Ý¶ $\u0003$\u0003Õ¶ \b \b ±³ $\u0003$\u0003©³ \b \b Rb\u0002 p\u0001p\u0001 \u0004\u0001\u0001 1 \u0001\u0001T \u0001‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... \u0003... \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... \u0003... ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement dénombrés. ‰Ne comprend pas les données du recensement pour une ou plusieurs réserves ou pour un ou plusieurs établissements partiellement ",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 3,
+      "text": "Présence d’enfants Présence d'enfants indique si oui ou non la famille comprend des enfants. Pour être inclus, les enfants doivent vivre dans le même ménage que la famille. Ils peuvent être des enfants biologiques ou adoptés.",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 4,
+      "text": "Il n’y a pas de restriction en ce qui concerne l’âge des enfants. Inclut les enfants vivant avec un ou des grands-parents, sans la présence de leurs parents. \u0001\u0001p\u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 3,
+      "text": "Child presence Child presence refers to whether or not the family includes any children. To be included, children must live in the same household as the family. They may be biological or adopted children.",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 4,
+      "text": "There is no age restriction on children. Includes children living with a grandparent or grandparents without a parent present. \u0001\u0001t \u0004 \u001aTotal - Présence d'enfants \u000e Avec enfants \u000e Sans enfants 4Nombre moyen de personnes par famille de recensement \u0004\u0001\u0001 \u0007 \u0001\u0001r \u0004 Total - Presence of children \u000f With children \u0012 Without children +Average number of persons per census family \u0004\u0001\u0001 \u0005 �\u0002\u0002 V þÿ \"ÿ¿ € ÿ\u0003ˆøÿ\u0002 þ Presence of chi\u0001\b2Presence of chiPrésence d'enfa\u0002 2Présence d'enfa�\u0002\u0004 \u0016 À \u0003 0 \u00011\u00012\u00013\u00014\u0004\u0001\u0001 \u0002 �\u0002\u0003 \" ø\"8þ¿ˆ ÿ¯¢Â (\u0004Code@\u0001 \u0001P\u0002 English Desc\u0001\b\u0001\u0004È\u0002 Desc Français\u0001\b\u0002\u0006È\u0002W±\u0002 u u O±\u0002 \b \b %±\u0002 * * Å°\u0002 ` ` ½°\u0002 \b \b ­¯\u0002 \u0010\u0001\u0010\u0001¥¯\u0002 \b \b A®\u0002 d\u0001d\u00019®\u0002 \b \b +®\u0002 \u000e \u000e \u0018ª\u0002 \u0013\u0004\u0013\u0004\u0010ª\u0002 \b \b \u0002ª\u0002 \u000e \u000e \u0019¥\u0002 é\u0004é\u0004 ¡\u0002 \u000e\u0004\u000e\u0004 œ\u0002 ë\u0004ë\u0004\u0013›\u0002 \u0001 \u0001Å™\u0002 N\u0001N\u0001 \u0001\u0001J\u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 5,
+      "text": "Structure de la famille de recensementStructure de la famille de recensement désigne la combinaison de personnes apparentées qui constituent une famille de recensement. La classification pour cette variable tient compte de la présence ou de l'absence de conjoints mariés ou conjoints de fait, et d'enfants. &nbsp; \u0001\u0001 \u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 5,
+      "text": "Census family structureCensus family structure refers to the combination of relatives that comprise a census family. Classification on this variable considers the presence or absence of: married spouses or common-law partners and children. &nbsp; \u0001\u0001ç\u0004\u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 6,
+      "text": "Étant donné que la taille de la population non binaire est petite, il est parfois nécessaire d’agréger les données dans une variable sur le genre à deux catégories pour protéger la confidentialité des réponses fournies. Dans ces cas, les personnes dans la catégorie « personnes non binaires » sont réparties dans les deux autres catégories de genre et sont désignées par le signe +. La variable « sexe » dans les années de recensement antérieures à 2021 et la variable sur le genre à deux catégories dans le Recensement de 2021 sont incluses ensemble dans [le tableau de données]. Bien que le sexe et le genre soient deux concepts différents, l’introduction du genre ne devrait pas avoir d’incidence importante sur l’analyse de données et la comparabilité historique, étant donné la petite taille des populations transgenre et non binaire. Pour obtenir de plus amples renseignements sur les changements dans les concepts au fil du temps, veuillez consulter le Guide de référence sur l’âge, le sexe à la naissance et le genre.",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 7,
+      "text": "Avant le Recensement de 2021, cette catégorie fait référence au sexe masculin. À compter de 2021, cette catégorie comprend les hommes (et/ou les garçons) de même que certaines personnes non binaires. \u0001\u0001 \u0004\u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 6,
+      "text": "Given that the non-binary population is small, data aggregation to a two-category gender variable is sometimes necessary to protect the confidentiality of responses provided. In these cases, individuals in the category “non-binary persons” are distributed into the other two gender categories and are denoted by the “+” symbol. The sex variable in census years prior to 2021 and the two-category gender variable in the 2021 Census are included together in the [data table]. Although sex and gender refer to two different concepts, the introduction of gender is not expected to have a significant impact on data analysis and historical comparability, given the small size of the transgender and non-binary populations. For additional information on changes of concepts over time, please consult the Age, Sex at Birth and Gender Reference Guide.",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 7,
+      "text": "Prior to the 2021 Census, this category refers to males. Starting in 2021, this category includes men (and/or boys), as well as some non-binary persons. \u0001\u0001å\u0004\u0001",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "fr",
+      "number": 8,
+      "text": "Avant le Recensement de 2021, cette catégorie fait référence au sexe féminin. À compter de 2021, cette catégorie comprend les femmes (et/ou les filles) de même que certaines personnes non binaires.",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    },
+    {
+      "language": "en",
+      "number": 8,
+      "text": "Prior to the 2021 Census, this category refers to females. Starting in 2021, this category includes women (and/or girls), as well as some non-binary persons.",
+      "scope": null,
+      "dimension": null,
+      "member_id": null
+    }
+  ],
+  "missing_values": [
+    {
+      "symbol": "..",
+      "code": 1,
+      "label": {
+        "en": "Not available for a specific reference period",
+        "fr": "Indisponible pour une période de référence précise"
+      }
+    },
+    {
+      "symbol": "X",
+      "code": 2,
+      "label": {
+        "en": "Suppressed to meet the confidentiality requirements of the Statistics Act",
+        "fr": "Confidentiel en vertu des dispositions de la Loi sur la statistique"
+      }
+    },
+    {
+      "symbol": "...",
+      "code": 3,
+      "label": {
+        "en": "Not applicable",
+        "fr": "N'ayant pas lieu de figurer"
+      }
+    },
+    {
+      "symbol": "F",
+      "code": 4,
+      "label": {
+        "en": "Too unreliable to be published",
+        "fr": "Trop peu fiable pour être publié"
+      }
+    }
+  ]
+}

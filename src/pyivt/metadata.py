@@ -46,6 +46,8 @@ class Dimension:
     count: int
     type: int
     is_geography: bool
+    description: str | None = None
+    type_label: str = "Normal"
     members: list[str] | None = None
     members_fr: list[str] | None = None
     ordinal: list[int] | None = None
@@ -97,12 +99,8 @@ class IvtMetadata:
     number_of_datapoints: int | None = None
     time_series: str | None = None
     read_only: bool | None = None
-    _dimensions: list[Dimension] | None = field(
-        default=None, repr=False, compare=False
-    )
-    _geographies: dict[str, Any] | None = field(
-        default=None, repr=False, compare=False
-    )
+    _dimensions: list[Dimension] | None = field(default=None, repr=False, compare=False)
+    _geographies: dict[str, Any] | None = field(default=None, repr=False, compare=False)
     _footnotes: list[Footnote] | None = field(default=None, repr=False, compare=False)
     _missing_values: list[MissingValue] | None = field(
         default=None, repr=False, compare=False
@@ -541,12 +539,96 @@ def _labels_plausible(labels: list[str]) -> bool:
     return sum(1 for x in labels if len(x.strip()) <= 1) <= max(1, len(labels) // 3)
 
 
-def _dim_dir_labels(
-    data: bytes, dim: DimDesc, slot_index: int, *, geography: bool = False
-) -> tuple[list[str] | None, list[str] | None, str | None]:
+def _beyond_type_label(*, is_geography: bool, type_code: int) -> str:
+    """Beyond Dimensions table Type column (UI label; not stored as text)."""
+    _ = (is_geography, type_code)  # reserved for future non-Normal kinds
+    return "Normal"
+
+
+def _parse_dim_title(block: bytes) -> tuple[str | None, str | None]:
+    """
+    Beyond Dimensions Description (EN) and French name from a dim-dir title entry.
+
+    Title entries are ``81 02`` blocks with a short name followed by bilingual
+    ``…\\x01…2`` / ``…\\x02…2`` payloads.
+    """
+    if len(block) < 16 or block[:2] != b"\x81\x02":
+        return None, None
+    for i in range(len(block) - 10):
+        if block[i + 1 : i + 3] != b"\x02\x00":
+            continue
+        p = i + 8
+        if p >= len(block) or not (65 <= block[p] <= 90 or 97 <= block[p] <= 122):
+            continue
+        end = block.find(b"\x01", p)
+        if end < 0 or not (1 <= end - p <= 40):
+            continue
+        short = latin1(block[p:end])
+        if not short or not all(32 <= ord(c) < 127 for c in short):
+            continue
+        q = end + 1
+        while q < len(block) and block[q] != 0x32:
+            if block[q] > 0x20:
+                break
+            q += 1
+        if q >= len(block) or block[q] != 0x32:
+            continue
+        q += 1
+        end2 = None
+        fr_start = None
+        r = q
+        while r < len(block):
+            j = block.find(b"\x02", r)
+            if j < 0:
+                break
+            k = j + 1
+            while k < len(block) and block[k] != 0x32:
+                if block[k] > 0x20:
+                    break
+                k += 1
+            if k < len(block) and block[k] == 0x32:
+                end2 = j
+                fr_start = k + 1
+                break
+            r = j + 1
+        glued = latin1(block[q:end2] if end2 is not None else block[q:])
+        description = short if glued.startswith(short) else (glued or short)
+        name_fr = None
+        if fr_start is not None:
+            raw_fr = latin1(block[fr_start:])
+            out: list[str] = []
+            for c in raw_fr:
+                if ord(c) < 32:
+                    break
+                out.append(c)
+            name_fr = "".join(out) or None
+        if name_fr is None and glued.startswith(short) and glued[len(short) :]:
+            name_fr = glued[len(short) :]
+        return description, name_fr
+    return None, None
+
+
+def _dim_title(data: bytes, slot_index: int) -> tuple[str | None, str | None]:
+    """Read Beyond Description / French name from the dimension directory."""
     slots = dim_slots(data)
     if slot_index >= len(slots):
-        return None, None, None
+        return None, None
+    slot = slots[slot_index]
+    for off, length in read_block_dir(data, slot.dir_ptr, slot.n_entries):
+        if length < 16:
+            continue
+        description, name_fr = _parse_dim_title(data[off : off + length])
+        if description:
+            return description, name_fr
+    return None, None
+
+
+def _dim_dir_labels(
+    data: bytes, dim: DimDesc, slot_index: int, *, geography: bool = False
+) -> tuple[list[str] | None, list[str] | None]:
+    slots = dim_slots(data)
+    if slot_index >= len(slots):
+        return None, None
     slot = slots[slot_index]
     entries = read_block_dir(data, slot.dir_ptr, slot.n_entries)
     arrays: list[list[str]] = []
@@ -567,13 +649,12 @@ def _dim_dir_labels(
                 continue
         arrays.append(labels)
     if not arrays:
-        return None, None, None
+        return None, None
     en = arrays[0]
     fr = arrays[1] if len(arrays) > 1 else None
-    name_fr = None
     if fr and en and _frscore(" ".join(fr[:3])) < _frscore(" ".join(en[:3])):
         en, fr = fr, en
-    return en, fr, name_fr
+    return en, fr
 
 
 def _parse_inline_geo(label: str) -> dict:
@@ -609,7 +690,7 @@ def _parse_inline_geo(label: str) -> dict:
 
 
 def _geo_from_dir(data: bytes, dim: DimDesc, slot_index: int = 0) -> dict:
-    en, fr, _ = _dim_dir_labels(data, dim, slot_index, geography=True)
+    en, fr = _dim_dir_labels(data, dim, slot_index, geography=True)
     n = dim.count
     geo: dict = {"member_id": list(range(1, n + 1))}
     if en and len(en) >= n:
@@ -662,7 +743,7 @@ def _parse_status_legend_record(blob: bytes) -> tuple[str, str] | None:
     if len(blob) < 8 or blob[:2] not in (b"\x82\x01", b"\x02\x01"):
         return None
     body = blob[4:]
-    for i in range(0, min(16, len(body) - 4)):
+    for i in range(min(16, len(body) - 4)):
         n = body[i]
         if not (1 <= n <= 8) or i + 1 + n + 2 > len(body):
             continue
@@ -784,16 +865,24 @@ def build_dimensions(data: bytes, desc: Descriptor) -> list[Dimension]:
     dims: list[Dimension] = []
     for i, d in enumerate(desc.dims):
         is_geo = (i + 1) == gd
-        members = members_fr = name_fr = None
+        members = members_fr = None
         if not is_geo:
-            members, members_fr, name_fr = _dim_dir_labels(data, d, i, geography=False)
+            members, members_fr = _dim_dir_labels(data, d, i, geography=False)
+        description, name_fr = _dim_title(data, i)
+        name = "Geography" if is_geo else d.name
+        if description is None:
+            description = name
+        if is_geo and name_fr is None:
+            name_fr = "Géographie"
         dims.append(
             Dimension(
-                name="Geography" if is_geo else d.name,
-                name_fr=name_fr if not is_geo else "Géographie",
+                name=name,
+                name_fr=name_fr,
                 count=d.count,
                 type=d.type,
                 is_geography=is_geo,
+                description=description,
+                type_label=_beyond_type_label(is_geography=is_geo, type_code=d.type),
                 members=members,
                 members_fr=members_fr,
             )
