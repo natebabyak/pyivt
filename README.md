@@ -32,7 +32,7 @@ pq.write_table(ivt.to_arrow(), "data.parquet")
 
 ### Opening IVT Files
 
-`pyivt.open` accepts a path, bytes-like buffer, or binary file object. Summary metadata and layout are parsed immediately; cell values decode only when you call `to_arrow()` or access `.cells`.
+`pyivt.open` accepts a path, bytes-like buffer, or binary file object. Summary metadata and layout are parsed immediately; cell values decode only when you call `to_arrow()`.
 
 #### From Path
 

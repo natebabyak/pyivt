@@ -9,13 +9,10 @@ from pathlib import Path
 
 _TESTS = Path(__file__).resolve().parents[1]
 _ROOT = _TESTS.parent
-_SRC = _ROOT / "src"
-for path in (_SRC, _TESTS):
-    if path.is_dir() and str(path) not in sys.path:
-        sys.path.insert(0, str(path))
+if str(_TESTS) not in sys.path:
+    sys.path.insert(0, str(_TESTS))
 
 from metadata_expected import EXPECTED_DIR, expected_path, snapshot_metadata
-
 from pyivt import open as open_ivt
 
 FIXTURES_DIR = _TESTS / "fixtures" / "statcan"

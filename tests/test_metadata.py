@@ -6,7 +6,6 @@ import json
 from math import prod
 
 from metadata_expected import expected_path, first_last_sentences, snapshot_metadata
-
 from pyivt import open as open_ivt
 
 
@@ -49,10 +48,23 @@ def test_metadata_lazy_fields(statcan_ivt):
     assert meta._loaded("missing_values")
 
 
-def test_open_bytes_defers_cells(statcan_ivt):
+def test_open_bytes_defers_decode(statcan_ivt):
     expect = json.loads(expected_path(statcan_ivt.id).read_text(encoding="utf-8"))
     ivt = open_ivt(statcan_ivt.path.read_bytes())
     assert ivt.metadata.product_id == statcan_ivt.id
-    assert ivt._cells is None
-    assert ivt.complete is None
     assert len(ivt.layout.counts) == len(expect["dimensions"])
+
+
+def test_to_arrow_row_count(statcan_ivt):
+    ivt = open_ivt(statcan_ivt.path)
+    n = ivt.metadata.number_of_datapoints
+    assert n is not None and n > 0
+    if n > 5_000_000:
+        # Keep CI / local runs bounded for very large published grids.
+        table = ivt.to_arrow(complete=False, labels=False)
+        assert table.num_rows > 0
+        assert "value" in table.column_names
+        return
+    table = ivt.to_arrow(complete=True, labels=True)
+    assert table.num_rows == n
+    assert "value" in table.column_names

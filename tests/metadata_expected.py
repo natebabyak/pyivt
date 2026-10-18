@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from pyivt.metadata import IvtMetadata, LocalizedText
+from pyivt import IvtMetadata, LocalizedText
 
 EXPECTED_DIR = Path(__file__).resolve().parent / "fixtures" / "statcan" / "expected"
 

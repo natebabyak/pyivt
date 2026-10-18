@@ -1,13 +1,14 @@
 """Beyond 20/20 IVT reader: metadata + Apache Arrow export."""
 
-from .metadata import (
+from pyivt._native import (
     Dimension,
     Footnote,
+    Ivt,
     IvtMetadata,
     LocalizedText,
     MissingValue,
+    open,
 )
-from .reader import Ivt, open
 
 __all__ = [
     "Dimension",

@@ -6,20 +6,21 @@ readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "pyivt contributors" }]
 dependencies = [
-  "numpy>=1.24",
   "pyarrow>=14",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "ruff>=0.6"]
+dev = ["pytest>=7", "ruff>=0.6", "maturin>=1.5,<2"]
 
 [build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["maturin>=1.5,<2"]
+build-backend = "maturin"
+
+[tool.maturin]
+module-name = "pyivt._native"
+python-source = "python"
+features = ["pyo3/extension-module"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
 testpaths = ["tests"]
-
-[tool.setuptools.packages.find]
-where = ["src"]
+pythonpath = ["python"]

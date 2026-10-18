@@ -1,5 +1,9 @@
 __pycache__/
 *.py[cod]
+*.pyd
+*.so
+*.dll
+*.pdb
 *.egg-info/
 .eggs/
 dist/
@@ -12,3 +16,6 @@ venv/
 *.ivt
 tests/fixtures/statcan/*.zip
 .mypy_cache/
+
+# Cargo / maturin build outputs
+/target
