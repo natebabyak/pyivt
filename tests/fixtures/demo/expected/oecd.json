@@ -1,0 +1,83 @@
+{
+  "title": {
+    "en": "Economic Outlook No 59: Semi-annual data",
+    "fr": "Perspectives Economiques No 59 : Données semi-annuelles"
+  },
+  "author": {
+    "en": "OECD",
+    "fr": "OCDE"
+  },
+  "category": {
+    "en": "OECD Publications",
+    "fr": "Publication d'OCDE"
+  },
+  "keywords": {
+    "en": null,
+    "fr": null
+  },
+  "notes": {
+    "en": {
+      "first": "Economic Outlook No 59: Semi-annual data The data contained in the Economic Outlook and associated diskettes are the product of the Economics Department of the OECD Secretariat.",
+      "last": "For each of the OECD regions, there are the following series: ET Total employment GDP Gross domestic product, 1991 PPP GDPV Gross domestic product, 1991 PPP, volume PCP Deflator for consumer expenditure, 1991 PDTY Productivity PGDP Deflator for gross domestic product, 1991 TDDV Total domestic demand, 1991 PPP, volume UNR Unemployment rate"
+    },
+    "fr": {
+      "first": "Perspectives Economiques No 59 : Données semi-annuelles Les statistiques contenues dans les Perspectives Économiques de l'OCDE et dans les disquettes correspondantes proviennent de travaux collectifs faisant appel à la contribution de toutes les divisions du Département des Affaires économiques du Secrétariat de l'OCDE.",
+      "last": "Pour chaque région, on trouve les séries suivantes: ET Emploi total GDP Produit intérieur brut, 1991 PPP, prix courants GDPV Produit intérieur brut, 1991 PPP, prix constants PCP Déflateur de la consommation privée, base 1991 PDTY Productivité PGDP Déflateur du produit intérieur brut, base 1991 TDDV Demande intérieure totale, 1991 PPP, prix constants UNR Taux de chômage"
+    }
+  },
+  "number_of_datapoints": 14820,
+  "time_series": {
+    "en": "Semi-annual, Jun1996-Jul1998",
+    "fr": "Semi-annuelle, juin1996-juil1998"
+  },
+  "read_only": false,
+  "dimensions": [
+    {
+      "name": {
+        "en": "Region",
+        "fr": null
+      },
+      "items": 30,
+      "type": "Geographic",
+      "description": {
+        "en": "Region",
+        "fr": null
+      }
+    },
+    {
+      "name": {
+        "en": "Item",
+        "fr": null
+      },
+      "items": 19,
+      "type": "Normal",
+      "description": {
+        "en": "Item",
+        "fr": null
+      }
+    },
+    {
+      "name": {
+        "en": "Time Period",
+        "fr": null
+      },
+      "items": 26,
+      "type": "Time Series",
+      "description": {
+        "en": "Time Period",
+        "fr": null
+      }
+    }
+  ],
+  "footnotes": [],
+  "missing_values": [
+    {
+      "symbol": "-",
+      "code": 1,
+      "label": {
+        "en": "Default Missing Value",
+        "fr": "Valeur manquante de défaut"
+      }
+    }
+  ]
+}

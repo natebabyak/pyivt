@@ -21,6 +21,7 @@ class Dimension:
     type: int
     is_geography: bool
     description: str | None
+    description_fr: str | None
     type_label: str
     members: list[str] | None
     members_fr: list[str] | None
@@ -74,7 +75,7 @@ class IvtMetadata:
     @property
     def number_of_datapoints(self) -> int | None: ...
     @property
-    def time_series(self) -> str | None: ...
+    def time_series(self) -> LocalizedText: ...
     @property
     def read_only(self) -> bool | None: ...
     @property

@@ -26,32 +26,59 @@
     }
   },
   "number_of_datapoints": 13944,
-  "time_series": "No",
+  "time_series": {
+    "en": "No",
+    "fr": "No"
+  },
   "read_only": true,
   "dimensions": [
     {
-      "name": "Geography",
+      "name": {
+        "en": "Geography",
+        "fr": "Géographie"
+      },
       "items": 166,
       "type": "Normal",
-      "description": "Geography"
+      "description": {
+        "en": "GeographyGéographie",
+        "fr": "Géographie"
+      }
     },
     {
-      "name": "Census year (3)",
+      "name": {
+        "en": "Census year (3)",
+        "fr": "Année de recens"
+      },
       "items": 3,
       "type": "Normal",
-      "description": "Census year (3)"
+      "description": {
+        "en": "Census year (3)Année de recens",
+        "fr": "Année de recens"
+      }
     },
     {
-      "name": "Census family s",
+      "name": {
+        "en": "Census family s",
+        "fr": "Structure de la"
+      },
       "items": 7,
       "type": "Normal",
-      "description": "Census family s"
+      "description": {
+        "en": "Census family sStructure de la",
+        "fr": "Structure de la"
+      }
     },
     {
-      "name": "Presence of chi",
+      "name": {
+        "en": "Presence of chi",
+        "fr": "Présence d'enfa"
+      },
       "items": 4,
       "type": "Normal",
-      "description": "Presence of chi"
+      "description": {
+        "en": "Presence of chiPrésence d'enfa",
+        "fr": "Présence d'enfa"
+      }
     }
   ],
   "footnotes": [

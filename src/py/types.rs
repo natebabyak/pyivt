@@ -61,6 +61,8 @@ pub struct Dimension {
     #[pyo3(get)]
     pub description: Option<String>,
     #[pyo3(get)]
+    pub description_fr: Option<String>,
+    #[pyo3(get)]
     pub type_label: String,
     #[pyo3(get)]
     pub members: Option<Vec<String>>,
@@ -79,6 +81,7 @@ impl From<CoreDimension> for Dimension {
             type_code: d.type_code,
             is_geography: d.is_geography,
             description: d.description,
+            description_fr: d.description_fr,
             type_label: d.type_label,
             members: d.members,
             members_fr: d.members_fr,
@@ -250,8 +253,8 @@ impl IvtMetadata {
     }
 
     #[getter]
-    fn time_series(&self) -> Option<String> {
-        self.inner.lock().unwrap().time_series.clone()
+    fn time_series(&self) -> LocalizedText {
+        self.inner.lock().unwrap().time_series.clone().into()
     }
 
     #[getter]

@@ -25,27 +25,36 @@
       "last": "Identificateur de produit : 98100039 Titre : Population dans les logements privés, logements privés occupés par des résidents habituels et taille moyenne du ménage, recensements de 1981 à 2021 : Canada, provinces et territoires Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Personnes dans les logements privés et logements privés occupés par des résidents habituels, recensements de 1981 à 2021 — Données intégrales (100 %) Liste de variables : Population, logements and ménages (3), Année de recensement (9) Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois :"
     }
   },
-  "number_of_datapoints": 378,
-  "time_series": "No",
+  "number_of_datapoints": 421504,
+  "time_series": {
+    "en": "No",
+    "fr": "No"
+  },
   "read_only": true,
   "dimensions": [
     {
-      "name": "Geography",
-      "items": 14,
+      "name": {
+        "en": "Geography",
+        "fr": "Géographie"
+      },
+      "items": 592,
       "type": "Normal",
-      "description": "Geography"
+      "description": {
+        "en": "GeographyGéographie",
+        "fr": "Géographie"
+      }
     },
     {
-      "name": "Population, dwe",
-      "items": 3,
+      "name": {
+        "en": "Population, dwe",
+        "fr": "Population, log"
+      },
+      "items": 712,
       "type": "Normal",
-      "description": "Population, dwe"
-    },
-    {
-      "name": "Census year (9)",
-      "items": 9,
-      "type": "Normal",
-      "description": "Census year (9)"
+      "description": {
+        "en": "Population, dwePopulation, log",
+        "fr": "Population, log"
+      }
     }
   ],
   "footnotes": [

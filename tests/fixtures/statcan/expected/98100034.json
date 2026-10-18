@@ -26,26 +26,47 @@
     }
   },
   "number_of_datapoints": 210,
-  "time_series": "No",
+  "time_series": {
+    "en": "No",
+    "fr": "No"
+  },
   "read_only": true,
   "dimensions": [
     {
-      "name": "Geography",
+      "name": {
+        "en": "Geography",
+        "fr": "Géographie"
+      },
       "items": 14,
       "type": "Normal",
-      "description": "Geography"
+      "description": {
+        "en": "GeographyGéographie",
+        "fr": "Géographie"
+      }
     },
     {
-      "name": "Broad age group",
+      "name": {
+        "en": "Broad age group",
+        "fr": "Grands groupes"
+      },
       "items": 5,
       "type": "Normal",
-      "description": "Broad age group"
+      "description": {
+        "en": "Broad age groupGrands groupes",
+        "fr": "Grands groupes"
+      }
     },
     {
-      "name": "Sex (3)",
+      "name": {
+        "en": "Sex (3)",
+        "fr": "Sexe (3)"
+      },
       "items": 3,
       "type": "Normal",
-      "description": "Sex (3)"
+      "description": {
+        "en": "Sex (3)Sexe (3)",
+        "fr": "Sexe (3)"
+      }
     }
   ],
   "footnotes": [

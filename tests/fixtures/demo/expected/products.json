@@ -1,0 +1,95 @@
+{
+  "title": {
+    "en": "Revenues, Expend., and Units Sold by Region, Cookie & Month",
+    "fr": "Revenus, Dépenses, Unités Vendue par Région, Mois, Biscuit"
+  },
+  "author": {
+    "en": "Ivation",
+    "fr": "Ivation"
+  },
+  "category": {
+    "en": "Beyond 20/20 Demonstration Tables and Extract",
+    "fr": "Tables et Extrait de démonstration de Beyond 20/20"
+  },
+  "keywords": {
+    "en": null,
+    "fr": null
+  },
+  "notes": {
+    "en": {
+      "first": "This table is one of two demonstration tables IVATION Datasystems Inc.",
+      "last": "If you have any questions concerning the data, contact John Representative at 123-4567."
+    },
+    "fr": {
+      "first": "Cette table est l'une des deux tables de démonstration qu'Ivation Datasystems Inc.",
+      "last": "Si vous avez des questions concernant les données, prière de communiquer avec Jean Représentant au 123-4567."
+    }
+  },
+  "number_of_datapoints": 10530,
+  "time_series": {
+    "en": "Monthly, Jan1991-Mar1994",
+    "fr": "Mensuelle, jan1991-mars1994"
+  },
+  "read_only": false,
+  "dimensions": [
+    {
+      "name": {
+        "en": "UNITS",
+        "fr": "UNITÉS"
+      },
+      "items": 3,
+      "type": "Normal",
+      "description": {
+        "en": "UNITS",
+        "fr": "UNITÉS"
+      }
+    },
+    {
+      "name": {
+        "en": "COOKIE",
+        "fr": "TYPE DE BISCUIT"
+      },
+      "items": 6,
+      "type": "Normal",
+      "description": {
+        "en": "COOKIE TYPE",
+        "fr": "TYPE DE BISCUIT"
+      }
+    },
+    {
+      "name": {
+        "en": "REGION",
+        "fr": "RÉGION"
+      },
+      "items": 15,
+      "type": "Geographic",
+      "description": {
+        "en": "REGION",
+        "fr": "RÉGION"
+      }
+    },
+    {
+      "name": {
+        "en": "TIME PERIOD",
+        "fr": "TEMPS"
+      },
+      "items": 39,
+      "type": "Time Series",
+      "description": {
+        "en": "Time Period",
+        "fr": "TEMPS"
+      }
+    }
+  ],
+  "footnotes": [],
+  "missing_values": [
+    {
+      "symbol": "-",
+      "code": 1,
+      "label": {
+        "en": "Default Missing Value",
+        "fr": "Valeur manquante de défaut"
+      }
+    }
+  ]
+}

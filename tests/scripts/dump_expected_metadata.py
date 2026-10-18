@@ -1,4 +1,4 @@
-"""Write golden metadata JSON for each downloaded StatCan IVT fixture."""
+"""Write golden metadata JSON for StatCan or Beyond demo IVT fixtures."""
 
 from __future__ import annotations
 
@@ -12,35 +12,53 @@ _ROOT = _TESTS.parent
 if str(_TESTS) not in sys.path:
     sys.path.insert(0, str(_TESTS))
 
-from metadata_expected import EXPECTED_DIR, expected_path, snapshot_metadata
+from conftest import DEMO_MANIFEST, STATCAN_DIR, STATCAN_MANIFEST, resolve_demo_ivt
+from metadata_expected import (
+    DEMO_EXPECTED_DIR,
+    STATCAN_EXPECTED_DIR,
+    expected_path,
+    snapshot_metadata,
+)
 from pyivt import open as open_ivt
-
-FIXTURES_DIR = _TESTS / "fixtures" / "statcan"
-MANIFEST_PATH = FIXTURES_DIR / "manifest.json"
-
-
-def load_manifest() -> list[dict]:
-    with MANIFEST_PATH.open(encoding="utf-8") as f:
-        return json.load(f)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.parse_args(argv)
+    parser.add_argument(
+        "--suite",
+        choices=("statcan", "demo"),
+        default="statcan",
+        help="Which fixture suite to dump (default: statcan)",
+    )
+    args = parser.parse_args(argv)
 
-    EXPECTED_DIR.mkdir(parents=True, exist_ok=True)
+    if args.suite == "demo":
+        expected_dir = DEMO_EXPECTED_DIR
+        manifest = DEMO_MANIFEST
+    else:
+        expected_dir = STATCAN_EXPECTED_DIR
+        manifest = STATCAN_MANIFEST
+
+    expected_dir.mkdir(parents=True, exist_ok=True)
     wrote = 0
     skipped = 0
-    for entry in load_manifest():
+    for entry in manifest:
         product_id = entry["id"]
-        ivt_path = FIXTURES_DIR / entry["filename"]
-        if not ivt_path.is_file():
-            print(f"skip {product_id}: missing {ivt_path.name}")
-            skipped += 1
-            continue
+        if args.suite == "demo":
+            ivt_path = resolve_demo_ivt(entry["filename"])
+            if ivt_path is None:
+                print(f"skip {product_id}: missing {entry['filename']}")
+                skipped += 1
+                continue
+        else:
+            ivt_path = STATCAN_DIR / entry["filename"]
+            if not ivt_path.is_file():
+                print(f"skip {product_id}: missing {ivt_path.name}")
+                skipped += 1
+                continue
         meta = open_ivt(ivt_path).metadata
         payload = snapshot_metadata(meta)
-        out = expected_path(product_id)
+        out = expected_path(product_id, suite=args.suite)
         out.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",

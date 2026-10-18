@@ -12,15 +12,27 @@ use crate::header::{
 
 static FACET_AUTHOR_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
-        r"(?:\d{4} Census - Statistics Canada|Recensement de \d{4}-Statistique Canada)$",
+        r"(?:\d{4} Census - Statistics Canada|Recensement de \d{4}-Statistique Canada|Beyond 20/20 Inc\.?|Ivation|OCDE|OECD)$",
     )
     .unwrap()
 });
 static TIME_SERIES_NAME_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?i)timeseries|time\s*series|time\s*period").unwrap());
+    Lazy::new(|| Regex::new(r"(?i)timeseries|time\s*series|time\s*period|\bdate\b").unwrap());
 static FREQ_NAME_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
-        r"(?i)\b(annual|yearly|quarterly|monthly|weekly|daily|annuel(?:le)?|trimestriel(?:le)?|mensuel(?:le)?|hebdomadaire|quotidien(?:ne)?)\b",
+        r"(?i)\b(annual|yearly|quarterly|monthly|weekly|daily|semi-?annual|annuel(?:le)?|trimestriel(?:le)?|mensuel(?:le)?|hebdomadaire|quotidien(?:ne)?|semi-?annuel(?:le)?)\b",
+    )
+    .unwrap()
+});
+static TS_RANGE_EN_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"(?i)\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s*(\d{4})\b(?:.*?\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s*(\d{4})\b)?",
+    )
+    .unwrap()
+});
+static TS_RANGE_FR_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"(?i)\b(jan(?:vier)?|f[eé]v(?:rier)?|mars|avr(?:il)?|mai|juin|juil(?:let)?|ao[uû]t|sep(?:t(?:embre)?)?|oct(?:obre)?|nov(?:embre)?|d[eé]c(?:embre)?)\s*(\d{4})\b(?:.*?\b(jan(?:vier)?|f[eé]v(?:rier)?|mars|avr(?:il)?|mai|juin|juil(?:let)?|ao[uû]t|sep(?:t(?:embre)?)?|oct(?:obre)?|nov(?:embre)?|d[eé]c(?:embre)?)\s*(\d{4})\b)?",
     )
     .unwrap()
 });
@@ -56,7 +68,17 @@ static PID_FALLBACK: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"\b(\d{2}-\d{3}-[A-Z]\d{7,}|\d{8})\b").unwrap());
 static GEO_CODE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"[\(\[]\d").unwrap());
 
-const FACET_CATEGORIES: &[&str] = &["Data Tables", "Tableaux de données"];
+/// Longest-first category suffixes stripped from glued FACET04 runs.
+const FACET_CATEGORIES: &[&str] = &[
+    "Beyond 20/20 Demonstration Tables and Extract",
+    "Tables et Extrait de démonstration de Beyond 20/20",
+    "Demostración de Tablas y Extractos de Beyond 20/20",
+    "Tableaux de données",
+    "Data Tables",
+    "OECD Publications",
+    "Publication d'OCDE",
+    "Publicaciones de la OECD",
+];
 const READONLY_FLAG_BIT: u8 = 0x10;
 
 #[derive(Debug, Clone)]
@@ -67,6 +89,7 @@ pub struct Dimension {
     pub type_code: i64,
     pub is_geography: bool,
     pub description: Option<String>,
+    pub description_fr: Option<String>,
     pub type_label: String,
     pub members: Option<Vec<String>>,
     pub members_fr: Option<Vec<String>>,
@@ -119,7 +142,7 @@ pub struct IvtMetadata {
     pub category: LocalizedText,
     pub keywords: LocalizedText,
     pub number_of_datapoints: Option<i64>,
-    pub time_series: Option<String>,
+    pub time_series: LocalizedText,
     pub read_only: Option<bool>,
     data: Vec<u8>,
     desc: Descriptor,
@@ -214,11 +237,19 @@ fn master_dir_entries(data: &[u8], max_entries: usize) -> Vec<(u32, u16)> {
 }
 
 fn split_facet_run(text: &str) -> (Option<String>, Option<String>, Option<String>) {
-    let text = text.trim();
-    if text.is_empty() {
+    let mut rest = text.trim().trim_end_matches(|c: char| (c as u32) < 32 || c == '\u{fffd}').to_string();
+    if rest.is_empty() {
         return (None, None, None);
     }
-    let mut rest = text.to_string();
+    // Strip trailing control / high junk that sometimes sticks to FACET runs.
+    while rest
+        .chars()
+        .last()
+        .map(|c| (c as u32) < 32 || c == '\u{81}' || c == '\u{fffd}')
+        .unwrap_or(false)
+    {
+        rest.pop();
+    }
     let mut category = None;
     for cat in FACET_CATEGORIES {
         if rest.ends_with(cat) {
@@ -479,32 +510,285 @@ fn has_time_series_marker(data: &[u8]) -> bool {
     false
 }
 
-fn frequency_hint_name(name: &str) -> Option<String> {
-    FREQ_NAME_RE.captures(name).map(|c| {
-        let s = c.get(1).unwrap().as_str();
-        let mut chars = s.chars();
-        match chars.next() {
-            None => String::new(),
-            Some(f) => f.to_uppercase().collect::<String>() + chars.as_str(),
-        }
-    })
+fn title_case_freq(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(f) => f.to_uppercase().collect::<String>() + chars.as_str(),
+    }
 }
 
-fn time_series_label(data: &[u8], dims: &[DimDesc]) -> String {
+fn frequency_hint_name(name: &str) -> Option<String> {
+    FREQ_NAME_RE
+        .captures(name)
+        .map(|c| title_case_freq(c.get(1).unwrap().as_str()))
+}
+
+fn month_abbr_en(raw: &str) -> &'static str {
+    let s = raw.to_ascii_lowercase();
+    match s.as_str() {
+        "january" | "jan" => "Jan",
+        "february" | "feb" => "Feb",
+        "march" | "mar" => "Mar",
+        "april" | "apr" => "Apr",
+        "may" => "May",
+        "june" | "jun" => "Jun",
+        "july" | "jul" => "Jul",
+        "august" | "aug" => "Aug",
+        "september" | "sept" | "sep" => "Sep",
+        "october" | "oct" => "Oct",
+        "november" | "nov" => "Nov",
+        "december" | "dec" => "Dec",
+        _ => "Jan",
+    }
+}
+
+fn month_abbr_fr(raw: &str) -> &'static str {
+    let s = raw.to_lowercase();
+    match s.as_str() {
+        "janvier" | "jan" => "jan",
+        "février" | "fevrier" | "fév" | "fev" => "fév",
+        "mars" => "mars",
+        "avril" | "avr" => "avr",
+        "mai" => "mai",
+        "juin" => "juin",
+        "juillet" | "juil" => "juil",
+        "août" | "aout" => "août",
+        "septembre" | "sept" | "sep" => "sept",
+        "octobre" | "oct" => "oct",
+        "novembre" | "nov" => "nov",
+        "décembre" | "decembre" | "déc" | "dec" => "déc",
+        _ => "jan",
+    }
+}
+
+fn freq_pair_from_text(text: &str) -> Option<(String, String)> {
+    let lower = text.to_lowercase();
+    if lower.contains("semi-annual") || lower.contains("semiannual") || lower.contains("semi-annuel")
+    {
+        return Some(("Semi-annual".into(), "Semi-annuelle".into()));
+    }
+    if lower.contains("monthly") || lower.contains("mensuel") {
+        return Some(("Monthly".into(), "Mensuelle".into()));
+    }
+    if lower.contains("quarterly") || lower.contains("trimestriel") {
+        return Some(("Quarterly".into(), "Trimestrielle".into()));
+    }
+    if lower.contains("annual") || lower.contains("yearly") || lower.contains("annuel") {
+        return Some(("Annual".into(), "Annuelle".into()));
+    }
+    if lower.contains("weekly") || lower.contains("hebdomadaire") {
+        return Some(("Weekly".into(), "Hebdomadaire".into()));
+    }
+    if lower.contains("daily") || lower.contains("quotidien") {
+        return Some(("Daily".into(), "Quotidienne".into()));
+    }
+    None
+}
+
+fn month_index_en(raw: &str) -> Option<u32> {
+    match month_abbr_en(raw) {
+        "Jan" => Some(1),
+        "Feb" => Some(2),
+        "Mar" => Some(3),
+        "Apr" => Some(4),
+        "May" => Some(5),
+        "Jun" => Some(6),
+        "Jul" => Some(7),
+        "Aug" => Some(8),
+        "Sep" => Some(9),
+        "Oct" => Some(10),
+        "Nov" => Some(11),
+        "Dec" => Some(12),
+        _ => None,
+    }
+}
+
+fn abbr_en_from_index(m: u32) -> &'static str {
+    match m {
+        1 => "Jan",
+        2 => "Feb",
+        3 => "Mar",
+        4 => "Apr",
+        5 => "May",
+        6 => "Jun",
+        7 => "Jul",
+        8 => "Aug",
+        9 => "Sep",
+        10 => "Oct",
+        11 => "Nov",
+        12 => "Dec",
+        _ => "Jan",
+    }
+}
+
+fn add_months(year: u32, month: u32, add: i64) -> (u32, u32) {
+    let idx = (year as i64) * 12 + (month as i64 - 1) + add;
+    let y = (idx / 12) as u32;
+    let m = (idx % 12 + 1) as u32;
+    (y, m)
+}
+
+fn format_range_en(m1: &str, y1: &str, m2: &str, y2: &str) -> String {
+    format!(
+        "{}{}-{}{}",
+        month_abbr_en(m1),
+        y1,
+        month_abbr_en(m2),
+        y2
+    )
+}
+
+fn format_range_fr_from_en(en: &str) -> String {
+    en.replace("Jan", "jan")
+        .replace("Feb", "fév")
+        .replace("Mar", "mars")
+        .replace("Apr", "avr")
+        .replace("May", "mai")
+        .replace("Jun", "juin")
+        .replace("Jul", "juil")
+        .replace("Aug", "août")
+        .replace("Sep", "sept")
+        .replace("Oct", "oct")
+        .replace("Nov", "nov")
+        .replace("Dec", "déc")
+}
+
+fn range_from_text(text: &str, time_count: Option<i64>) -> (Option<String>, Option<String>) {
+    let mut en = None;
+    let mut fr = None;
+    if let Some(c) = TS_RANGE_EN_RE.captures(text) {
+        let m1 = c.get(1).unwrap().as_str();
+        let y1 = c.get(2).unwrap().as_str();
+        if let (Some(m2), Some(y2)) = (c.get(3), c.get(4)) {
+            en = Some(format_range_en(m1, y1, m2.as_str(), y2.as_str()));
+        } else if let (Some(count), Some(mi), Ok(year)) =
+            (time_count, month_index_en(m1), y1.parse::<u32>())
+        {
+            if count >= 1 {
+                let (ey, em) = add_months(year, mi, count - 1);
+                en = Some(format!(
+                    "{}{}-{}{}",
+                    month_abbr_en(m1),
+                    y1,
+                    abbr_en_from_index(em),
+                    ey
+                ));
+            }
+        }
+    }
+    if let Some(c) = TS_RANGE_FR_RE.captures(text) {
+        let m1 = c.get(1).unwrap().as_str();
+        let y1 = c.get(2).unwrap().as_str();
+        if let (Some(m2), Some(y2)) = (c.get(3), c.get(4)) {
+            fr = Some(format!(
+                "{}{}-{}{}",
+                month_abbr_fr(m1),
+                y1,
+                month_abbr_fr(m2.as_str()),
+                y2.as_str()
+            ));
+        }
+    }
+    // Prefer translating a complete EN range (includes count-derived ends).
+    if let Some(ref e) = en {
+        fr = Some(format_range_fr_from_en(e));
+    }
+    (en, fr)
+}
+
+fn time_series_label(
+    data: &[u8],
+    dims: &[DimDesc],
+    notes_en: Option<&str>,
+    notes_fr: Option<&str>,
+) -> LocalizedText {
     let dim = time_dim_desc(dims);
     if dim.is_none() && !has_time_series_marker(data) {
-        return "No".into();
+        return LocalizedText {
+            en: Some("No".into()),
+            fr: Some("No".into()),
+        };
     }
-    let Some(dim) = dim else {
-        return "Yes".into();
-    };
-    if let Some(freq) = frequency_hint_name(&dim.name) {
-        return freq;
+    // Dim notes (frequency/range) often live outside the identity-notes blobs.
+    let file_text = latin1(data);
+    let mut freq_en = None;
+    let mut freq_fr = None;
+    for text in [notes_en, notes_fr, Some(file_text.as_str())]
+        .into_iter()
+        .flatten()
+    {
+        if let Some((e, f)) = freq_pair_from_text(text) {
+            freq_en = Some(e);
+            freq_fr = Some(f);
+            break;
+        }
     }
-    if !dim.name.is_empty() {
-        return dim.name.clone();
+    if freq_en.is_none() {
+        if let Some(dim) = dim {
+            if let Some(f) = frequency_hint_name(&dim.name) {
+                let pair = freq_pair_from_text(&f).unwrap_or_else(|| (f.clone(), f));
+                freq_en = Some(pair.0);
+                freq_fr = Some(pair.1);
+            }
+        }
     }
-    "Yes".into()
+    let time_count = dim.map(|d| d.count);
+    let mut range_en = None;
+    let mut range_fr = None;
+    for text in [notes_en, notes_fr, Some(file_text.as_str())]
+        .into_iter()
+        .flatten()
+    {
+        let (e, f) = range_from_text(text, time_count);
+        if range_en.is_none() {
+            range_en = e;
+        }
+        if range_fr.is_none() {
+            range_fr = f;
+        }
+        if range_en.is_some() && range_fr.is_some() {
+            break;
+        }
+    }
+    if let (Some(fe), Some(re)) = (freq_en.clone(), range_en.clone()) {
+        return LocalizedText {
+            en: Some(format!("{fe}, {re}")),
+            fr: Some(format!(
+                "{}, {}",
+                freq_fr.unwrap_or(fe),
+                range_fr.unwrap_or(re)
+            )),
+        };
+    }
+    if let Some(fe) = freq_en {
+        return LocalizedText {
+            en: Some(fe.clone()),
+            fr: freq_fr.or(Some(fe)),
+        };
+    }
+    if let Some(dim) = dim {
+        if !dim.name.is_empty() {
+            return LocalizedText {
+                en: Some(dim.name.clone()),
+                fr: None,
+            };
+        }
+    }
+    LocalizedText {
+        en: Some("Yes".into()),
+        fr: Some("Yes".into()),
+    }
+}
+
+fn type_label_for(d: &DimDesc) -> String {
+    if d.type_code == 6 || TIME_SERIES_NAME_RE.is_match(&d.name) {
+        return "Time Series".into();
+    }
+    if d.double01 || d.type_code == 0x12 {
+        return "Geographic".into();
+    }
+    "Normal".into()
 }
 
 fn read_only_flag(data: &[u8]) -> bool {
@@ -673,9 +957,96 @@ fn read_member_array(block: &[u8], expect: usize) -> Vec<String> {
     Vec::new()
 }
 
-fn parse_dim_title(block: &[u8]) -> (Option<String>, Option<String>) {
+fn split_en_fr_glued(code: &str, glued: &str) -> (String, Option<String>) {
+    let cl = code.to_ascii_lowercase();
+    let gl = glued.to_ascii_lowercase();
+    if gl.starts_with(&cl) && glued.len() >= code.len() {
+        let fr = glued[code.len()..].to_string();
+        let en = if glued[..code.len()]
+            .chars()
+            .any(|c| c.is_ascii_lowercase())
+        {
+            // Prefer the title-case English spelling from the glued run.
+            glued[..code.len()].to_string()
+        } else {
+            code.to_string()
+        };
+        return (en, if fr.is_empty() { None } else { Some(fr) });
+    }
+    // e.g. "Time PeriodTEMPS" — English phrase then an uppercase French token.
+    let bytes = glued.as_bytes();
+    for i in 1..glued.len() {
+        if bytes[i - 1].is_ascii_lowercase() && bytes[i].is_ascii_uppercase() {
+            let en = glued[..i].to_string();
+            let fr = glued[i..].to_string();
+            if !en.is_empty() && !fr.is_empty() {
+                return (en, Some(fr));
+            }
+        }
+    }
+    (glued.to_string(), None)
+}
+
+/// Demo-table title block: CODE 01 04 32 EN+FR 02 05 32 …
+fn parse_dim_title_demo(block: &[u8]) -> (Option<String>, Option<String>, Option<String>) {
+    let marker = b"\x01\x042";
+    let Some(rel) = block.windows(marker.len()).position(|w| w == marker) else {
+        return (None, None, None);
+    };
+    // Walk back over the ASCII code name.
+    let mut start = rel;
+    while start > 0 && (32..=126).contains(&block[start - 1]) {
+        start -= 1;
+    }
+    let code = latin1(&block[start..rel]).trim().to_string();
+    if code.len() < 2 {
+        return (None, None, None);
+    }
+    let p = rel + marker.len();
+    let mut end = p;
+    while end < block.len() {
+        if block[end] < 32 {
+            break;
+        }
+        // Next language marker: 0x02/0x03 … 0x32
+        if end + 2 < block.len()
+            && (block[end] == 0x02 || block[end] == 0x03)
+            && block[end + 2] == 0x32
+        {
+            break;
+        }
+        end += 1;
+    }
+    // Trim if we over-consumed into a 0x02/0x03 marker without 0x32 yet.
+    while end > p && block[end - 1] < 32 {
+        end -= 1;
+    }
+    let glued = latin1(&block[p..end]);
+    let (desc_en, desc_fr) = split_en_fr_glued(&code, &glued);
+    // COOKIE TYPE → Name COOKIE; keep TIME PERIOD / REGION as-is.
+    let short = if code.to_ascii_uppercase().ends_with(" TYPE") {
+        code.split_whitespace()
+            .next()
+            .unwrap_or(&code)
+            .to_string()
+    } else {
+        code.clone()
+    };
+    (
+        Some(short),
+        Some(if desc_en.is_empty() { code } else { desc_en }),
+        desc_fr,
+    )
+}
+
+/// Returns (short_code, description_en, description_fr).
+fn parse_dim_title(block: &[u8]) -> (Option<String>, Option<String>, Option<String>) {
     if block.len() < 16 || block[..2] != *b"\x81\x02" {
-        return (None, None);
+        return (None, None, None);
+    }
+    let demo = parse_dim_title_demo(block);
+    if demo.0.is_some() {
+        return demo;
     }
     for i in 0..block.len().saturating_sub(10) {
         if block[i + 1..i + 3] != *b"\x02\x00" {
@@ -735,14 +1106,15 @@ fn parse_dim_title(block: &[u8]) -> (Option<String>, Option<String>) {
             Some(e) => &block[q..e],
             None => &block[q..],
         });
-        let description = if glued.starts_with(&short) {
+        let description = if glued.is_empty() {
             short.clone()
-        } else if glued.is_empty() {
-            short.clone()
+        } else if glued.starts_with(&short) && glued.len() > short.len() {
+            // Prefer the longer English label when code is a prefix (COOKIE / COOKIE TYPE).
+            glued.clone()
         } else {
             glued.clone()
         };
-        let mut name_fr = None;
+        let mut description_fr = None;
         if let Some(fs) = fr_start {
             let raw_fr = latin1(&block[fs..]);
             let mut out = String::new();
@@ -753,34 +1125,37 @@ fn parse_dim_title(block: &[u8]) -> (Option<String>, Option<String>) {
                 out.push(c);
             }
             if !out.is_empty() {
-                name_fr = Some(out);
+                description_fr = Some(out);
             }
         }
-        if name_fr.is_none() && glued.starts_with(&short) && glued.len() > short.len() {
-            name_fr = Some(glued[short.len()..].to_string());
+        if description_fr.is_none() && glued.starts_with(&short) && glued.len() > short.len() {
+            description_fr = Some(glued[short.len()..].to_string());
         }
-        return (Some(description), name_fr);
+        return (Some(short), Some(description), description_fr);
     }
-    (None, None)
+    (None, None, None)
 }
 
-fn dim_title(data: &[u8], slot_index: usize) -> (Option<String>, Option<String>) {
+fn dim_title(
+    data: &[u8],
+    slot_index: usize,
+) -> (Option<String>, Option<String>, Option<String>) {
     let slots = dim_slots(data, 32);
     if slot_index >= slots.len() {
-        return (None, None);
+        return (None, None, None);
     }
     let slot = slots[slot_index];
     for (off, length) in read_block_dir(data, slot.dir_ptr, slot.n_entries) {
         if length < 16 {
             continue;
         }
-        let (description, name_fr) =
+        let (short, description, description_fr) =
             parse_dim_title(&data[off as usize..off as usize + length as usize]);
-        if description.is_some() {
-            return (description, name_fr);
+        if short.is_some() || description.is_some() {
+            return (short, description, description_fr);
         }
     }
-    (None, None)
+    (None, None, None)
 }
 
 fn dim_dir_labels(
@@ -1122,14 +1497,15 @@ pub fn build_dimensions(data: &[u8], desc: &Descriptor) -> Vec<Dimension> {
         } else {
             (None, None)
         };
-        let (description, mut name_fr) = dim_title(data, i);
-        let name = if is_geo {
-            "Geography".into()
-        } else {
-            d.name.clone()
-        };
+        let (short, description, description_fr) = dim_title(data, i);
+        // Prefer the dim-title short code (COOKIE) over a long descriptor name
+        // (COOKIE TYPE) when available; keep descriptor name otherwise.
+        let name = short
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| d.name.clone());
         let description = description.or_else(|| Some(name.clone()));
-        if is_geo && name_fr.is_none() {
+        let mut name_fr = description_fr.clone();
+        if is_geo && name.eq_ignore_ascii_case("Geography") && name_fr.is_none() {
             name_fr = Some("Géographie".into());
         }
         dims.push(Dimension {
@@ -1139,7 +1515,8 @@ pub fn build_dimensions(data: &[u8], desc: &Descriptor) -> Vec<Dimension> {
             type_code: d.type_code,
             is_geography: is_geo,
             description,
-            type_label: "Normal".into(),
+            description_fr,
+            type_label: type_label_for(d),
             members,
             members_fr,
             ordinal: None,
@@ -1181,6 +1558,12 @@ pub fn build_metadata(
     } else {
         desc.dims.iter().fold(1i64, |a, d| a.saturating_mul(d.count))
     };
+    let time_series = time_series_label(
+        &data,
+        &desc.dims,
+        notes_en.as_deref(),
+        notes_fr.as_deref(),
+    );
 
     Ok(IvtMetadata {
         product_id,
@@ -1205,7 +1588,7 @@ pub fn build_metadata(
         },
         keywords,
         number_of_datapoints: Some(number_of_datapoints),
-        time_series: Some(time_series_label(&data, &desc.dims)),
+        time_series,
         read_only: Some(read_only_flag(&data)),
         data,
         desc,

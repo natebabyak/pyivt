@@ -1,0 +1,18 @@
+[
+  {
+    "id": "products",
+    "filename": "Products.ivt"
+  },
+  {
+    "id": "people",
+    "filename": "People.ivt"
+  },
+  {
+    "id": "sample",
+    "filename": "Sample.ivt"
+  },
+  {
+    "id": "oecd",
+    "filename": "Oecd.ivt"
+  }
+]

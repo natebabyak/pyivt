@@ -26,26 +26,47 @@
     }
   },
   "number_of_datapoints": 448,
-  "time_series": "No",
+  "time_series": {
+    "en": "No",
+    "fr": "No"
+  },
   "read_only": true,
   "dimensions": [
     {
-      "name": "Geography",
+      "name": {
+        "en": "Geography",
+        "fr": "Géographie"
+      },
       "items": 14,
       "type": "Normal",
-      "description": "Geography"
+      "description": {
+        "en": "GeographyGéographie",
+        "fr": "Géographie"
+      }
     },
     {
-      "name": "Type of collect",
+      "name": {
+        "en": "Type of collect",
+        "fr": "Type de logemen"
+      },
       "items": 16,
       "type": "Normal",
-      "description": "Type of collect"
+      "description": {
+        "en": "Type of collectType de logemen",
+        "fr": "Type de logemen"
+      }
     },
     {
-      "name": "Collective dwel",
+      "name": {
+        "en": "Collective dwel",
+        "fr": "Logements colle"
+      },
       "items": 2,
-      "type": "Normal",
-      "description": "Collective dwel"
+      "type": "Geographic",
+      "description": {
+        "en": "Collective dwelLogements colle",
+        "fr": "Logements colle"
+      }
     }
   ],
   "footnotes": [

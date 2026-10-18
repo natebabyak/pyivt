@@ -26,26 +26,47 @@
     }
   },
   "number_of_datapoints": 504,
-  "time_series": "No",
+  "time_series": {
+    "en": "No",
+    "fr": "No"
+  },
   "read_only": true,
   "dimensions": [
     {
-      "name": "Geography",
+      "name": {
+        "en": "Geography",
+        "fr": "Géographie"
+      },
       "items": 14,
       "type": "Normal",
-      "description": "Geography"
+      "description": {
+        "en": "GeographyGéographie",
+        "fr": "Géographie"
+      }
     },
     {
-      "name": "Structural type",
+      "name": {
+        "en": "Structural type",
+        "fr": "Type de constru"
+      },
       "items": 9,
       "type": "Normal",
-      "description": "Structural type"
+      "description": {
+        "en": "Structural typeType de constru",
+        "fr": "Type de constru"
+      }
     },
     {
-      "name": "View",
+      "name": {
+        "en": "View",
+        "fr": "Vue"
+      },
       "items": 4,
       "type": "Normal",
-      "description": "View"
+      "description": {
+        "en": "ViewVue",
+        "fr": "Vue"
+      }
     }
   ],
   "footnotes": [

@@ -26,38 +26,71 @@
     }
   },
   "number_of_datapoints": 137280,
-  "time_series": "Geography",
+  "time_series": {
+    "en": "Geography",
+    "fr": null
+  },
   "read_only": true,
   "dimensions": [
     {
-      "name": "Geography",
+      "name": {
+        "en": "Geography",
+        "fr": "Géographie"
+      },
       "items": 55,
-      "type": "Normal",
-      "description": "Geography"
+      "type": "Time Series",
+      "description": {
+        "en": "GeographyGéographie",
+        "fr": "Géographie"
+      }
     },
     {
-      "name": "Gender (3a)",
+      "name": {
+        "en": "Gender (3a)",
+        "fr": "Genre (3a)"
+      },
       "items": 3,
       "type": "Normal",
-      "description": "Gender (3a)"
+      "description": {
+        "en": "Gender (3a)Genre (3a)",
+        "fr": "Genre (3a)"
+      }
     },
     {
-      "name": "Census year (4)",
+      "name": {
+        "en": "Census year (4)",
+        "fr": "Année de recens"
+      },
       "items": 4,
       "type": "Normal",
-      "description": "Census year (4)"
+      "description": {
+        "en": "Census year (4)Année de recens",
+        "fr": "Année de recens"
+      }
     },
     {
-      "name": "Marital status",
+      "name": {
+        "en": "Marital status",
+        "fr": "État matrimonia"
+      },
       "items": 13,
       "type": "Normal",
-      "description": "Marital status"
+      "description": {
+        "en": "Marital statusÉtat matrimonia",
+        "fr": "État matrimonia"
+      }
     },
     {
-      "name": "Age (16)",
+      "name": {
+        "en": "Age (16)",
+        "fr": "Âge (16)"
+      },
       "items": 16,
       "type": "Normal",
-      "description": "Age (16)"
+      "description": {
+        "en": "Age (16)Âge (16)",
+        "fr": "Âge (16)"
+      }
     }
   ],
   "footnotes": [

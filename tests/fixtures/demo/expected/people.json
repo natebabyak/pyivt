@@ -1,0 +1,95 @@
+{
+  "title": {
+    "en": "No. of Employees & Salaries by Occupation, Region, & Month",
+    "fr": "Nombre d'Employés et Salaires par Profession, Région & Mois"
+  },
+  "author": {
+    "en": "Ivation",
+    "fr": "Ivation"
+  },
+  "category": {
+    "en": "Beyond 20/20 Demonstration Tables and Extract",
+    "fr": "Tables et Extrait de démonstration de Beyond 20/20"
+  },
+  "keywords": {
+    "en": null,
+    "fr": null
+  },
+  "notes": {
+    "en": {
+      "first": "This table is one of two demonstration tables IVATION Datasystems Inc.",
+      "last": "If you have any questions concerning the data, please contact John Representative at 123-4567."
+    },
+    "fr": {
+      "first": "Cette table est l'une des deux tables de démonstration qu'Ivation Datasystems Inc.",
+      "last": "Si vous avez des questions concernant les données, prière de communiquer avec Jean Représentant au 123-4567."
+    }
+  },
+  "number_of_datapoints": 4680,
+  "time_series": {
+    "en": "Monthly, Jan1991-Mar1994",
+    "fr": "Mensuelle, jan1991-mars1994"
+  },
+  "read_only": false,
+  "dimensions": [
+    {
+      "name": {
+        "en": "UNITS",
+        "fr": null
+      },
+      "items": 2,
+      "type": "Normal",
+      "description": {
+        "en": "UNITS",
+        "fr": null
+      }
+    },
+    {
+      "name": {
+        "en": "OCCUPATION",
+        "fr": "PROFESSION"
+      },
+      "items": 12,
+      "type": "Normal",
+      "description": {
+        "en": "OCCUPATION",
+        "fr": "PROFESSION"
+      }
+    },
+    {
+      "name": {
+        "en": "REGION",
+        "fr": "RÉGION"
+      },
+      "items": 5,
+      "type": "Geographic",
+      "description": {
+        "en": "REGION",
+        "fr": "RÉGION"
+      }
+    },
+    {
+      "name": {
+        "en": "Time Period",
+        "fr": null
+      },
+      "items": 39,
+      "type": "Time Series",
+      "description": {
+        "en": "Time Period",
+        "fr": null
+      }
+    }
+  ],
+  "footnotes": [],
+  "missing_values": [
+    {
+      "symbol": "-",
+      "code": 1,
+      "label": {
+        "en": "Default Missing Value",
+        "fr": "Valeur manquante de défaut"
+      }
+    }
+  ]
+}

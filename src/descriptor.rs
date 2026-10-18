@@ -67,6 +67,19 @@ fn descriptor_name(run: &[u8], first_record: bool) -> Option<String> {
             }
         }
     }
+    // Code glued to a spaced description: "RegionReporting Region", "DateMonthly reporting period".
+    if let Some(sp) = s.find(' ') {
+        let before = &s[..sp];
+        let bytes = before.as_bytes();
+        for i in (2..before.len().saturating_sub(1)).rev() {
+            if bytes[i].is_ascii_uppercase() && bytes[i - 1].is_ascii_lowercase() {
+                let code = &before[..i];
+                if (2..=24).contains(&code.len()) {
+                    return Some(code.to_string());
+                }
+            }
+        }
+    }
     if first_record && s.starts_with("Geography") {
         return Some("Geography".into());
     }
@@ -123,11 +136,47 @@ fn walk_records(v: &[u8], lend: usize, cap: usize, lenient: bool) -> Vec<DimDesc
             }
             let run = &v[k + 1..e];
             if !lenient || run.len() >= 4 {
-                let double01 = anchor_a && v[k - 1] == 0x01;
-                let (typ, count) = if anchor_b {
-                    (v[k] as i64, count_b)
-                } else if double01 {
-                    (v[k - 3] as i64, v[k - 2] as i64)
+                // Layout variants before NAME:
+                //   [type][count] 01 01 NAME          geographic (People REGION)
+                //   [count][type] 01 01 02 NAME       older geographic (Oecd REGION)
+                //   [type][count] 01 02 NAME          first-axis (People UNITS)
+                //   [count][type] … 02 NAME           bare02 (Oecd ITEM/TIME)
+                //   [count][type] 01 NAME             normal
+                let geo_double01 = anchor_a && v[k] == 0x01 && v[k - 1] == 0x01;
+                let triple010102 = anchor_a
+                    && v[k] == 0x02
+                    && v[k - 1] == 0x01
+                    && k >= 4
+                    && v[k - 2] == 0x01;
+                let lead_01_02 = anchor_a
+                    && v[k] == 0x02
+                    && v[k - 1] == 0x01
+                    && k >= 3
+                    && v[k - 2] != 0x01;
+                let (typ, count, is_geo_flag) = if anchor_b {
+                    (v[k] as i64, count_b, false)
+                } else if triple010102 {
+                    (v[k - 3] as i64, v[k - 4] as i64, true)
+                } else if geo_double01 {
+                    // People REGION uses [type=0x12][count]; Products REGION uses
+                    // [count][type] with a normal type byte before the 01 01.
+                    let a = v[k - 3] as i64;
+                    let b = v[k - 2] as i64;
+                    if a == 0x12 {
+                        (a, b, true)
+                    } else {
+                        (b, a, true)
+                    }
+                } else if lead_01_02 {
+                    (v[k - 3] as i64, v[k - 2] as i64, false)
+                } else if bare02 && k >= 3 {
+                    // Oecd-style [count][type][flag≤4][02]NAME vs
+                    // People/Products [count][type][02]NAME (type often 6).
+                    if v[k - 1] <= 0x04 && k >= 4 {
+                        (v[k - 2] as i64, v[k - 3] as i64, false)
+                    } else {
+                        (v[k - 1] as i64, v[k - 2] as i64, false)
+                    }
                 } else {
                     let typ = v[k - 1] as i64;
                     let count = if GEOTYPES.contains(&v[k - 1]) {
@@ -135,7 +184,7 @@ fn walk_records(v: &[u8], lend: usize, cap: usize, lenient: bool) -> Vec<DimDesc
                     } else {
                         v[k - 2] as i64
                     };
-                    (typ, count)
+                    (typ, count, false)
                 };
                 let mut nm = descriptor_name(run, dims.is_empty());
                 if nm.is_none() && lenient {
@@ -152,12 +201,12 @@ fn walk_records(v: &[u8], lend: usize, cap: usize, lenient: bool) -> Vec<DimDesc
                     }
                 }
                 if let Some(name) = nm {
-                    if count >= 1 {
+                    if count >= 1 && count <= 2_000_000 && dims_name_ok(&name) {
                         dims.push(DimDesc {
                             name,
                             count,
                             type_code: typ,
-                            double01,
+                            double01: is_geo_flag,
                         });
                         k = e;
                         continue;
@@ -170,11 +219,69 @@ fn walk_records(v: &[u8], lend: usize, cap: usize, lenient: bool) -> Vec<DimDesc
     dims
 }
 
-pub fn parse_descriptor(data: &[u8]) -> Option<Descriptor> {
-    if !data.is_empty() && data[0] == 0x02 {
-        return None;
+fn dims_name_ok(name: &str) -> bool {
+    let t = name.trim();
+    if t.len() < 2 || t.len() > 48 {
+        return false;
     }
-    let d_off = u32(data, HDR_DESCRIPTOR_PTR) as usize;
+    // Reject prose / notes fragments mistaken for dimension names.
+    if t.contains(". ") || t.contains(".\r") || t.contains(".\n") || t.contains(',') {
+        return false;
+    }
+    let words = t.split_whitespace().count();
+    if words > 5 {
+        return false;
+    }
+    let lower = t.to_lowercase();
+    for bad in [
+        "this table",
+        "cette table",
+        "esta tabla",
+        "the data",
+        "diskettes",
+        "secretariat",
+        "economic outlook",
+        "demonstration",
+        "contient",
+        "contains",
+        "enregistrements",
+        "revenus",
+        "ingresos",
+    ] {
+        if lower.contains(bad) {
+            return false;
+        }
+    }
+    true
+}
+
+fn dims_quality_score(dims: &[DimDesc]) -> i64 {
+    if !dims_quality_ok(dims) {
+        return -1;
+    }
+    // Prefer more axes and a sane cell product.
+    let prod = dims.iter().fold(1i64, |a, d| a.saturating_mul(d.count));
+    (dims.len() as i64) * 1_000_000 + prod.min(999_999)
+}
+
+fn dims_quality_ok(dims: &[DimDesc]) -> bool {
+    if dims.len() < 2 || dims.len() > 16 {
+        return false;
+    }
+    let mut prod: i64 = 1;
+    for d in dims {
+        if !dims_name_ok(&d.name) || d.count < 1 {
+            return false;
+        }
+        prod = prod.saturating_mul(d.count);
+        if prod > 500_000_000 {
+            return false;
+        }
+    }
+    true
+}
+
+fn walk_at(data: &[u8], d_off: usize, cap_hint: usize) -> Option<Vec<DimDesc>> {
     let n = data.len();
     if d_off < 1 || d_off + 18 > n {
         return None;
@@ -191,12 +298,17 @@ pub fn parse_descriptor(data: &[u8]) -> Option<Descriptor> {
             }
         })
         .collect();
-    let lend = if let Some(facet) = text.find("FACET04") {
-        if facet > 0 {
-            facet
+    // FACET04 usually ends the dim block, but an earlier FACET (title summary)
+    // can sit before the name chain in pre-marker windows — ignore those.
+    let facet_lend = text.find("FACET04").and_then(|facet| {
+        if facet >= 200 {
+            Some(facet)
         } else {
-            v.len()
+            None
         }
+    });
+    let lend = if let Some(facet) = facet_lend {
+        facet
     } else if let Some(anchor) = dir_anchor_header(data) {
         let vb = u32(data, anchor) as usize;
         if vb > d_off + 32 {
@@ -210,20 +322,86 @@ pub fn parse_descriptor(data: &[u8]) -> Option<Descriptor> {
     let ndim_field = u16(data, d_off + 16);
     let cap = if (1..=32).contains(&ndim_field) {
         ndim_field as usize
+    } else if (2..=16).contains(&cap_hint) {
+        cap_hint
     } else {
         16
     };
-    let mut dims = walk_records(v, lend, cap, false);
-    if dims.len() < 2 {
-        dims = walk_records(v, lend, cap, true);
+    let try_walk = |end: usize| -> Option<Vec<DimDesc>> {
+        let mut dims = walk_records(v, end, cap, false);
+        if !dims_quality_ok(&dims) {
+            dims = walk_records(v, end, cap, true);
+        }
+        if dims_quality_ok(&dims) {
+            Some(dims)
+        } else {
+            None
+        }
+    };
+    if let Some(dims) = try_walk(lend) {
+        return Some(dims);
     }
-    if dims.len() < 2 {
+    // Retry full window when FACET/dir truncation hid the real chain.
+    if lend < v.len() {
+        try_walk(v.len())
+    } else {
+        None
+    }
+}
+
+/// Demo tables sometimes store the dim-name chain just before an `81 01 20 00`
+/// marker while `HDR_DESCRIPTOR_PTR` points at a Timeseries/options blob.
+fn scan_dim_marker_windows(data: &[u8]) -> Option<(usize, Vec<DimDesc>)> {
+    let needle = b"\x81\x01\x20\x00";
+    let mut best: Option<(usize, Vec<DimDesc>, i64)> = None;
+    let mut start = 0usize;
+    while let Some(rel) = data[start..]
+        .windows(needle.len())
+        .position(|w| w == needle)
+    {
+        let marker = start + rel;
+        for off in [marker.saturating_sub(256), marker] {
+            if let Some(dims) = walk_at(data, off, 16) {
+                let score = dims_quality_score(&dims);
+                if score >= 0 && best.as_ref().map(|(_, _, s)| *s).unwrap_or(-1) < score {
+                    best = Some((off, dims, score));
+                }
+            }
+        }
+        start = marker + needle.len();
+    }
+    best.map(|(o, d, _)| (o, d))
+}
+
+pub fn parse_descriptor(data: &[u8]) -> Option<Descriptor> {
+    if !data.is_empty() && data[0] == 0x02 {
         return None;
     }
-    Some(Descriptor {
-        offset: d_off as u32,
+    let d_off = u32(data, HDR_DESCRIPTOR_PTR) as usize;
+    let mut best: Option<(usize, Vec<DimDesc>, i64)> = None;
+    let consider = |best: &mut Option<(usize, Vec<DimDesc>, i64)>, off: usize, dims: Vec<DimDesc>| {
+        let score = dims_quality_score(&dims);
+        if score < 0 {
+            return;
+        }
+        if best.as_ref().map(|(_, _, s)| *s).unwrap_or(-1) < score {
+            *best = Some((off, dims, score));
+        }
+    };
+    if let Some(dims) = walk_at(data, d_off, 16) {
+        consider(&mut best, d_off, dims);
+    }
+    if let Some((off, dims)) = scan_dim_marker_windows(data) {
+        consider(&mut best, off, dims);
+    }
+    best.map(|(offset, dims, _)| Descriptor {
+        offset: offset as u32,
         dims,
     })
+}
+
+fn is_geographic_dim(d: &DimDesc) -> bool {
+    d.double01 || d.type_code == 0x12
 }
 
 pub fn geo_dim_index(dims: &[DimDesc]) -> usize {
@@ -233,6 +411,16 @@ pub fn geo_dim_index(dims: &[DimDesc]) -> usize {
     let name = dims[0].name.to_lowercase();
     if dims[0].count == 1 && (name == "values" || name == "value") {
         return dims.len();
+    }
+    // Prefer an explicit Geographic-typed axis (demo REGION) over assuming dim 0.
+    if let Some((i, _)) = dims.iter().enumerate().find(|(_, d)| is_geographic_dim(d)) {
+        return i + 1;
+    }
+    // Census-style tables keep geography first even when Type is Normal.
+    if dims[0].name.eq_ignore_ascii_case("Geography")
+        || dims[0].name.eq_ignore_ascii_case("Géographie")
+    {
+        return 1;
     }
     1
 }

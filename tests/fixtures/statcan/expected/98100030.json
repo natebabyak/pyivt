@@ -26,32 +26,59 @@
     }
   },
   "number_of_datapoints": 10440,
-  "time_series": "No",
+  "time_series": {
+    "en": "No",
+    "fr": "No"
+  },
   "read_only": true,
   "dimensions": [
     {
-      "name": "Geography",
+      "name": {
+        "en": "Geography",
+        "fr": "Géographie"
+      },
       "items": 174,
       "type": "Normal",
-      "description": "Geography"
+      "description": {
+        "en": "GeographyGéographie",
+        "fr": "Géographie"
+      }
     },
     {
-      "name": "Gender (3a)",
+      "name": {
+        "en": "Gender (3a)",
+        "fr": "Genre (3a)"
+      },
       "items": 3,
       "type": "Normal",
-      "description": "Gender (3a)"
+      "description": {
+        "en": "Gender (3a)Genre (3a)",
+        "fr": "Genre (3a)"
+      }
     },
     {
-      "name": "Broad age group",
+      "name": {
+        "en": "Broad age group",
+        "fr": "Grands groupes"
+      },
       "items": 5,
       "type": "Normal",
-      "description": "Broad age group"
+      "description": {
+        "en": "Broad age groupGrands groupes",
+        "fr": "Grands groupes"
+      }
     },
     {
-      "name": "View",
+      "name": {
+        "en": "View",
+        "fr": "Vue"
+      },
       "items": 4,
       "type": "Normal",
-      "description": "View"
+      "description": {
+        "en": "ViewVue",
+        "fr": "Vue"
+      }
     }
   ],
   "footnotes": [
