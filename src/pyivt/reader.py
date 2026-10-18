@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
+from datetime import datetime
 
 import pyarrow as pa
 
-from ._io import Source, load_source
+from ._io import as_bytes
 from .decode import Layout, build_layout, complete_grid, decode_store
 from .descriptor import parse_descriptor
 from .metadata import IvtMetadata, read_metadata_bytes
 from .tidy import tidy_arrays
-
-PathLike = str | Path
 
 
 def _columns_to_arrow(cols: dict) -> pa.Table:
@@ -30,7 +28,7 @@ class IvtTable:
     layout: Layout
     complete: bool = True
 
-    def to_columns(
+    def _to_columns(
         self,
         *,
         labels: bool = True,
@@ -50,77 +48,37 @@ class IvtTable:
         labels: bool = True,
         language: str = "en",
     ) -> pa.Table:
-        return _columns_to_arrow(self.to_columns(labels=labels, language=language))
-
-    def to_pandas(
-        self,
-        *,
-        labels: bool = True,
-        language: str = "en",
-    ):
-        try:
-            return self.to_arrow(labels=labels, language=language).to_pandas()
-        except ImportError as exc:  # pragma: no cover - optional dep
-            raise ImportError(
-                "to_pandas() requires pandas; install it with: pip install pandas"
-            ) from exc
-
-    def to_polars(
-        self,
-        *,
-        labels: bool = True,
-        language: str = "en",
-    ):
-        try:
-            import polars as pl
-        except ImportError as exc:  # pragma: no cover - optional dep
-            raise ImportError(
-                "to_polars() requires polars; install it with: pip install polars"
-            ) from exc
-        return pl.from_arrow(self.to_arrow(labels=labels, language=language))
-
-    def to_parquet(
-        self,
-        path: PathLike,
-        *,
-        labels: bool = True,
-        members: bool = True,
-        language: str = "en",
-    ) -> Path:
-        from .parquet import write_parquet
-
-        return write_parquet(
-            self,
-            path,
-            labels=labels,
-            members=members,
-            language=language,
-        )
+        return _columns_to_arrow(self._to_columns(labels=labels, language=language))
 
 
 def open(
-    source: Source,
+    data: bytes | bytearray | memoryview,
     *,
     complete: bool = True,
     language: str = "en",
     max_cells: int = 100_000_000,
+    file_name: str | None = None,
+    directory: str | None = None,
+    last_update: datetime | None = None,
 ) -> IvtTable:
     """
-    Open an IVT file from a path, URL, bytes, or binary file-like object.
+    Open an IVT file from a bytes buffer.
 
     Parameters
     ----------
     complete
         If True (default), expand to the published grid (absent cells → 0).
         If False, return only stored non-zero cells.
+    file_name, directory, last_update
+        Optional Beyond 20/20 summary fields; omit when not known.
     """
-    data, origin = load_source(source)
+    data = as_bytes(data)
     meta = read_metadata_bytes(
         data,
-        file_name=origin.file_name,
-        directory=origin.directory,
-        last_update=origin.last_update,
-        file_size=origin.file_size,
+        file_name=file_name,
+        directory=directory,
+        last_update=last_update,
+        file_size=len(data),
     )
     desc = parse_descriptor(data)
     if desc is None:

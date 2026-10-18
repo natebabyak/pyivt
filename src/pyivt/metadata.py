@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from ._bytes import latin1, rd_pascal, u16, u32
-from ._io import Source, load_source
+from ._io import as_bytes
 from .descriptor import Descriptor, DimDesc, geo_dim_index, parse_descriptor
 from .header import (
     HDR_MASTER_PTR,
@@ -729,13 +729,19 @@ def read_metadata_bytes(
     )
 
 
-def read_metadata(source: Source) -> IvtMetadata:
+def read_metadata(
+    data: bytes | bytearray | memoryview,
+    *,
+    file_name: str | None = None,
+    directory: str | None = None,
+    last_update: datetime | None = None,
+) -> IvtMetadata:
     """Extract file summary + dimension codebook without decoding cell values."""
-    data, origin = load_source(source)
+    data = as_bytes(data)
     return read_metadata_bytes(
         data,
-        file_name=origin.file_name,
-        directory=origin.directory,
-        last_update=origin.last_update,
-        file_size=origin.file_size,
+        file_name=file_name,
+        directory=directory,
+        last_update=last_update,
+        file_size=len(data),
     )

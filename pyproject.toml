@@ -1,7 +1,7 @@
 [project]
 name = "pyivt"
 version = "0.1.0"
-description = "Read Statistics Canada Beyond 20/20 .ivt tables: metadata and Parquet export"
+description = "Read Statistics Canada Beyond 20/20 .ivt tables: metadata and Apache Arrow export"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "pyivt contributors" }]

@@ -1,7 +1,7 @@
-"""Minimal Beyond 20/20 IVT reader: metadata + tidy Parquet export."""
+"""Beyond 20/20 IVT reader: metadata + Apache Arrow export."""
 
 from .metadata import read_metadata
-from .parquet import write_metadata, write_parquet
+from .parquet import write_metadata
 from .reader import IvtTable, open
 
 __all__ = [
@@ -9,7 +9,6 @@ __all__ = [
     "open",
     "read_metadata",
     "write_metadata",
-    "write_parquet",
 ]
 
 __version__ = "0.1.0"

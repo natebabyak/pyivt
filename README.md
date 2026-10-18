@@ -3,7 +3,7 @@
 Python library for Beyond 20/20 `.ivt` files.
 
 - Up to 100,000% faster than GUI automation for metadata
-- Export data to Apache Arrow, pandas, Parquet, or Polars
+- Export data to Apache Arrow (then pandas, Parquet, Polars, or anything Arrow supports)
 
 ## Getting Started
 
@@ -22,64 +22,68 @@ pip install pyivt
 Open an IVT file, inspect its metadata, and export its data to Parquet:
 
 ```python
+from pathlib import Path
+
+import pyarrow.parquet as pq
 import pyivt
 
-ivt = pyivt.open("data.ivt")
+path = Path("data.ivt")
+ivt = pyivt.open(path.read_bytes())
 
 print(ivt.metadata.title.en)
 
-ivt.to_parquet("data.parquet")
+pq.write_table(ivt.to_arrow(), "data.parquet")
 ```
 
 #### Opening IVT Files
 
-##### Local files
+`pyivt.open` accepts IVT bytes only. Convert paths, URLs, or file objects first:
 
 ```python
+import os
 from pathlib import Path
+from urllib.request import urlopen
 
 import pyivt
 
-ivt = pyivt.open("data.ivt")
-ivt = pyivt.open(Path("data.ivt"))
-```
+# Local file
+path = Path("data.ivt")
+ivt = pyivt.open(path.read_bytes())
 
-##### Remote URLs
+# Optional Beyond 20/20 summary fields from the filesystem
+ivt = pyivt.open(
+    path.read_bytes(),
+    file_name=path.name,
+    directory=str(path.resolve().parent) + os.sep,
+)
 
-```python
-import pyivt
+# Remote URL
+with urlopen("https://example.com/data.ivt") as resp:
+    ivt = pyivt.open(resp.read())
 
-ivt = pyivt.open("https://example.com/data.ivt")
-```
-
-##### Bytes and file-like objects
-
-```python
-from io import BytesIO
-
-import pyivt
-
-ivt = pyivt.open(data)
-ivt = pyivt.open(BytesIO(data))
-
+# File-like object
 with open("data.ivt", "rb") as file:
-    ivt = pyivt.open(file)
+    ivt = pyivt.open(file.read())
 ```
 
 #### Exporting Data
 
+`IvtTable.to_arrow()` returns an Apache Arrow table. Convert from there:
+
 ```python
-# Apache Arrow
+import polars as pl
+import pyarrow.parquet as pq
+
 table = ivt.to_arrow()
 
 # pandas
-df = ivt.to_pandas()
+df = table.to_pandas()
 
 # Parquet
-ivt.to_parquet("data.parquet")
+pq.write_table(table, "data.parquet")
 
 # Polars
-df = ivt.to_polars()
+df = pl.from_arrow(table)
 ```
 
 ## Beyond 20/20 Summary vs. `pyivt` Metadata
