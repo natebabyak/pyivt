@@ -3,12 +3,20 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 
 use crate::bytes::{latin1, rd_pascal, u16, u32};
-use crate::descriptor::{geo_dim_index, parse_descriptor, Descriptor, DimDesc};
-use crate::header::{
-    dim_slots, read_block_dir, read_header, HeaderLayout, HDR_MASTER_PTR, HDR_STATUS_LEGEND,
+use crate::descriptor::{
+    geo_dim_index, parse_descriptor, scan_dim_marker_in_buffers, walk_at_window, Descriptor,
+    DimDesc,
 };
+use crate::error::IvtError;
+use crate::header::{
+    dim_slots, read_block_dir, read_block_dir_bytes, read_header, read_header_ex, HeaderLayout,
+    HDR_DESCRIPTOR_PTR, HDR_DIM_SLOT0, HDR_DIR_PTR, HDR_MASTER_PTR, HDR_STATUS_LEGEND,
+    DIM_SLOT_STRIDE,
+};
+use crate::io::{ByteRange, IvtSource, LoadedRange, DEFAULT_MERGE_GAP};
 
 static FACET_AUTHOR_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
@@ -137,7 +145,6 @@ pub struct Geographies {
     pub tnr_short_form: Option<Vec<Option<String>>>,
 }
 
-#[derive(Debug, Clone)]
 pub struct IvtMetadata {
     pub product_id: Option<String>,
     pub title: LocalizedText,
@@ -151,8 +158,10 @@ pub struct IvtMetadata {
     pub number_of_datapoints: Option<i64>,
     pub time_series: Option<TimeSeriesInfo>,
     pub read_only: Option<bool>,
-    data: Vec<u8>,
+    source: IvtSource,
     desc: Descriptor,
+    #[allow(dead_code)]
+    master_entries: Vec<(u32, u16)>,
     dimensions: Option<Vec<Dimension>>,
     geographies: Option<Geographies>,
     footnotes: Option<Vec<Footnote>>,
@@ -160,39 +169,48 @@ pub struct IvtMetadata {
 }
 
 impl IvtMetadata {
-    pub fn dimensions(&mut self) -> &Vec<Dimension> {
-        self.ensure_dims_geo();
-        self.dimensions.as_ref().unwrap()
+    pub fn dimensions(&mut self) -> Result<&Vec<Dimension>, String> {
+        self.ensure_dimensions().map_err(|e| e.to_string())?;
+        Ok(self.dimensions.as_ref().unwrap())
     }
 
-    pub fn geographies(&mut self) -> &Geographies {
-        self.ensure_dims_geo();
-        self.geographies.as_ref().unwrap()
+    pub fn geographies(&mut self) -> Result<&Geographies, String> {
+        self.ensure_geographies().map_err(|e| e.to_string())?;
+        Ok(self.geographies.as_ref().unwrap())
     }
 
-    pub fn footnotes(&mut self) -> &Vec<Footnote> {
+    pub fn footnotes(&mut self) -> Result<&Vec<Footnote>, String> {
         if self.footnotes.is_none() {
-            self.footnotes = Some(footnotes(&self.data));
+            self.footnotes = Some(footnotes_from_source(&self.source).map_err(|e| e.to_string())?);
         }
-        self.footnotes.as_ref().unwrap()
+        Ok(self.footnotes.as_ref().unwrap())
     }
 
-    pub fn missing_values(&mut self) -> &Vec<MissingValue> {
+    pub fn missing_values(&mut self) -> Result<&Vec<MissingValue>, String> {
         if self.missing_values.is_none() {
-            self.missing_values = Some(missing_values(&self.data));
+            self.missing_values =
+                Some(missing_values_from_source(&self.source).map_err(|e| e.to_string())?);
         }
-        self.missing_values.as_ref().unwrap()
+        Ok(self.missing_values.as_ref().unwrap())
     }
 
-    fn ensure_dims_geo(&mut self) {
-        if self.dimensions.is_some() && self.geographies.is_some() {
-            return;
+    fn ensure_dimensions(&mut self) -> Result<(), IvtError> {
+        if self.dimensions.is_some() {
+            return Ok(());
         }
-        let dims = build_dimensions(&self.data, &self.desc);
-        let gd = geo_dim_index(&self.desc.dims);
-        let geos = geo_from_dir(&self.data, &self.desc.dims[gd - 1], gd - 1);
+        let dims = build_dimensions_from_source(&self.source, &self.desc)?;
         self.dimensions = Some(dims);
+        Ok(())
+    }
+
+    fn ensure_geographies(&mut self) -> Result<(), IvtError> {
+        if self.geographies.is_some() {
+            return Ok(());
+        }
+        let gd = geo_dim_index(&self.desc.dims);
+        let geos = geo_from_source(&self.source, &self.desc.dims[gd - 1], gd - 1)?;
         self.geographies = Some(geos);
+        Ok(())
     }
 
     pub fn loaded(&self, name: &str) -> bool {
@@ -209,6 +227,13 @@ impl IvtMetadata {
         &self.desc
     }
 
+    pub fn source(&self) -> &IvtSource {
+        &self.source
+    }
+
+    pub fn io_metrics(&self) -> crate::io::IoMetrics {
+        self.source.metrics()
+    }
 }
 
 fn frscore(s: &str) -> usize {
@@ -282,23 +307,29 @@ fn split_facet_run(text: &str) -> (Option<String>, Option<String>, Option<String
 }
 
 fn parse_facet_summary(data: &[u8]) -> HashMap<&'static str, Option<String>> {
+    parse_facet_summary_bufs(&[data])
+}
+
+fn parse_facet_summary_bufs(bufs: &[&[u8]]) -> HashMap<&'static str, Option<String>> {
     let mut runs = Vec::new();
-    let mut start = 0;
-    while let Some(rel) = data[start..]
-        .windows(7)
-        .position(|w| w == b"FACET04")
-    {
-        let i = start + rel;
-        let run = &data[i + 7..];
-        let mut end = 0;
-        while end < run.len() && run[end] >= 32 {
-            end += 1;
+    for data in bufs {
+        let mut start = 0;
+        while let Some(rel) = data[start..]
+            .windows(7)
+            .position(|w| w == b"FACET04")
+        {
+            let i = start + rel;
+            let run = &data[i + 7..];
+            let mut end = 0;
+            while end < run.len() && run[end] >= 32 {
+                end += 1;
+            }
+            let text = latin1(&run[..end]).trim().to_string();
+            if !text.is_empty() {
+                runs.push(text);
+            }
+            start = i + 7;
         }
-        let text = latin1(&run[..end]).trim().to_string();
-        if !text.is_empty() {
-            runs.push(text);
-        }
-        start = i + 7;
     }
     let mut parsed: Vec<_> = runs.iter().map(|r| split_facet_run(r)).collect();
     parsed.retain(|(t, _, _)| t.is_some());
@@ -503,16 +534,22 @@ fn time_dim_desc(dims: &[DimDesc]) -> Option<&DimDesc> {
 }
 
 fn has_time_series_marker(data: &[u8]) -> bool {
-    let mut o = 0;
-    while let Some(rel) = data[o..].windows(2).position(|w| w == b"\x81\x02") {
-        let i = o + rel;
-        if i + 6 > data.len() {
-            break;
+    has_time_series_marker_bufs(&[data])
+}
+
+fn has_time_series_marker_bufs(bufs: &[&[u8]]) -> bool {
+    for data in bufs {
+        let mut o = 0;
+        while let Some(rel) = data[o..].windows(2).position(|w| w == b"\x81\x02") {
+            let i = o + rel;
+            if i + 6 > data.len() {
+                break;
+            }
+            if &data[i + 4..i + 6] == b"\x08\x00" {
+                return true;
+            }
+            o = i + 2;
         }
-        if &data[i + 4..i + 6] == b"\x08\x00" {
-            return true;
-        }
-        o = i + 2;
     }
     false
 }
@@ -670,19 +707,18 @@ fn range_bounds_from_text(
 }
 
 fn parse_time_series(
-    data: &[u8],
+    marker_bufs: &[&[u8]],
+    searchable_text: &str,
     dims: &[DimDesc],
     notes_en: Option<&str>,
     notes_fr: Option<&str>,
 ) -> Option<TimeSeriesInfo> {
     let dim = time_dim_desc(dims);
-    if dim.is_none() && !has_time_series_marker(data) {
+    if dim.is_none() && !has_time_series_marker_bufs(marker_bufs) {
         return None;
     }
-    // Dim notes (frequency/range) often live outside the identity-notes blobs.
-    let file_text = latin1(data);
     let mut frequency = None;
-    for text in [notes_en, notes_fr, Some(file_text.as_str())]
+    for text in [notes_en, notes_fr, Some(searchable_text)]
         .into_iter()
         .flatten()
     {
@@ -702,7 +738,7 @@ fn parse_time_series(
     let time_count = dim.map(|d| d.count);
     let mut start = None;
     let mut end = None;
-    for text in [notes_en, notes_fr, Some(file_text.as_str())]
+    for text in [notes_en, notes_fr, Some(searchable_text)]
         .into_iter()
         .flatten()
     {
@@ -1223,7 +1259,11 @@ fn geo_from_dir(data: &[u8], dim: &DimDesc, slot_index: usize) -> Geographies {
 
 fn footnotes(data: &[u8]) -> Vec<Footnote> {
     let start = data.len().saturating_sub(200_000);
-    let regions: [&[u8]; 2] = [&data[..data.len().min(12000)], &data[start..]];
+    footnotes_regions(&data[..data.len().min(12000)], &data[start..])
+}
+
+fn footnotes_regions(head: &[u8], tail: &[u8]) -> Vec<Footnote> {
+    let regions: [&[u8]; 2] = [head, tail];
     let mut out = Vec::new();
     let mut counts = HashMap::from([("en", 0i64), ("fr", 0i64)]);
     for region in regions {
@@ -1468,46 +1508,84 @@ pub fn build_dimensions(data: &[u8], desc: &Descriptor) -> Vec<Dimension> {
     dims
 }
 
+/// Oracle / bytes path: build metadata from a complete in-memory IVT.
 pub fn build_metadata(
     data: Vec<u8>,
     desc: Option<Descriptor>,
     hdr: Option<HeaderLayout>,
 ) -> Result<IvtMetadata, String> {
+    let source = IvtSource::from_bytes(data);
+    build_metadata_from_source(source, desc, hdr).map_err(|e| e.to_string())
+}
+
+/// Path-based entry: open a file without reading it entirely for summary metadata.
+pub fn open_metadata_path(path: &Path) -> Result<IvtMetadata, IvtError> {
+    let source = IvtSource::open_file(path)?;
+    // Small files: one full read matches the legacy oracle and is cheaper than
+    // many tiny range requests. Large files use selective range I/O.
+    const SMALL_FILE: u64 = 2 * 1024 * 1024;
+    if source.len()? <= SMALL_FILE {
+        let data = source.read_all()?;
+        let mut metrics = source.metrics();
+        // Attribute the full-file load for benchmarks (one logical read).
+        if metrics.read_ops == 0 {
+            metrics.record(data.len());
+        }
+        return build_metadata_from_source(
+            IvtSource::from_bytes_with_metrics(data, metrics),
+            None,
+            None,
+        );
+    }
+    build_metadata_from_source(source, None, None)
+}
+
+pub fn build_metadata_from_source(
+    source: IvtSource,
+    desc: Option<Descriptor>,
+    hdr: Option<HeaderLayout>,
+) -> Result<IvtMetadata, IvtError> {
+    if let Some(data) = source.memory_arc() {
+        return build_metadata_memory(data.as_ref(), source, desc, hdr);
+    }
+    build_metadata_selective(source, desc, hdr)
+}
+
+fn build_metadata_memory(
+    data: &[u8],
+    source: IvtSource,
+    desc: Option<Descriptor>,
+    hdr: Option<HeaderLayout>,
+) -> Result<IvtMetadata, IvtError> {
     let hdr = match hdr {
         Some(h) => h,
-        None => read_header(&data)?,
+        None => read_header(data).map_err(IvtError::Parse)?,
     };
     if hdr.signature != [0x04, 0x00, 0x20, 0x00] && hdr.signature != [0x02, 0x00, 0x20, 0x00] {
-        return Err(format!(
-            "unrecognised IVT signature: {}",
-            signature_hex(&hdr.signature)
-        ));
+        return Err(IvtError::InvalidSignature(hdr.signature));
     }
     let desc = match desc {
         Some(d) => d,
-        None => parse_descriptor(&data).ok_or("could not parse IVT dimension descriptor")?,
+        None => parse_descriptor(data).ok_or(IvtError::DescriptorNotFound)?,
     };
-
-    let info = parse_table_identity(&data);
-    let (notes_en, notes_fr, notes_pid) = parse_identity_notes(&data);
-    let product_id = info
-        .get("product_id")
-        .cloned()
-        .flatten()
-        .or(notes_pid);
-    let keywords = parse_keywords(&data, product_id.as_deref());
+    let master_entries = master_dir_entries(data, 32);
+    let info = parse_table_identity(data);
+    let (notes_en, notes_fr, notes_pid) = parse_identity_notes(data);
+    let product_id = info.get("product_id").cloned().flatten().or(notes_pid);
+    let keywords = parse_keywords(data, product_id.as_deref());
     let number_of_datapoints = if desc.dims.is_empty() {
         0
     } else {
         desc.dims.iter().fold(1i64, |a, d| a.saturating_mul(d.count))
     };
+    let searchable = latin1(data);
     let time_series = parse_time_series(
-        &data,
+        &[data],
+        &searchable,
         &desc.dims,
         notes_en.as_deref(),
         notes_fr.as_deref(),
     );
-
     Ok(IvtMetadata {
         product_id,
         title: LocalizedText {
@@ -1532,12 +1610,915 @@ pub fn build_metadata(
         keywords,
         number_of_datapoints: Some(number_of_datapoints),
         time_series,
-        read_only: Some(read_only_flag(&data)),
-        data,
+        read_only: Some(read_only_flag(data)),
+        source,
         desc,
+        master_entries,
         dimensions: None,
         geographies: None,
         footnotes: None,
         missing_values: None,
     })
+}
+
+fn build_metadata_selective(
+    source: IvtSource,
+    desc: Option<Descriptor>,
+    hdr: Option<HeaderLayout>,
+) -> Result<IvtMetadata, IvtError> {
+    let file_len = source.len()?;
+    let prefix_len = (HDR_DIM_SLOT0 + DIM_SLOT_STRIDE * 32).max(2048);
+    let prefix = source.read_prefix(prefix_len.min(file_len as usize))?;
+    let hdr = match hdr {
+        Some(h) => h,
+        None => read_header_ex(&prefix, file_len as usize).map_err(IvtError::Parse)?,
+    };
+    if hdr.signature != [0x04, 0x00, 0x20, 0x00] && hdr.signature != [0x02, 0x00, 0x20, 0x00] {
+        return Err(IvtError::InvalidSignature(hdr.signature));
+    }
+
+    let master = u32(&prefix, HDR_MASTER_PTR) as u64;
+    let mut ranges = vec![
+        ByteRange::new(0, prefix.len()),
+        ByteRange::new(master, 256),
+    ];
+    let d_off = u32(&prefix, HDR_DESCRIPTOR_PTR) as u64;
+    if d_off > 0 && d_off < file_len {
+        let wlen = 4000u64.min(file_len - d_off) as usize;
+        ranges.push(ByteRange::new(d_off, wlen));
+    }
+    if hdr.title_en != 0 && (hdr.title_en as u64) < file_len {
+        let len = 512usize.min((file_len - hdr.title_en as u64) as usize);
+        ranges.push(ByteRange::new(hdr.title_en as u64, len));
+    }
+    if hdr.title_fr != 0 && (hdr.title_fr as u64) < file_len {
+        let len = 512usize.min((file_len - hdr.title_fr as u64) as usize);
+        ranges.push(ByteRange::new(hdr.title_fr as u64, len));
+    }
+
+    // Peek master directory to plan block reads.
+    let master_dir = source.read_range(master, 256.min((file_len - master) as usize))?;
+    let master_entries = master_dir_entries_from_buf(&prefix, &master_dir, master, file_len as usize);
+    for &(off, len) in &master_entries {
+        ranges.push(ByteRange::new(off as u64, len as usize));
+    }
+
+    let loaded = source.load_ranges(&ranges, DEFAULT_MERGE_GAP)?;
+    let head = slice_or_read(&source, &loaded, 0, prefix.len().min(8000))?;
+    let block_bufs: Vec<&[u8]> = master_entries
+        .iter()
+        .filter_map(|&(off, len)| find_loaded(&loaded, off as u64, len as usize))
+        .collect();
+
+    let desc = match desc {
+        Some(d) => d,
+        None => match parse_descriptor_selective(&source, &prefix, &loaded, d_off, &block_bufs)
+        {
+            Ok(d) => d,
+            Err(_) => {
+                // Demo tables sometimes need a full-file marker scan for the dim chain.
+                source.set_fallback_used();
+                let all = source.read_all()?;
+                parse_descriptor(&all).ok_or(IvtError::DescriptorNotFound)?
+            }
+        },
+    };
+
+    let mut facet = parse_facet_summary_bufs(&block_bufs);
+    let mut info = parse_table_identity_selective(&head, &block_bufs, &facet);
+    let (notes_en, notes_fr, notes_pid) = parse_identity_notes_bufs(&block_bufs);
+    let mut product_id = info.get("product_id").cloned().flatten().or(notes_pid);
+    let keywords = parse_keywords_bufs(&block_bufs, product_id.as_deref());
+
+    // Fallback: full-file FACET/identity only when summary fields are missing.
+    let need_fallback = info.get("title_en").and_then(|t| t.as_ref()).is_none()
+        && info.get("title_fr").and_then(|t| t.as_ref()).is_none()
+        && facet.get("title_en").and_then(|t| t.as_ref()).is_none()
+        && facet.get("title_fr").and_then(|t| t.as_ref()).is_none();
+    let (searchable, marker_owned): (String, Option<Vec<u8>>) = if need_fallback {
+        source.set_fallback_used();
+        let all = source.read_all()?;
+        facet = parse_facet_summary(&all);
+        info = parse_table_identity(&all);
+        product_id = info
+            .get("product_id")
+            .cloned()
+            .flatten()
+            .or(product_id);
+        (latin1(&all), Some(all))
+    } else {
+        let mut parts = Vec::new();
+        parts.push(latin1(&head));
+        for b in &block_bufs {
+            parts.push(latin1(b));
+        }
+        if let (Some(ne), Some(nf)) = (notes_en.as_ref(), notes_fr.as_ref()) {
+            parts.push(ne.clone());
+            parts.push(nf.clone());
+        } else if let Some(ne) = notes_en.as_ref() {
+            parts.push(ne.clone());
+        } else if let Some(nf) = notes_fr.as_ref() {
+            parts.push(nf.clone());
+        }
+        (parts.join("\n"), None)
+    };
+
+    let marker_refs: Vec<&[u8]> = if let Some(ref all) = marker_owned {
+        vec![all.as_slice()]
+    } else {
+        block_bufs.clone()
+    };
+
+    let number_of_datapoints = if desc.dims.is_empty() {
+        0
+    } else {
+        desc.dims.iter().fold(1i64, |a, d| a.saturating_mul(d.count))
+    };
+    let mut time_series = parse_time_series(
+        &marker_refs,
+        &searchable,
+        &desc.dims,
+        notes_en.as_deref(),
+        notes_fr.as_deref(),
+    );
+    // Frequency/range strings may live outside master blocks. Full-text fallback
+    // is only used when the file is still modest; large network files keep the
+    // bounded searchable text to avoid a complete transfer.
+    const TS_FALLBACK_MAX: u64 = 2 * 1024 * 1024;
+    if let Some(ts) = &time_series {
+        if (ts.start.is_none() || ts.end.is_none() || ts.frequency.is_none())
+            && file_len <= TS_FALLBACK_MAX
+        {
+            source.set_fallback_used();
+            let all = if let Some(ref owned) = marker_owned {
+                owned.clone()
+            } else {
+                source.read_all()?
+            };
+            let full_text = latin1(&all);
+            time_series = parse_time_series(
+                &[&all],
+                &full_text,
+                &desc.dims,
+                notes_en.as_deref(),
+                notes_fr.as_deref(),
+            );
+        }
+    }
+    let read_only = read_only_flag_bufs(&block_bufs);
+
+    // Prefer FACET titles/authors when present (same as parse_table_identity).
+    let title_en = facet
+        .get("title_en")
+        .cloned()
+        .flatten()
+        .or_else(|| info.get("title_en").cloned().flatten());
+    let title_fr = facet
+        .get("title_fr")
+        .cloned()
+        .flatten()
+        .or_else(|| info.get("title_fr").cloned().flatten());
+
+    Ok(IvtMetadata {
+        product_id,
+        title: LocalizedText {
+            en: title_en,
+            fr: title_fr,
+        },
+        universe: info.get("universe").cloned().flatten(),
+        notes: LocalizedText {
+            en: notes_en,
+            fr: notes_fr,
+        },
+        version: hdr.version,
+        signature: signature_hex(&hdr.signature),
+        author: LocalizedText {
+            en: facet
+                .get("author_en")
+                .cloned()
+                .flatten()
+                .or_else(|| info.get("author_en").cloned().flatten()),
+            fr: facet
+                .get("author_fr")
+                .cloned()
+                .flatten()
+                .or_else(|| info.get("author_fr").cloned().flatten()),
+        },
+        category: LocalizedText {
+            en: facet
+                .get("category_en")
+                .cloned()
+                .flatten()
+                .or_else(|| info.get("category_en").cloned().flatten()),
+            fr: facet
+                .get("category_fr")
+                .cloned()
+                .flatten()
+                .or_else(|| info.get("category_fr").cloned().flatten()),
+        },
+        keywords,
+        number_of_datapoints: Some(number_of_datapoints),
+        time_series,
+        read_only: Some(read_only),
+        source,
+        desc,
+        master_entries,
+        dimensions: None,
+        geographies: None,
+        footnotes: None,
+        missing_values: None,
+    })
+}
+
+fn find_loaded<'a>(loaded: &'a [LoadedRange], offset: u64, length: usize) -> Option<&'a [u8]> {
+    for lr in loaded {
+        if let Some(s) = lr.slice_at(offset, length) {
+            return Some(s);
+        }
+    }
+    None
+}
+
+fn slice_or_read(
+    source: &IvtSource,
+    loaded: &[LoadedRange],
+    offset: u64,
+    length: usize,
+) -> Result<Vec<u8>, IvtError> {
+    if let Some(s) = find_loaded(loaded, offset, length) {
+        return Ok(s.to_vec());
+    }
+    source.read_range(offset, length)
+}
+
+fn master_dir_entries_from_buf(
+    prefix: &[u8],
+    master_dir: &[u8],
+    master_off: u64,
+    file_len: usize,
+) -> Vec<(u32, u16)> {
+    let _ = (prefix, master_off);
+    let mut out = Vec::new();
+    let mut o = 0usize;
+    for _ in 0..32 {
+        if o + 8 > master_dir.len() {
+            break;
+        }
+        let off = u32(master_dir, o);
+        let s1 = u16(master_dir, o + 4);
+        o += 8;
+        if off == 0 && s1 == 0 {
+            continue;
+        }
+        if s1 == 0 || (off as usize) + (s1 as usize) > file_len {
+            continue;
+        }
+        out.push((off, s1));
+    }
+    out
+}
+
+fn parse_descriptor_selective(
+    source: &IvtSource,
+    prefix: &[u8],
+    loaded: &[LoadedRange],
+    d_off: u64,
+    block_bufs: &[&[u8]],
+) -> Result<Descriptor, IvtError> {
+    if !prefix.is_empty() && prefix[0] == 0x02 {
+        return Err(IvtError::DescriptorNotFound);
+    }
+    let file_len = source.len()?;
+    // Contiguous prefix covering the descriptor window matches oracle `walk_at`
+    // (including FACET04 / dir-anchor truncation) without reading value pages.
+    // Small files: full-buffer descriptor parse (includes marker-window fallback).
+    // Large files: walk the header pointer window; marker scan uses master blocks
+    // then a measured full-file fallback if needed.
+    const SMALL_FILE: u64 = 2 * 1024 * 1024;
+    if file_len <= SMALL_FILE {
+        let all = source.read_all()?;
+        return parse_descriptor(&all).ok_or(IvtError::DescriptorNotFound);
+    }
+
+    const MAX_PREFIX: u64 = 8 * 1024 * 1024;
+    let need = (d_off.saturating_add(4000)).min(file_len);
+    let mut best: Option<(u32, Vec<DimDesc>, i64)> = None;
+    let consider = |best: &mut Option<(u32, Vec<DimDesc>, i64)>, off: u32, dims: Vec<DimDesc>| {
+        let score = if dims.len() < 2 || dims.len() > 16 {
+            -1
+        } else {
+            let prod = dims.iter().fold(1i64, |a, d| a.saturating_mul(d.count));
+            (dims.len() as i64) * 1_000_000 + prod.min(999_999)
+        };
+        if score < 0 {
+            return;
+        }
+        if best.as_ref().map(|(_, _, s)| *s).unwrap_or(-1) < score {
+            *best = Some((off, dims, score));
+        }
+    };
+
+    if need > d_off && need <= MAX_PREFIX {
+        let buf = slice_or_read(source, loaded, 0, need as usize)?;
+        let d_off_usize = d_off as usize;
+        if d_off_usize + 18 <= buf.len() {
+            let anchor = crate::header::dir_anchor_header(&buf);
+            if let Some(dims) =
+                walk_at_window(&buf[d_off_usize..], d_off_usize, anchor, 16)
+            {
+                consider(&mut best, d_off as u32, dims);
+            }
+        }
+    }
+    if let Some((off, dims)) = scan_dim_marker_in_buffers(block_bufs) {
+        consider(&mut best, off as u32, dims);
+    }
+    if let Some((offset, dims, _)) = best {
+        return Ok(Descriptor { offset, dims });
+    }
+    Err(IvtError::DescriptorNotFound)
+}
+
+fn parse_table_identity_selective(
+    head: &[u8],
+    block_bufs: &[&[u8]],
+    facet: &HashMap<&'static str, Option<String>>,
+) -> HashMap<&'static str, Option<String>> {
+    let head_text = latin1(head);
+    let grab = |re: &Regex| {
+        re.captures(&head_text)
+            .map(|m| m.get(1).unwrap().as_str().trim().to_string())
+    };
+    let mut info: HashMap<&'static str, Option<String>> = HashMap::new();
+    info.insert("product_id", grab(&PRODUCT_ID_HEAD));
+    info.insert("title_en", grab(&TITLE_EN_HEAD));
+    info.insert("title_fr", grab(&TITLE_FR_HEAD));
+    info.insert("universe", grab(&UNIVERSE_HEAD));
+
+    let mut blobs = Vec::new();
+    for blk in block_bufs {
+        if blk.len() >= 2 && &blk[..2] == b"\x01\x01" && blk.len() > 8 {
+            let payload = &blk[4..];
+            let mut i = 0;
+            while i < payload.len() && payload[i] < 0x20 {
+                i += 1;
+            }
+            let text = latin1(&payload[i..]).trim().to_string();
+            if !text.is_empty() {
+                blobs.push(text);
+            }
+        } else if !blk.is_empty() && (blk[0] == b' ' || blk[0].is_ascii_alphabetic()) {
+            let text = latin1(blk).trim().to_string();
+            if text.contains("98-") || text.contains("Title") {
+                blobs.push(text);
+            }
+        }
+    }
+
+    let mut pid = info.get("product_id").cloned().flatten();
+    let mut title_en = info.get("title_en").cloned().flatten();
+    let mut title_fr = info.get("title_fr").cloned().flatten();
+
+    for blob in &blobs {
+        let (p, t) = identity_from_blob(blob);
+        if let Some(ref p) = p {
+            if (pid.is_none() || p.len() > pid.as_ref().map(|x| x.len()).unwrap_or(0))
+                && PID_FULL.is_match(p)
+            {
+                pid = Some(p.clone());
+            }
+        }
+        if let Some(t) = t {
+            if title_en.is_none() && title_fr.is_none() {
+                if frscore(&t) >= 2 {
+                    title_fr = Some(t);
+                } else {
+                    title_en = Some(t);
+                }
+            }
+        }
+    }
+
+    if let Some(t) = facet.get("title_en").cloned().flatten() {
+        title_en = Some(t);
+    }
+    if let Some(t) = facet.get("title_fr").cloned().flatten() {
+        title_fr = Some(t);
+    }
+    if pid.is_none() {
+        if let Some(m) = PID_FALLBACK.captures(&head_text) {
+            pid = Some(m.get(1).unwrap().as_str().to_string());
+        }
+    }
+
+    info.insert("product_id", pid);
+    info.insert("title_en", title_en);
+    info.insert("title_fr", title_fr);
+    info.insert("author_en", facet.get("author_en").cloned().flatten());
+    info.insert("author_fr", facet.get("author_fr").cloned().flatten());
+    info.insert("category_en", facet.get("category_en").cloned().flatten());
+    info.insert("category_fr", facet.get("category_fr").cloned().flatten());
+    info
+}
+
+fn parse_identity_notes_bufs(
+    block_bufs: &[&[u8]],
+) -> (Option<String>, Option<String>, Option<String>) {
+    let mut notes_en = None;
+    let mut notes_fr = None;
+    let mut product_id = None;
+    let mut long_blobs = Vec::new();
+    for blk in block_bufs {
+        if blk.len() < 2 || &blk[..2] != b"\x01\x01" || blk.len() < 40 {
+            continue;
+        }
+        let payload = &blk[4..];
+        let mut i = 0;
+        while i < payload.len() && payload[i] < 0x20 {
+            i += 1;
+        }
+        let text = latin1(&payload[i..]).trim_end_matches('\0').trim().to_string();
+        if text.is_empty() || (!text.contains('\n') && !text.contains('\r')) {
+            continue;
+        }
+        long_blobs.push(text.clone());
+        let (pid, _) = identity_from_blob(&text);
+        if let Some(p) = pid {
+            if PID_FULL.is_match(&p) {
+                product_id = product_id.or(Some(p));
+            }
+        }
+    }
+    long_blobs.sort_by_key(|s| frscore(s));
+    if !long_blobs.is_empty() {
+        let en = long_blobs[0].clone();
+        let mut fr = None;
+        if long_blobs.len() > 1
+            && frscore(long_blobs.last().unwrap()) > frscore(&long_blobs[0])
+        {
+            fr = Some(long_blobs.last().unwrap().clone());
+        }
+        notes_en = Some(en.clone());
+        notes_fr = fr;
+        if notes_fr.is_none() && frscore(&en) >= 2 {
+            notes_fr = Some(en);
+            notes_en = None;
+        }
+    }
+    (notes_en, notes_fr, product_id)
+}
+
+fn parse_keywords_bufs(block_bufs: &[&[u8]], product_id: Option<&str>) -> LocalizedText {
+    let mut candidates = Vec::new();
+    for blk in block_bufs {
+        let length = blk.len() as u16;
+        if !(8..=40).contains(&length) {
+            continue;
+        }
+        if blk.len() < 2 || &blk[..2] != b"\x01\x01" {
+            continue;
+        }
+        let payload = &blk[4..];
+        let mut i = 0;
+        while i < payload.len() && payload[i] < 0x20 {
+            i += 1;
+        }
+        if i < payload.len() && (1..64).contains(&payload[i]) {
+            let n = payload[i] as usize;
+            if i + 1 + n <= payload.len() {
+                let kw = latin1(&payload[i + 1..i + 1 + n])
+                    .trim_end_matches('\0')
+                    .trim()
+                    .to_string();
+                if !kw.is_empty() {
+                    candidates.push(kw);
+                    continue;
+                }
+            }
+        }
+        let text = latin1(&payload[i..])
+            .trim_end_matches('\0')
+            .trim()
+            .to_string();
+        if !text.is_empty() && !text.contains('\n') && text.len() <= 40 {
+            candidates.push(text);
+        }
+    }
+    if candidates.is_empty() {
+        return LocalizedText::default();
+    }
+    // Reuse keyword assembly via a temporary in-memory parse path.
+    let mut unique = Vec::new();
+    for c in candidates {
+        if !unique.contains(&c) {
+            unique.push(c);
+        }
+    }
+    if let Some(pid) = product_id {
+        for c in &unique {
+            if c == pid {
+                let others: Vec<_> = unique.iter().filter(|x| *x != c).cloned().collect();
+                if !others.is_empty() {
+                    let mut scored = others;
+                    scored.sort_by_key(|s| frscore(s));
+                    let fr = if frscore(scored.last().unwrap()) > frscore(c) {
+                        Some(scored.last().unwrap().clone())
+                    } else {
+                        None
+                    };
+                    return LocalizedText {
+                        en: Some(c.clone()),
+                        fr,
+                    };
+                }
+                return LocalizedText {
+                    en: Some(c.clone()),
+                    fr: None,
+                };
+            }
+        }
+    }
+    if unique.len() == 1 {
+        return LocalizedText {
+            en: Some(unique[0].clone()),
+            fr: None,
+        };
+    }
+    let mut scored = unique;
+    scored.sort_by_key(|s| frscore(s));
+    let en = Some(scored[0].clone());
+    let fr = if frscore(scored.last().unwrap()) > frscore(&scored[0]) {
+        Some(scored.last().unwrap().clone())
+    } else {
+        None
+    };
+    LocalizedText { en, fr }
+}
+
+fn read_only_flag_bufs(block_bufs: &[&[u8]]) -> bool {
+    for blk in block_bufs {
+        if blk.len() >= 5 && &blk[..4] == b"\x81\x01\x20\x00" {
+            return (blk[4] & READONLY_FLAG_BIT) != 0;
+        }
+    }
+    false
+}
+
+fn footnotes_from_source(source: &IvtSource) -> Result<Vec<Footnote>, IvtError> {
+    if let Some(data) = source.as_memory_slice() {
+        return Ok(footnotes(data));
+    }
+    let file_len = source.len()? as usize;
+    // Match legacy region selection: for files ≤ 200 KiB the "tail" is the whole file.
+    let tail_start = file_len.saturating_sub(200_000);
+    if tail_start == 0 {
+        let data = source.read_range(0, file_len)?;
+        return Ok(footnotes(&data));
+    }
+    let head_len = file_len.min(12_000);
+    let ranges = [
+        ByteRange::new(0, head_len),
+        ByteRange::new(tail_start as u64, file_len - tail_start),
+    ];
+    let loaded = source.load_ranges_default(&ranges)?;
+    let head = find_loaded(&loaded, 0, head_len)
+        .map(|s| s.to_vec())
+        .unwrap_or_default();
+    let tail = find_loaded(&loaded, tail_start as u64, file_len - tail_start)
+        .map(|s| s.to_vec())
+        .unwrap_or_default();
+    Ok(footnotes_regions(&head, &tail))
+}
+
+fn missing_values_from_source(source: &IvtSource) -> Result<Vec<MissingValue>, IvtError> {
+    if let Some(data) = source.as_memory_slice() {
+        return Ok(missing_values(data));
+    }
+    let file_len = source.len()? as usize;
+    if file_len < HDR_STATUS_LEGEND + 14 {
+        return Ok(Vec::new());
+    }
+    let hdr = source.read_range(HDR_STATUS_LEGEND as u64, 14)?;
+    let dir_ptr = u32(&hdr, 0);
+    let n_entries = u32(&hdr, 8);
+    if dir_ptr == 0 || n_entries < 1 {
+        return Ok(Vec::new());
+    }
+    let dir_bytes = source.read_range(
+        dir_ptr as u64,
+        (n_entries as usize).saturating_mul(8).saturating_add(64),
+    )?;
+    let entries = status_legend_dir_bytes(&dir_bytes, n_entries, file_len);
+    if entries.is_empty() {
+        return Ok(Vec::new());
+    }
+    let (idx_off, idx_len) = entries[0];
+    if idx_off == 0 || idx_len < 6 {
+        return Ok(Vec::new());
+    }
+    let mut ranges = vec![ByteRange::new(idx_off as u64, idx_len as usize)];
+    for &(off, len) in entries.iter().skip(1) {
+        if off != 0 && len > 0 {
+            ranges.push(ByteRange::new(off as u64, len as usize));
+        }
+    }
+    let loaded = source.load_ranges_default(&ranges)?;
+    let index = find_loaded(&loaded, idx_off as u64, idx_len as usize)
+        .ok_or(IvtError::InvalidDirectory("status legend index"))?;
+    if index[..2] != *b"\x04\x02" {
+        return Ok(Vec::new());
+    }
+    let n_codes = u16(index, 2) as usize;
+    let per_code = u16(index, 4) as usize;
+    if n_codes < 1 || per_code < 1 {
+        return Ok(Vec::new());
+    }
+    let need = 6 + n_codes * per_code * 4;
+    if index.len() < need {
+        return Ok(Vec::new());
+    }
+    let mut out = Vec::new();
+    let mut pos = 6;
+    for code in 1..=n_codes {
+        let mut eidxs = Vec::new();
+        for j in 0..per_code {
+            eidxs.push(u32(index, pos + 4 * j) as usize);
+        }
+        pos += 4 * per_code;
+        let mut labels: Vec<Option<String>> = Vec::new();
+        let mut symbol = None;
+        for ei in eidxs {
+            if ei >= entries.len() {
+                labels.push(None);
+                continue;
+            }
+            let (off, length) = entries[ei];
+            if off == 0 || length < 1 {
+                labels.push(None);
+                continue;
+            }
+            let Some(blob) = find_loaded(&loaded, off as u64, length as usize) else {
+                labels.push(None);
+                continue;
+            };
+            match parse_status_legend_record(blob) {
+                Some((sym, text)) => {
+                    if symbol.is_none() {
+                        symbol = Some(sym);
+                    }
+                    labels.push(Some(text));
+                }
+                None => labels.push(None),
+            }
+        }
+        if symbol.is_none() || !labels.iter().any(|l| l.is_some()) {
+            continue;
+        }
+        let en = labels.first().cloned().flatten();
+        let fr = if labels.len() > 1 {
+            labels[1].clone()
+        } else {
+            None
+        };
+        out.push(MissingValue {
+            symbol: symbol.unwrap(),
+            label: LocalizedText { en, fr },
+            code: Some(code as i64),
+        });
+    }
+    Ok(out)
+}
+
+fn status_legend_dir_bytes(dir: &[u8], n_entries: u32, file_len: usize) -> Vec<(u32, u16)> {
+    let mut entries = Vec::new();
+    let mut o = 0usize;
+    for _ in 0..n_entries {
+        if o + 8 > dir.len() {
+            break;
+        }
+        let off = u32(dir, o);
+        let s1 = u16(dir, o + 4);
+        let s2 = u16(dir, o + 6);
+        o += 8;
+        if off == 0 && s1 == 0 {
+            entries.push((0, 0));
+            continue;
+        }
+        let ok = s1 == s2 || s2 == 4 * ((s1 + 3) / 4) || s2 >= s1;
+        if !ok || s1 == 0 || (off as usize) + (s1 as usize) > file_len {
+            break;
+        }
+        entries.push((off, s1));
+    }
+    entries
+}
+
+fn build_dimensions_from_source(
+    source: &IvtSource,
+    desc: &Descriptor,
+) -> Result<Vec<Dimension>, IvtError> {
+    if let Some(data) = source.as_memory_slice() {
+        return Ok(build_dimensions(data, desc));
+    }
+    let gd = geo_dim_index(&desc.dims);
+    let mut dims = Vec::new();
+    for (i, d) in desc.dims.iter().enumerate() {
+        let is_geo = (i + 1) == gd;
+        let (members, members_fr) = if !is_geo {
+            dim_dir_labels_src(source, d, i, false)?
+        } else {
+            (None, None)
+        };
+        let (short, description, description_fr) = dim_title_src(source, i)?;
+        let name = short
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| d.name.clone());
+        let description = description.or_else(|| Some(name.clone()));
+        let mut name_fr = description_fr.clone();
+        if is_geo && name.eq_ignore_ascii_case("Geography") && name_fr.is_none() {
+            name_fr = Some("Géographie".into());
+        }
+        dims.push(Dimension {
+            name,
+            name_fr,
+            count: d.count,
+            type_code: d.type_code,
+            is_geography: is_geo,
+            description,
+            description_fr,
+            type_label: type_label_for(d),
+            members,
+            members_fr,
+            ordinal: None,
+        });
+    }
+    Ok(dims)
+}
+
+fn geo_from_source(
+    source: &IvtSource,
+    dim: &DimDesc,
+    slot_index: usize,
+) -> Result<Geographies, IvtError> {
+    if let Some(data) = source.as_memory_slice() {
+        return Ok(geo_from_dir(data, dim, slot_index));
+    }
+    let (en, fr) = dim_dir_labels_src(source, dim, slot_index, true)?;
+    let n = dim.count as usize;
+    let mut geo = Geographies {
+        member_id: (1..=dim.count).collect(),
+        ..Default::default()
+    };
+    if let Some(mut en) = en {
+        if en.len() >= n {
+            en.truncate(n);
+            let parsed: Vec<_> = en.iter().map(|x| parse_inline_geo(x)).collect();
+            geo.geo_label = Some(en);
+            geo.geo_name = Some(parsed.iter().map(|p| p.geo_name.clone()).collect());
+            geo.geo_uid = Some(parsed.iter().map(|p| p.geo_uid.clone()).collect());
+            if parsed.iter().any(|p| p.dqf_code.is_some()) {
+                geo.dqf_code = Some(parsed.iter().map(|p| p.dqf_code.clone()).collect());
+            }
+            if parsed.iter().any(|p| p.tnr_short_form.is_some()) {
+                geo.tnr_short_form =
+                    Some(parsed.iter().map(|p| p.tnr_short_form.clone()).collect());
+            }
+        }
+    }
+    if let Some(mut fr) = fr {
+        if fr.len() >= n {
+            fr.truncate(n);
+            geo.geo_label_fr = Some(fr);
+        }
+    }
+    Ok(geo)
+}
+
+fn dim_slot_from_source(source: &IvtSource, slot_index: usize) -> Result<Option<crate::header::DimSlot>, IvtError> {
+    let base = HDR_DIM_SLOT0 + DIM_SLOT_STRIDE * slot_index;
+    let file_len = source.len()? as usize;
+    if base + DIM_SLOT_STRIDE > file_len {
+        return Ok(None);
+    }
+    let bytes = source.read_range(base as u64, DIM_SLOT_STRIDE)?;
+    let dir_ptr = u32(&bytes, 0);
+    let alloc = u32(&bytes, 4);
+    let n_entries = u32(&bytes, 8);
+    let flag = u16(&bytes, 12);
+    if dir_ptr == 0 && alloc == 0 && n_entries == 0 {
+        return Ok(None);
+    }
+    Ok(Some(crate::header::DimSlot {
+        index: slot_index,
+        dir_ptr,
+        alloc,
+        n_entries,
+        flag,
+    }))
+}
+
+fn dim_title_src(
+    source: &IvtSource,
+    slot_index: usize,
+) -> Result<(Option<String>, Option<String>, Option<String>), IvtError> {
+    if let Some(data) = source.as_memory_slice() {
+        return Ok(dim_title(data, slot_index));
+    }
+    let Some(slot) = dim_slot_from_source(source, slot_index)? else {
+        return Ok((None, None, None));
+    };
+    let file_len = source.len()? as usize;
+    let dir_bytes = source.read_range(
+        slot.dir_ptr as u64,
+        (slot.n_entries as usize + 8).saturating_mul(8),
+    )?;
+    let entries = read_block_dir_bytes(&dir_bytes, slot.n_entries, file_len);
+    let mut ranges = Vec::new();
+    for &(off, length) in &entries {
+        if length >= 16 {
+            ranges.push(ByteRange::new(off as u64, length as usize));
+        }
+    }
+    let loaded = source.load_ranges_default(&ranges)?;
+    for &(off, length) in &entries {
+        if length < 16 {
+            continue;
+        }
+        if let Some(block) = find_loaded(&loaded, off as u64, length as usize) {
+            let (short, description, description_fr) = parse_dim_title(block);
+            if short.is_some() || description.is_some() {
+                return Ok((short, description, description_fr));
+            }
+        }
+    }
+    Ok((None, None, None))
+}
+
+fn dim_dir_labels_src(
+    source: &IvtSource,
+    dim: &DimDesc,
+    slot_index: usize,
+    geography: bool,
+) -> Result<(Option<Vec<String>>, Option<Vec<String>>), IvtError> {
+    if let Some(data) = source.as_memory_slice() {
+        return Ok(dim_dir_labels(data, dim, slot_index, geography));
+    }
+    let Some(slot) = dim_slot_from_source(source, slot_index)? else {
+        return Ok((None, None));
+    };
+    let file_len = source.len()? as usize;
+    let dir_bytes = source.read_range(
+        slot.dir_ptr as u64,
+        (slot.n_entries as usize + 8).saturating_mul(8),
+    )?;
+    let entries = read_block_dir_bytes(&dir_bytes, slot.n_entries, file_len);
+    let mut ranges = Vec::new();
+    for &(off, length) in &entries {
+        if (length as i64) >= dim.count + 4 {
+            ranges.push(ByteRange::new(off as u64, length as usize));
+        }
+    }
+    let loaded = source.load_ranges_default(&ranges)?;
+    let mut arrays = Vec::new();
+    for &(off, length) in &entries {
+        if (length as i64) < dim.count + 4 {
+            continue;
+        }
+        let Some(block) = find_loaded(&loaded, off as u64, length as usize) else {
+            continue;
+        };
+        if block.len() >= 2 && block[..2] == *b"\x81\x02" {
+            continue;
+        }
+        let labels = read_member_array(block, dim.count as usize);
+        if labels.len() != dim.count as usize {
+            continue;
+        }
+        if geography {
+            let sample = labels.iter().take(3).cloned().collect::<Vec<_>>().join(" ");
+            if !sample.contains("Canada")
+                && !labels.iter().take(5).any(|x| GEO_CODE_RE.is_match(x))
+            {
+                continue;
+            }
+        }
+        arrays.push(labels);
+    }
+    if arrays.is_empty() {
+        return Ok((None, None));
+    }
+    let mut en = arrays.remove(0);
+    let mut fr = if arrays.is_empty() {
+        None
+    } else {
+        Some(arrays.remove(0))
+    };
+    if let Some(ref f) = fr {
+        if frscore(&f[..3.min(f.len())].join(" ")) < frscore(&en[..3.min(en.len())].join(" ")) {
+            let tmp = en;
+            en = f.clone();
+            fr = Some(tmp);
+        }
+    }
+    Ok((Some(en), fr))
 }

@@ -1,6 +1,6 @@
 //! PyO3 wrappers for the public Python API.
 
-use pyo3::exceptions::{PyTypeError, PyValueError};
+use pyo3::exceptions::{PyOSError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes, PyString};
 use std::path::PathBuf;
@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 use crate::arrow_export::columns_to_pyarrow;
 use crate::decode::{build_layout, complete_grid, decode_store, Layout};
 use crate::descriptor::parse_descriptor;
+use crate::error::IvtError;
 use crate::header::read_header;
 use crate::metadata::{
     self, Dimension as CoreDimension, Footnote as CoreFootnote,
@@ -16,6 +17,13 @@ use crate::metadata::{
     MissingValue as CoreMissing, TimeSeriesInfo as CoreTimeSeries,
 };
 use crate::tidy::{tidy_arrays, Column};
+
+fn map_ivt_err(e: IvtError) -> PyErr {
+    match e {
+        IvtError::Io(io) => PyOSError::new_err(io.to_string()),
+        other => PyValueError::new_err(other.to_string()),
+    }
+}
 
 #[pyclass(name = "LocalizedText", module = "pyivt")]
 #[derive(Clone)]
@@ -309,48 +317,40 @@ impl IvtMetadata {
     }
 
     #[getter]
-    fn dimensions(&self) -> Vec<Dimension> {
-        self.inner
-            .lock()
-            .unwrap()
-            .dimensions()
-            .iter()
-            .cloned()
-            .map(Dimension::from)
-            .collect()
+    fn dimensions(&self) -> PyResult<Vec<Dimension>> {
+        let mut guard = self.inner.lock().unwrap();
+        let dims = guard.dimensions().map_err(PyValueError::new_err)?;
+        Ok(dims.iter().cloned().map(Dimension::from).collect())
     }
 
     #[getter]
-    fn geographies(&self) -> Geographies {
-        self.inner.lock().unwrap().geographies().clone().into()
+    fn geographies(&self) -> PyResult<Geographies> {
+        let mut guard = self.inner.lock().unwrap();
+        Ok(guard.geographies().map_err(PyValueError::new_err)?.clone().into())
     }
 
     #[getter]
-    fn footnotes(&self) -> Vec<Footnote> {
-        self.inner
-            .lock()
-            .unwrap()
-            .footnotes()
-            .iter()
-            .cloned()
-            .map(Footnote::from)
-            .collect()
+    fn footnotes(&self) -> PyResult<Vec<Footnote>> {
+        let mut guard = self.inner.lock().unwrap();
+        let notes = guard.footnotes().map_err(PyValueError::new_err)?;
+        Ok(notes.iter().cloned().map(Footnote::from).collect())
     }
 
     #[getter]
-    fn missing_values(&self) -> Vec<MissingValue> {
-        self.inner
-            .lock()
-            .unwrap()
-            .missing_values()
-            .iter()
-            .cloned()
-            .map(MissingValue::from)
-            .collect()
+    fn missing_values(&self) -> PyResult<Vec<MissingValue>> {
+        let mut guard = self.inner.lock().unwrap();
+        let vals = guard.missing_values().map_err(PyValueError::new_err)?;
+        Ok(vals.iter().cloned().map(MissingValue::from).collect())
     }
 
     fn _loaded(&self, name: &str) -> bool {
         self.inner.lock().unwrap().loaded(name)
+    }
+
+    /// Internal: bytes read / read ops during metadata I/O (for benchmarks).
+    fn _io_metrics(&self) -> (u64, u64, usize, bool) {
+        let m = self.inner.lock().unwrap().io_metrics();
+        (m.bytes_read, m.read_ops, m.largest_range, m.fallback_used)
     }
 }
 
@@ -394,7 +394,9 @@ pub struct Ivt {
     metadata: Py<IvtMetadata>,
     layout: Layout,
     py_layout: PyLayout,
-    data: Arc<Vec<u8>>,
+    /// Full file bytes when opened from memory, or filled lazily for path opens on `to_arrow`.
+    data: Mutex<Option<Arc<Vec<u8>>>>,
+    path: Option<PathBuf>,
     cache: Mutex<Option<DecodeCache>>,
 }
 
@@ -428,7 +430,7 @@ impl Ivt {
             }
         }
 
-        let data = Arc::clone(&self.data);
+        let data = self.ensure_data(py).map_err(map_ivt_err)?;
         let layout = self.layout.clone();
         let dims = {
             let meta = self.metadata.borrow(py);
@@ -469,22 +471,26 @@ impl Ivt {
     }
 }
 
-fn read_source(_py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
+enum OpenSource {
+    Path(PathBuf),
+    Bytes(Vec<u8>),
+}
+
+fn resolve_source(_py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<OpenSource> {
     if let Ok(b) = source.downcast::<PyBytes>() {
-        return Ok(b.as_bytes().to_vec());
+        return Ok(OpenSource::Bytes(b.as_bytes().to_vec()));
     }
     if let Ok(ba) = source.downcast::<PyByteArray>() {
-        return Ok(ba.to_vec());
+        return Ok(OpenSource::Bytes(ba.to_vec()));
     }
     if source.hasattr("read")? {
         let data = source.call_method0("read")?;
         if let Ok(b) = data.downcast::<PyBytes>() {
-            return Ok(b.as_bytes().to_vec());
+            return Ok(OpenSource::Bytes(b.as_bytes().to_vec()));
         }
-        // bytearray / memoryview
         if let Ok(bytes) = data.call_method0("__bytes__") {
             if let Ok(b) = bytes.downcast::<PyBytes>() {
-                return Ok(b.as_bytes().to_vec());
+                return Ok(OpenSource::Bytes(b.as_bytes().to_vec()));
             }
         }
         return Err(PyTypeError::new_err(format!(
@@ -493,23 +499,15 @@ fn read_source(_py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
         )));
     }
     if let Ok(s) = source.downcast::<PyString>() {
-        let path = PathBuf::from(s.to_str()?);
-        return std::fs::read(&path).map_err(|e| {
-            PyValueError::new_err(format!("failed to read {}: {e}", path.display()))
-        });
+        return Ok(OpenSource::Path(PathBuf::from(s.to_str()?)));
     }
-    // pathlib.Path
     if source.hasattr("__fspath__")? {
         let p = source.call_method0("__fspath__")?;
-        let path = PathBuf::from(p.extract::<&str>()?);
-        return std::fs::read(&path).map_err(|e| {
-            PyValueError::new_err(format!("failed to read {}: {e}", path.display()))
-        });
+        return Ok(OpenSource::Path(PathBuf::from(p.extract::<&str>()?)));
     }
-    // bytearray / memoryview
     if let Ok(bytes) = source.call_method0("__bytes__") {
         if let Ok(b) = bytes.downcast::<PyBytes>() {
-            return Ok(b.as_bytes().to_vec());
+            return Ok(OpenSource::Bytes(b.as_bytes().to_vec()));
         }
     }
     Err(PyTypeError::new_err(format!(
@@ -518,28 +516,81 @@ fn read_source(_py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
     )))
 }
 
+impl Ivt {
+    fn ensure_data(&self, _py: Python<'_>) -> Result<Arc<Vec<u8>>, IvtError> {
+        {
+            let guard = self.data.lock().unwrap();
+            if let Some(d) = guard.as_ref() {
+                return Ok(Arc::clone(d));
+            }
+        }
+        let path = self
+            .path
+            .as_ref()
+            .ok_or_else(|| IvtError::Parse("IVT has no in-memory data or path".into()))?;
+        let bytes = std::fs::read(path).map_err(IvtError::Io)?;
+        let arc = Arc::new(bytes);
+        *self.data.lock().unwrap() = Some(Arc::clone(&arc));
+        Ok(arc)
+    }
+}
+
 #[pyfunction]
 #[pyo3(name = "open")]
 pub fn open_ivt(py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<Ivt> {
-    let data = read_source(py, source)?;
-    let hdr = read_header(&data).map_err(PyValueError::new_err)?;
-    let desc = parse_descriptor(&data)
-        .ok_or_else(|| PyValueError::new_err("could not parse IVT dimension descriptor"))?;
-    let layout = build_layout(&desc.dims).map_err(PyValueError::new_err)?;
-    let py_layout = PyLayout::from(&layout);
-    let meta = metadata::build_metadata(data.clone(), Some(desc), Some(hdr))
-        .map_err(PyValueError::new_err)?;
-    let metadata = Py::new(
-        py,
-        IvtMetadata {
-            inner: Mutex::new(meta),
-        },
-    )?;
-    Ok(Ivt {
-        metadata,
-        layout,
-        py_layout,
-        data: Arc::new(data),
-        cache: Mutex::new(None),
-    })
+    let src = resolve_source(py, source)?;
+    match src {
+        OpenSource::Path(path) => {
+            let path_clone = path.clone();
+            let (meta, layout) = py
+                .allow_threads(|| -> Result<(CoreMeta, Layout), IvtError> {
+                    let meta = metadata::open_metadata_path(&path_clone)?;
+                    let layout = build_layout(&meta.desc().dims).map_err(IvtError::Parse)?;
+                    Ok((meta, layout))
+                })
+                .map_err(map_ivt_err)?;
+            let py_layout = PyLayout::from(&layout);
+            let metadata = Py::new(
+                py,
+                IvtMetadata {
+                    inner: Mutex::new(meta),
+                },
+            )?;
+            Ok(Ivt {
+                metadata,
+                layout,
+                py_layout,
+                data: Mutex::new(None),
+                path: Some(path),
+                cache: Mutex::new(None),
+            })
+        }
+        OpenSource::Bytes(data) => {
+            let (meta, layout) = py
+                .allow_threads(|| -> Result<(CoreMeta, Layout), IvtError> {
+                    let hdr = read_header(&data).map_err(IvtError::Parse)?;
+                    let desc = parse_descriptor(&data).ok_or(IvtError::DescriptorNotFound)?;
+                    let layout = build_layout(&desc.dims).map_err(IvtError::Parse)?;
+                    let meta = metadata::build_metadata(data.clone(), Some(desc), Some(hdr))
+                        .map_err(IvtError::Parse)?;
+                    Ok((meta, layout))
+                })
+                .map_err(map_ivt_err)?;
+            let py_layout = PyLayout::from(&layout);
+            let metadata = Py::new(
+                py,
+                IvtMetadata {
+                    inner: Mutex::new(meta),
+                },
+            )?;
+            Ok(Ivt {
+                metadata,
+                layout,
+                py_layout,
+                data: Mutex::new(Some(Arc::new(data))),
+                path: None,
+                cache: Mutex::new(None),
+            })
+        }
+    }
 }

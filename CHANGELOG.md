@@ -5,6 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Changed
+
+- Path-based `pyivt.open` uses selective range I/O for files larger than 2 MiB so summary metadata no longer requires reading the entire IVT up front
+- `dimensions` and `geographies` load independently (accessing dimensions no longer forces geography member arrays)
+- Lazy metadata accessors may raise on I/O failure (`OSError` / `ValueError`) instead of assuming bytes are already in memory
+
+### Added
+
+- Internal positional reader, range coalescing, and I/O metrics (`IvtMetadata._io_metrics()` for benchmarks)
+- [docs/ivt-ranges.md](docs/ivt-ranges.md) describing IVT pointers and which operations touch the file
+- `tests/bench_metadata_io.py` harness (`PYIVT_BENCH_IVT` for an optional large network sample)
+
+### Migration
+
+- Prefer `pyivt.open(path)` over reading the file into Python bytes when only metadata is needed
+- If you relied on `dimensions` also populating `geographies`, access `geographies` explicitly
+- `to_arrow()` on path-backed objects may trigger a full file read the first time it runs
+
 ## [0.0.1] - 2026-10-18
 
 First public release: Rust/PyO3 reader for Statistics Canada Beyond 20/20 `.ivt` files.

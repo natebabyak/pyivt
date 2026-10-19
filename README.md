@@ -44,6 +44,8 @@ pq.write_table(ivt.to_arrow(), "data.parquet")
 
 `pyivt.open` accepts a path, bytes-like buffer, or binary file object. Summary metadata and layout are parsed immediately; cell values decode only when you call `to_arrow()`.
 
+**I/O behavior:** Opening from a **path** uses selective range reads for large files (over 2 MiB) so summary metadata does not pull the entire IVT across a network share. Opening from **bytes** or a file object still uses the buffer you already loaded. Accessing `dimensions`, `geographies`, `footnotes`, or `missing_values` may perform additional file reads. `to_arrow()` reads the full file when opened from a path. See [docs/ivt-ranges.md](docs/ivt-ranges.md).
+
 #### From Path
 
 ```python

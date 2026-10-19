@@ -400,6 +400,105 @@ pub fn parse_descriptor(data: &[u8]) -> Option<Descriptor> {
     })
 }
 
+/// Walk a descriptor window loaded separately from the file prefix.
+/// `dir_anchor` is an optional absolute offset of the value-block directory.
+pub fn walk_at_window(
+    window: &[u8],
+    d_off: usize,
+    dir_anchor: Option<usize>,
+    cap_hint: usize,
+) -> Option<Vec<DimDesc>> {
+    if window.len() < 18 {
+        return None;
+    }
+    let v = window;
+    let text: String = v
+        .iter()
+        .map(|&b| {
+            if (32..=126).contains(&b) {
+                b as char
+            } else {
+                '.'
+            }
+        })
+        .collect();
+    let facet_lend = text.find("FACET04").and_then(|facet| {
+        if facet >= 200 {
+            Some(facet)
+        } else {
+            None
+        }
+    });
+    let lend = if let Some(facet) = facet_lend {
+        facet
+    } else if let Some(anchor) = dir_anchor {
+        // Value-block start relative to descriptor, when known.
+        if anchor > d_off + 32 {
+            (anchor - d_off).min(v.len())
+        } else {
+            v.len()
+        }
+    } else {
+        v.len()
+    };
+    let ndim_field = u16(v, 16);
+    let cap = if (1..=32).contains(&ndim_field) {
+        ndim_field as usize
+    } else if (2..=16).contains(&cap_hint) {
+        cap_hint
+    } else {
+        16
+    };
+    let try_walk = |end: usize| -> Option<Vec<DimDesc>> {
+        let mut dims = walk_records(v, end, cap, false);
+        if !dims_quality_ok(&dims) {
+            dims = walk_records(v, end, cap, true);
+        }
+        if dims_quality_ok(&dims) {
+            Some(dims)
+        } else {
+            None
+        }
+    };
+    if let Some(dims) = try_walk(lend) {
+        return Some(dims);
+    }
+    if lend < v.len() {
+        try_walk(v.len())
+    } else {
+        None
+    }
+}
+
+/// Scan isolated buffers (e.g. master blocks) for dim-name chains near `81 01 20 00`.
+pub fn scan_dim_marker_in_buffers(buffers: &[&[u8]]) -> Option<(usize, Vec<DimDesc>)> {
+    let needle = b"\x81\x01\x20\x00";
+    let mut best: Option<(usize, Vec<DimDesc>, i64)> = None;
+    for data in buffers {
+        let mut start = 0usize;
+        while let Some(rel) = data[start..]
+            .windows(needle.len())
+            .position(|w| w == needle)
+        {
+            let marker = start + rel;
+            for off in [marker.saturating_sub(256), marker] {
+                if off + 18 > data.len() {
+                    continue;
+                }
+                if let Some(dims) = walk_at_window(&data[off..], off, None, 16) {
+                    let score = dims_quality_score(&dims);
+                    if score >= 0 && best.as_ref().map(|(_, _, s)| *s).unwrap_or(-1) < score {
+                        // Absolute offset unknown for detached buffers; store relative off.
+                        best = Some((off, dims, score));
+                    }
+                }
+            }
+            start = marker + needle.len();
+        }
+    }
+    best.map(|(o, d, _)| (o, d))
+}
+
 fn is_geographic_dim(d: &DimDesc) -> bool {
     d.double01 || d.type_code == 0x12
 }

@@ -69,8 +69,8 @@ pub fn tidy_arrays(
     let n = value.len();
     let mut out: Vec<(String, Column)> = Vec::new();
 
-    let dims = meta.dimensions().clone();
-    let geos = meta.geographies().clone();
+    let dims = meta.dimensions()?.clone();
+    let geos = meta.geographies()?.clone();
 
     for (dim_i, slug) in lay.slugs.iter().enumerate() {
         let ids = cells

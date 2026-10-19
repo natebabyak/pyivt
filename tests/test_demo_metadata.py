@@ -38,9 +38,12 @@ def test_demo_metadata_lazy_fields(demo_ivt):
 
     _ = meta.dimensions
     assert meta._loaded("dimensions")
-    assert meta._loaded("geographies")
+    assert not meta._loaded("geographies")
     assert not meta._loaded("footnotes")
     assert not meta._loaded("missing_values")
+
+    _ = meta.geographies
+    assert meta._loaded("geographies")
 
     _ = meta.footnotes
     _ = meta.missing_values
