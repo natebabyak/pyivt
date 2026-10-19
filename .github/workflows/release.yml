@@ -122,6 +122,9 @@ jobs:
           path: dist
           merge-multiple: true
 
+      # Trusted Publishing (OIDC). First-time:
+      # https://pypi.org/manage/account/publishing/
+      # Owner: natebabyak  Repo: pyivt  Workflow: release.yml
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
