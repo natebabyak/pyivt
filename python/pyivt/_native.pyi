@@ -1,7 +1,5 @@
 """Type stubs for the pyivt._native extension module."""
 
-from __future__ import annotations
-
 from os import PathLike
 from typing import BinaryIO
 
@@ -12,7 +10,6 @@ class LocalizedText:
     fr: str | None
 
     def __init__(self, en: str | None = None, fr: str | None = None) -> None: ...
-    def __repr__(self) -> str: ...
 
 class TimeSeries:
     frequency: str | None
@@ -25,7 +22,6 @@ class TimeSeries:
         start: str | None = None,
         end: str | None = None,
     ) -> None: ...
-    def __repr__(self) -> str: ...
 
 class Dimension:
     name: str
@@ -39,8 +35,6 @@ class Dimension:
     members: list[str] | None
     members_fr: list[str] | None
     ordinal: list[int] | None
-
-    def __repr__(self) -> str: ...
 
 class Footnote:
     language: str
@@ -63,8 +57,6 @@ class Geographies:
     geo_label_fr: list[str] | None
     dqf_code: list[str | None] | None
     tnr_short_form: list[str | None] | None
-
-    def __repr__(self) -> str: ...
 
 class IvtMetadata:
     @property
