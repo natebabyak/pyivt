@@ -10,7 +10,8 @@
 ## Installation
 
 ```bash
-pip install pyivt
+uv add pyivt
+# or: uv pip install pyivt / pip install pyivt
 ```
 
 Requires Python 3.10+ and a platform wheel (abi3) or a local Rust toolchain for source builds.
@@ -18,12 +19,10 @@ Requires Python 3.10+ and a platform wheel (abi3) or a local Rust toolchain for 
 ### Development
 
 ```bash
-python -m venv .venv
-# Windows: .\.venv\Scripts\Activate.ps1
-pip install -e ".[dev]"
-# or: maturin develop --release
-python tests/scripts/download.py   # StatCan fixtures for pytest
-pytest
+uv sync --extra dev
+uv run python tests/scripts/download.py   # StatCan fixtures for pytest
+uv run pytest
+# or: uv run maturin develop --release
 ```
 
 ## Usage

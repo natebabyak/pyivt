@@ -14,25 +14,27 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - uses: actions/setup-python@v5
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: astral-sh/setup-uv@v6
         with:
+          enable-cache: true
           python-version: "3.12"
-          cache: pip
 
       - name: Install package
-        run: pip install -e ".[dev]"
+        run: uv sync --extra dev
 
       - name: Lint
-        run: ruff check .
+        run: uv run ruff check .
 
       - name: Format
-        run: ruff format --check .
+        run: uv run ruff format --check .
 
       - name: Rust tests
         run: cargo test
 
       - name: Download fixtures
-        run: python tests/scripts/download.py
+        run: uv run python tests/scripts/download.py
 
       - name: Test
-        run: pytest
+        run: uv run pytest
