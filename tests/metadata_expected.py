@@ -15,11 +15,8 @@ DEMO_EXPECTED_DIR = _TESTS / "fixtures" / "demo" / "expected"
 # Back-compat alias used by StatCan helpers/scripts.
 EXPECTED_DIR = STATCAN_EXPECTED_DIR
 
-_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
-
-
-def first_last_sentences(text: str | None) -> tuple[str | None, str | None]:
-    """Return the first and last sentences of *text* (None-safe)."""
+def first_last_words(text: str | None) -> tuple[str | None, str | None]:
+    """Return the first and last whitespace-split words of *text* (None-safe)."""
     if text is None:
         return None, None
     normalized = re.sub(
@@ -27,11 +24,9 @@ def first_last_sentences(text: str | None) -> tuple[str | None, str | None]:
     ).strip()
     if not normalized:
         return None, None
-    parts = [p.strip() for p in _SENTENCE_SPLIT.split(normalized) if p.strip()]
+    parts = normalized.split()
     if not parts:
         return None, None
-    if len(parts) == 1:
-        return parts[0], parts[0]
     return parts[0], parts[-1]
 
 
@@ -40,8 +35,8 @@ def _localized(text: LocalizedText) -> dict[str, str | None]:
 
 
 def _notes_endpoints(text: LocalizedText) -> dict[str, dict[str, str | None]]:
-    en_first, en_last = first_last_sentences(text.en)
-    fr_first, fr_last = first_last_sentences(text.fr)
+    en_first, en_last = first_last_words(text.en)
+    fr_first, fr_last = first_last_words(text.fr)
     return {
         "en": {"first": en_first, "last": en_last},
         "fr": {"first": fr_first, "last": fr_last},

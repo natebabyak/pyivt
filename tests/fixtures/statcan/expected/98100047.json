@@ -17,12 +17,12 @@
   },
   "notes": {
     "en": {
-      "first": "Product ID: 98100047 Title: Occupied private dwellings by structural type of dwelling, percentage distribution 2021: Canada, provinces and territories Archive Status: Current Frequency: Occasional Universe: Occupied Private Dwellings, 2021 and 2016 censuses — 100% data Variable List: Structural type of dwelling (9), View Start Reference Period: 2021-01-01 End Reference Period: 2021-01-01 Survey Code: 3901 Survey Name: Census of Population Subjects: High Level Corrections: Footnotes : Footnote 1 Historical comparison of geographic areas The boundaries and names of census geographies can change from one census to the next.",
-      "last": "As well previous census data for some 2021 areas may not be available due to the fact that the concordance did not produce an accurate representation of the 2021 area."
+      "first": "Product",
+      "last": "area."
     },
     "fr": {
-      "first": "Identificateur de produit : 98100047 Titre : Logements privés occupés selon le type de construction résidentielle, chiffres de 2021 : Canada, provinces et territoires Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Logements privés occupés, recensements de 2021 et 2016 — Données intégrales (100 %) Liste de variables : Type de construction résidentielle (9), Vue Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois : Renvoi 1 Comparaison historique de régions géographiques Les limites et les noms des géographies du recensement peuvent changer d'un recensement à l'autre.",
-      "last": "De plus, des données de recensements antérieurs pour certaines régions de 2021 ne sont pas disponibles en raison d’une concordance qui n’aurait pas généré une représentation exacte de la région de 2021."
+      "first": "Identificateur",
+      "last": "2021."
     }
   },
   "number_of_datapoints": 504,

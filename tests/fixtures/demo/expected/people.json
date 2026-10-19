@@ -17,12 +17,12 @@
   },
   "notes": {
     "en": {
-      "first": "This table is one of two demonstration tables IVATION Datasystems Inc.",
-      "last": "If you have any questions concerning the data, please contact John Representative at 123-4567."
+      "first": "This",
+      "last": "123-4567."
     },
     "fr": {
-      "first": "Cette table est l'une des deux tables de démonstration qu'Ivation Datasystems Inc.",
-      "last": "Si vous avez des questions concernant les données, prière de communiquer avec Jean Représentant au 123-4567."
+      "first": "Cette",
+      "last": "123-4567."
     }
   },
   "number_of_datapoints": 4680,

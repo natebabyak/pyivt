@@ -17,12 +17,12 @@
   },
   "notes": {
     "en": {
-      "first": "Product ID: 98100044 Title: Type of collective dwelling and collective dwellings occupied by usual residents and population in collective dwellings: Canada, provinces and territories Archive Status: Current Frequency: Occasional Universe: Persons in collective dwellings and collective dwellings occupied by usual residents, 2021 Census — 100% data Variable List: Type of collective dwelling (16), Collective dwellings occupied by usual residents and population in collective dwellings (2) Start Reference Period: 2021-01-01 End Reference Period: 2021-01-01 Survey Code: 3901 Survey Name: Census of Population Subjects: High Level Corrections: Footnotes : Footnote 1 Historical comparability of collective dwelling data Changes in the collection and processing procedures of collective dwelling data as a result of the COVID-19 pandemic may have had an impact on the historical comparability of collective dwelling data.",
+      "first": "Product",
       "last": "98-500-X."
     },
     "fr": {
-      "first": "Identificateur de produit : 98100044 Titre : Type de logement collectif et logements collectifs occupés par des résidents habituels et population dans les logements collectifs : Canada, provinces et territoires Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Personnes dans les logements collectifs et logements collectifs occupés par des résidents habituels, Recensement de 2021 — Données intégrales (100 %) Liste de variables : Type de logement collectif (16), Logements collectifs occupés par des résidents habituels et population dans les logements collectifs (2) Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois : Renvoi 1 Comparabilité historique des données sur les logements collectifs Les modifications apportées aux procédures de collecte et de traitement des données sur les logements collectifs à la suite de la pandémie de COVID-19 peuvent avoir eu une incidence sur la comparabilité historique des données sur les logements collectifs.",
-      "last": "Pour de plus amples renseignements sur la qualité des données sur les logements collectifs, consultez le Guide de référence sur les types de logements, Recensement de la population, 2021, produit no 98-500-X au catalogue de Statistique Canada."
+      "first": "Identificateur",
+      "last": "Canada."
     }
   },
   "number_of_datapoints": 448,

@@ -17,12 +17,12 @@
   },
   "notes": {
     "en": {
-      "first": "Product ID: 98100033 Title: Broad age groups, gender and census year: Canada, provinces and territories Archive Status: Current Frequency: Occasional Universe: Total Population, including institutional residents, 1851 to 2021 censuses — 100% data Variable List: Census year (25), Gender (3a), Broad age groups (5) Start Reference Period: 2021-01-01 End Reference Period: 2021-01-01 Survey Code: 3901 Survey Name: Census of Population Subjects: High Level Corrections: Footnotes :",
-      "last": "Product ID: 98100033 Title: Broad age groups, gender and census year: Canada, provinces and territories Archive Status: Current Frequency: Occasional Universe: Total Population, including institutional residents, 1851 to 2021 censuses — 100% data Variable List: Census year (25), Gender (3a), Broad age groups (5) Start Reference Period: 2021-01-01 End Reference Period: 2021-01-01 Survey Code: 3901 Survey Name: Census of Population Subjects: High Level Corrections: Footnotes :"
+      "first": "Product",
+      "last": ":"
     },
     "fr": {
-      "first": "Identificateur de produit : 98100033 Titre : Grands groupes d’âge, genre et année de recensement : Canada, provinces et territoires Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Population totale, incluant les résidents institutionnels, recensements de 1851 à 2021 – Données intégrales (100 %) Liste de variables : Année de recensement (25), Genre (3a), Grands groupes d’âge (5) Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois :",
-      "last": "Identificateur de produit : 98100033 Titre : Grands groupes d’âge, genre et année de recensement : Canada, provinces et territoires Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Population totale, incluant les résidents institutionnels, recensements de 1851 à 2021 – Données intégrales (100 %) Liste de variables : Année de recensement (25), Genre (3a), Grands groupes d’âge (5) Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois :"
+      "first": "Identificateur",
+      "last": ":"
     }
   },
   "number_of_datapoints": 5250,

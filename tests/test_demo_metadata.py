@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from math import prod
 
-from metadata_expected import expected_path, first_last_sentences, snapshot_metadata
+from metadata_expected import expected_path, first_last_words, snapshot_metadata
 from pyivt import open as open_ivt
 
 
@@ -19,8 +19,8 @@ def test_demo_metadata_matches_expected(demo_ivt):
     meta = open_ivt(demo_ivt.path).metadata
     assert snapshot_metadata(meta) == expect
 
-    en_first, en_last = first_last_sentences(meta.notes.en)
-    fr_first, fr_last = first_last_sentences(meta.notes.fr)
+    en_first, en_last = first_last_words(meta.notes.en)
+    fr_first, fr_last = first_last_words(meta.notes.fr)
     assert {"first": en_first, "last": en_last} == expect["notes"]["en"]
     assert {"first": fr_first, "last": fr_last} == expect["notes"]["fr"]
     assert prod(d.count for d in meta.dimensions) == expect["number_of_datapoints"]

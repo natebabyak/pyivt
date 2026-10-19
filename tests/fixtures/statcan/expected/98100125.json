@@ -17,12 +17,12 @@
   },
   "notes": {
     "en": {
-      "first": "Product ID: 98100125 Title: Marital status, age group and gender: Canada, provinces and territories and census metropolitan areas Archive Status: Current Frequency: Occasional Universe: Population 15 years of age and older, 2021, 2016, 2011 and 2006 censuses — 100% data Variable List: Marital status (13), Gender (3a), Census year (4), Age (16) Start Reference Period: 2021-01-01 End Reference Period: 2021-01-01 Survey Code: 3901 Survey Name: Census of Population Subjects: High Level Corrections: Footnotes : Footnote 1 The boundaries and names of census geographies can change from one census to the next.",
-      "last": "As well previous census data for some 2021 areas may not be available due to the fact that the concordance did not produce an accurate representation of the 2021 area."
+      "first": "Product",
+      "last": "area."
     },
     "fr": {
-      "first": "Identificateur de produit : 98100125 Titre : État matrimonial, groupe d’âge et genre : Canada, provinces et territoires et régions métropolitaines de recensement Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Population âgée de 15 ans et plus, recensements de 2021, 2016, 2011 et 2006 — Données intégrales (100 %) Liste de variables : État matrimonial (13), Genre (3a), Année de recensement (4), Âge (16) Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois : Renvoi 1 Les limites et les noms des géographies du recensement peuvent changer d'un recensement à l'autre.",
-      "last": "De plus, des données de recensements antérieurs pour certaines régions de 2021 ne sont pas disponibles en raison d’une concordance qui n’aurait pas généré une représentation exacte de la région de 2021."
+      "first": "Identificateur",
+      "last": "2021."
     }
   },
   "number_of_datapoints": 137280,

@@ -17,12 +17,12 @@
   },
   "notes": {
     "en": {
-      "first": "Product ID: 98100123 Title: Census family structure, presence of children and average number of persons per census family: Canada, provinces and territories, census metropolitan areas and census agglomerations Archive Status: Current Frequency: Occasional Universe: Census families in private households, 2021, 2016 and 2011 censuses — 100% Data Variable List: Census family structure (7A), Census year (3), Presence of children (4) Start Reference Period: 2021-01-01 End Reference Period: 2021-01-01 Survey Code: 3901 Survey Name: Census of Population Subjects: High Level Corrections: Footnotes : Footnote 1 The boundaries and names of census geographies can change from one census to the next.",
-      "last": "As well previous census data for some 2021 areas may not be available due to the fact that the concordance did not produce an accurate representation of the 2021 area."
+      "first": "Product",
+      "last": "area."
     },
     "fr": {
-      "first": "Identificateur de produit : 98100123 Titre : Structure de la famille de recensement, présence d’enfants et nombre moyen de personnes par famille de recensement : Canada, provinces et territoires, régions métropolitaines de recensement et agglomérations de recensement Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Familles de recensement dans les ménages privés, recensements de 2021, 2016 et 2011 — Données intégrales (100 %) Liste de variables : Structure de la famille de recensement (7A), Année de recensement (3), Présence d'enfants (4) Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois : Renvoi 1 Les limites et les noms des géographies du recensement peuvent changer d'un recensement à l'autre.",
-      "last": "De plus, des données de recensements antérieurs pour certaines régions de 2021 ne sont pas disponibles en raison d’une concordance qui n’aurait pas généré une représentation exacte de la région de 2021."
+      "first": "Identificateur",
+      "last": "2021."
     }
   },
   "number_of_datapoints": 13944,

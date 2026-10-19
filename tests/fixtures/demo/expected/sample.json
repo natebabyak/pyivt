@@ -17,12 +17,12 @@
   },
   "notes": {
     "en": {
-      "first": "This table is a demonstration table and should be used solely for the purpose of exploring Beyond 20/20 features.",
-      "last": "The data shows the number of interviews and the cost of each project by geography on a monthly basis."
+      "first": "This",
+      "last": "basis."
     },
     "fr": {
-      "first": "Cette table est une table de démonstration et devrait être employée seulement pour explorer des dispositifs de Beyond 20/20.",
-      "last": "Les données montrent le nombre d'entrevues et du coût de chaque projet par géographie, sur une base mensuelle."
+      "first": "Cette",
+      "last": "mensuelle."
     }
   },
   "number_of_datapoints": 4680,

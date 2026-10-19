@@ -17,12 +17,12 @@
   },
   "notes": {
     "en": {
-      "first": "Product ID: 98100034 Title: Broad age groups and sex: Canada, provinces and territories Archive Status: Current Frequency: Occasional Universe: Total population, including institutional residents, 2021 Census — 100% data Variable List: Broad age groups (5), Sex (3) Start Reference Period: 2021-01-01 End Reference Period: 2021-01-01 Survey Code: 3901 Survey Name: Census of Population Subjects: High Level Corrections: Footnotes :",
-      "last": "Product ID: 98100034 Title: Broad age groups and sex: Canada, provinces and territories Archive Status: Current Frequency: Occasional Universe: Total population, including institutional residents, 2021 Census — 100% data Variable List: Broad age groups (5), Sex (3) Start Reference Period: 2021-01-01 End Reference Period: 2021-01-01 Survey Code: 3901 Survey Name: Census of Population Subjects: High Level Corrections: Footnotes :"
+      "first": "Product",
+      "last": ":"
     },
     "fr": {
-      "first": "Identificateur de produit : 98100034 Titre : Grands groupes d’âge et sexe : Canada, provinces et territoires Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Population totale, incluant les résidents institutionnels, Recensement de 2021 — Données intégrales (100 %) Liste de variables : Grands groupes d’âge (5), Sexe (3) Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois :",
-      "last": "Identificateur de produit : 98100034 Titre : Grands groupes d’âge et sexe : Canada, provinces et territoires Statut d'archivage : Courant Fréquence : Occasionnelle Univers : Population totale, incluant les résidents institutionnels, Recensement de 2021 — Données intégrales (100 %) Liste de variables : Grands groupes d’âge (5), Sexe (3) Date de début de la période de référence : 2021-01-01 Date de fin de la période de référence : 2021-01-01 Numéro d'enquête : 3901 Nom de l'enquête : Recensement de la population Sujets: Corrections de grande importance: Renvois :"
+      "first": "Identificateur",
+      "last": ":"
     }
   },
   "number_of_datapoints": 210,
