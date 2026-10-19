@@ -112,6 +112,13 @@ pub struct LocalizedText {
     pub fr: Option<String>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TimeSeriesInfo {
+    pub frequency: Option<String>,
+    pub start: Option<String>,
+    pub end: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct MissingValue {
     pub symbol: String,
@@ -142,7 +149,7 @@ pub struct IvtMetadata {
     pub category: LocalizedText,
     pub keywords: LocalizedText,
     pub number_of_datapoints: Option<i64>,
-    pub time_series: LocalizedText,
+    pub time_series: Option<TimeSeriesInfo>,
     pub read_only: Option<bool>,
     data: Vec<u8>,
     desc: Descriptor,
@@ -543,22 +550,22 @@ fn month_abbr_en(raw: &str) -> &'static str {
     }
 }
 
-fn month_abbr_fr(raw: &str) -> &'static str {
+fn month_index_fr(raw: &str) -> Option<u32> {
     let s = raw.to_lowercase();
     match s.as_str() {
-        "janvier" | "jan" => "jan",
-        "février" | "fevrier" | "fév" | "fev" => "fév",
-        "mars" => "mars",
-        "avril" | "avr" => "avr",
-        "mai" => "mai",
-        "juin" => "juin",
-        "juillet" | "juil" => "juil",
-        "août" | "aout" => "août",
-        "septembre" | "sept" | "sep" => "sept",
-        "octobre" | "oct" => "oct",
-        "novembre" | "nov" => "nov",
-        "décembre" | "decembre" | "déc" | "dec" => "déc",
-        _ => "jan",
+        "janvier" | "jan" => Some(1),
+        "février" | "fevrier" | "fév" | "fev" => Some(2),
+        "mars" => Some(3),
+        "avril" | "avr" => Some(4),
+        "mai" => Some(5),
+        "juin" => Some(6),
+        "juillet" | "juil" => Some(7),
+        "août" | "aout" => Some(8),
+        "septembre" | "sept" | "sep" => Some(9),
+        "octobre" | "oct" => Some(10),
+        "novembre" | "nov" => Some(11),
+        "décembre" | "decembre" | "déc" | "dec" => Some(12),
+        _ => None,
     }
 }
 
@@ -604,24 +611,6 @@ fn month_index_en(raw: &str) -> Option<u32> {
     }
 }
 
-fn abbr_en_from_index(m: u32) -> &'static str {
-    match m {
-        1 => "Jan",
-        2 => "Feb",
-        3 => "Mar",
-        4 => "Apr",
-        5 => "May",
-        6 => "Jun",
-        7 => "Jul",
-        8 => "Aug",
-        9 => "Sep",
-        10 => "Oct",
-        11 => "Nov",
-        12 => "Dec",
-        _ => "Jan",
-    }
-}
-
 fn add_months(year: u32, month: u32, add: i64) -> (u32, u32) {
     let idx = (year as i64) * 12 + (month as i64 - 1) + add;
     let y = (idx / 12) as u32;
@@ -629,156 +618,110 @@ fn add_months(year: u32, month: u32, add: i64) -> (u32, u32) {
     (y, m)
 }
 
-fn format_range_en(m1: &str, y1: &str, m2: &str, y2: &str) -> String {
-    format!(
-        "{}{}-{}{}",
-        month_abbr_en(m1),
-        y1,
-        month_abbr_en(m2),
-        y2
-    )
+fn iso_ym(year: u32, month: u32) -> String {
+    format!("{:04}-{:02}-01", year, month)
 }
 
-fn format_range_fr_from_en(en: &str) -> String {
-    en.replace("Jan", "jan")
-        .replace("Feb", "fév")
-        .replace("Mar", "mars")
-        .replace("Apr", "avr")
-        .replace("May", "mai")
-        .replace("Jun", "juin")
-        .replace("Jul", "juil")
-        .replace("Aug", "août")
-        .replace("Sep", "sept")
-        .replace("Oct", "oct")
-        .replace("Nov", "nov")
-        .replace("Dec", "déc")
-}
-
-fn range_from_text(text: &str, time_count: Option<i64>) -> (Option<String>, Option<String>) {
-    let mut en = None;
-    let mut fr = None;
+/// Parse a start/end year-month pair from notes or file text.
+fn range_bounds_from_text(
+    text: &str,
+    time_count: Option<i64>,
+) -> (Option<(u32, u32)>, Option<(u32, u32)>) {
+    let mut start = None;
+    let mut end = None;
     if let Some(c) = TS_RANGE_EN_RE.captures(text) {
         let m1 = c.get(1).unwrap().as_str();
         let y1 = c.get(2).unwrap().as_str();
-        if let (Some(m2), Some(y2)) = (c.get(3), c.get(4)) {
-            en = Some(format_range_en(m1, y1, m2.as_str(), y2.as_str()));
-        } else if let (Some(count), Some(mi), Ok(year)) =
-            (time_count, month_index_en(m1), y1.parse::<u32>())
-        {
-            if count >= 1 {
-                let (ey, em) = add_months(year, mi, count - 1);
-                en = Some(format!(
-                    "{}{}-{}{}",
-                    month_abbr_en(m1),
-                    y1,
-                    abbr_en_from_index(em),
-                    ey
-                ));
+        if let (Some(mi), Ok(year)) = (month_index_en(m1), y1.parse::<u32>()) {
+            start = Some((year, mi));
+            if let (Some(m2), Some(y2)) = (c.get(3), c.get(4)) {
+                if let (Some(emi), Ok(ey)) = (month_index_en(m2.as_str()), y2.as_str().parse::<u32>())
+                {
+                    end = Some((ey, emi));
+                }
+            } else if let Some(count) = time_count {
+                if count >= 1 {
+                    end = Some(add_months(year, mi, count - 1));
+                }
             }
         }
     }
-    if let Some(c) = TS_RANGE_FR_RE.captures(text) {
-        let m1 = c.get(1).unwrap().as_str();
-        let y1 = c.get(2).unwrap().as_str();
-        if let (Some(m2), Some(y2)) = (c.get(3), c.get(4)) {
-            fr = Some(format!(
-                "{}{}-{}{}",
-                month_abbr_fr(m1),
-                y1,
-                month_abbr_fr(m2.as_str()),
-                y2.as_str()
-            ));
+    if start.is_none() {
+        if let Some(c) = TS_RANGE_FR_RE.captures(text) {
+            let m1 = c.get(1).unwrap().as_str();
+            let y1 = c.get(2).unwrap().as_str();
+            if let (Some(mi), Ok(year)) = (month_index_fr(m1), y1.parse::<u32>()) {
+                start = Some((year, mi));
+                if let (Some(m2), Some(y2)) = (c.get(3), c.get(4)) {
+                    if let (Some(emi), Ok(ey)) =
+                        (month_index_fr(m2.as_str()), y2.as_str().parse::<u32>())
+                    {
+                        end = Some((ey, emi));
+                    }
+                } else if let Some(count) = time_count {
+                    if count >= 1 {
+                        end = Some(add_months(year, mi, count - 1));
+                    }
+                }
+            }
         }
     }
-    // Prefer translating a complete EN range (includes count-derived ends).
-    if let Some(ref e) = en {
-        fr = Some(format_range_fr_from_en(e));
-    }
-    (en, fr)
+    (start, end)
 }
 
-fn time_series_label(
+fn parse_time_series(
     data: &[u8],
     dims: &[DimDesc],
     notes_en: Option<&str>,
     notes_fr: Option<&str>,
-) -> LocalizedText {
+) -> Option<TimeSeriesInfo> {
     let dim = time_dim_desc(dims);
     if dim.is_none() && !has_time_series_marker(data) {
-        return LocalizedText {
-            en: Some("No".into()),
-            fr: Some("No".into()),
-        };
+        return None;
     }
     // Dim notes (frequency/range) often live outside the identity-notes blobs.
     let file_text = latin1(data);
-    let mut freq_en = None;
-    let mut freq_fr = None;
+    let mut frequency = None;
     for text in [notes_en, notes_fr, Some(file_text.as_str())]
         .into_iter()
         .flatten()
     {
-        if let Some((e, f)) = freq_pair_from_text(text) {
-            freq_en = Some(e);
-            freq_fr = Some(f);
+        if let Some((e, _)) = freq_pair_from_text(text) {
+            frequency = Some(e);
             break;
         }
     }
-    if freq_en.is_none() {
+    if frequency.is_none() {
         if let Some(dim) = dim {
             if let Some(f) = frequency_hint_name(&dim.name) {
                 let pair = freq_pair_from_text(&f).unwrap_or_else(|| (f.clone(), f));
-                freq_en = Some(pair.0);
-                freq_fr = Some(pair.1);
+                frequency = Some(pair.0);
             }
         }
     }
     let time_count = dim.map(|d| d.count);
-    let mut range_en = None;
-    let mut range_fr = None;
+    let mut start = None;
+    let mut end = None;
     for text in [notes_en, notes_fr, Some(file_text.as_str())]
         .into_iter()
         .flatten()
     {
-        let (e, f) = range_from_text(text, time_count);
-        if range_en.is_none() {
-            range_en = e;
+        let (s, e) = range_bounds_from_text(text, time_count);
+        if start.is_none() {
+            start = s;
         }
-        if range_fr.is_none() {
-            range_fr = f;
+        if end.is_none() {
+            end = e;
         }
-        if range_en.is_some() && range_fr.is_some() {
+        if start.is_some() && end.is_some() {
             break;
         }
     }
-    if let (Some(fe), Some(re)) = (freq_en.clone(), range_en.clone()) {
-        return LocalizedText {
-            en: Some(format!("{fe}, {re}")),
-            fr: Some(format!(
-                "{}, {}",
-                freq_fr.unwrap_or(fe),
-                range_fr.unwrap_or(re)
-            )),
-        };
-    }
-    if let Some(fe) = freq_en {
-        return LocalizedText {
-            en: Some(fe.clone()),
-            fr: freq_fr.or(Some(fe)),
-        };
-    }
-    if let Some(dim) = dim {
-        if !dim.name.is_empty() {
-            return LocalizedText {
-                en: Some(dim.name.clone()),
-                fr: None,
-            };
-        }
-    }
-    LocalizedText {
-        en: Some("Yes".into()),
-        fr: Some("Yes".into()),
-    }
+    Some(TimeSeriesInfo {
+        frequency,
+        start: start.map(|(y, m)| iso_ym(y, m)),
+        end: end.map(|(y, m)| iso_ym(y, m)),
+    })
 }
 
 fn type_label_for(d: &DimDesc) -> String {
@@ -1558,7 +1501,7 @@ pub fn build_metadata(
     } else {
         desc.dims.iter().fold(1i64, |a, d| a.saturating_mul(d.count))
     };
-    let time_series = time_series_label(
+    let time_series = parse_time_series(
         &data,
         &desc.dims,
         notes_en.as_deref(),

@@ -27,8 +27,9 @@
   },
   "number_of_datapoints": 137280,
   "time_series": {
-    "en": "Geography",
-    "fr": null
+    "frequency": null,
+    "start": null,
+    "end": null
   },
   "read_only": true,
   "dimensions": [

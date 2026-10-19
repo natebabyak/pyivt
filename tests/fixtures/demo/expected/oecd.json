@@ -27,8 +27,9 @@
   },
   "number_of_datapoints": 14820,
   "time_series": {
-    "en": "Semi-annual, Jun1996-Jul1998",
-    "fr": "Semi-annuelle, juin1996-juil1998"
+    "frequency": "Semi-annual",
+    "start": "1996-06-01",
+    "end": "1998-07-01"
   },
   "read_only": false,
   "dimensions": [

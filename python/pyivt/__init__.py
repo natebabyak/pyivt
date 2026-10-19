@@ -9,6 +9,7 @@ from pyivt._native import (
     Layout,
     LocalizedText,
     MissingValue,
+    TimeSeries,
     open,
 )
 
@@ -21,6 +22,7 @@ __all__ = [
     "Layout",
     "LocalizedText",
     "MissingValue",
+    "TimeSeries",
     "open",
 ]
 

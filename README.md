@@ -68,7 +68,7 @@ ivt = pyivt.open(res.content)
 | Keywords             | `keywords.en`, `keywords.fr` |
 | Notes                | `notes.en`, `notes.fr`       |
 | Number of Datapoints | `number_of_datapoints`       |
-| Time Series          | `time_series`                |
+| Time Series          | `time_series` (`.frequency`, `.start`, `.end`) or `None` |
 | Read-Only            | `read_only`                  |
 | Dimensions           | `dimensions`                 |
 | Geographies          | `geographies`                |

@@ -26,10 +26,7 @@
     }
   },
   "number_of_datapoints": 504,
-  "time_series": {
-    "en": "No",
-    "fr": "No"
-  },
+  "time_series": null,
   "read_only": true,
   "dimensions": [
     {

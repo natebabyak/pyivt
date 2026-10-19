@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from pyivt import IvtMetadata, LocalizedText
+from pyivt import IvtMetadata, LocalizedText, TimeSeries
 
 _TESTS = Path(__file__).resolve().parent
 STATCAN_EXPECTED_DIR = _TESTS / "fixtures" / "statcan" / "expected"
@@ -56,17 +56,14 @@ def _dim_description(d) -> dict[str, str | None]:
     return {"en": en, "fr": fr}
 
 
+def _time_series(ts: TimeSeries | None) -> dict[str, str | None] | None:
+    if ts is None:
+        return None
+    return {"frequency": ts.frequency, "start": ts.start, "end": ts.end}
+
+
 def snapshot_metadata(meta: IvtMetadata) -> dict[str, Any]:
     """Build the golden-file payload for one IVT's metadata."""
-    ts = meta.time_series
-    if isinstance(ts, LocalizedText):
-        time_series: Any = _localized(ts)
-    elif ts is None:
-        time_series = {"en": None, "fr": None}
-    else:
-        # Legacy string API during transition.
-        time_series = {"en": ts, "fr": None}
-
     return {
         "title": _localized(meta.title),
         "author": _localized(meta.author),
@@ -74,7 +71,7 @@ def snapshot_metadata(meta: IvtMetadata) -> dict[str, Any]:
         "keywords": _localized(meta.keywords),
         "notes": _notes_endpoints(meta.notes),
         "number_of_datapoints": meta.number_of_datapoints,
-        "time_series": time_series,
+        "time_series": _time_series(meta.time_series),
         "read_only": meta.read_only,
         "dimensions": [
             {

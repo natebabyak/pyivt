@@ -27,8 +27,9 @@
   },
   "number_of_datapoints": 4680,
   "time_series": {
-    "en": "Monthly, Dec1996-Feb2000",
-    "fr": "Mensuelle, déc1996-fév2000"
+    "frequency": "Monthly",
+    "start": "1996-12-01",
+    "end": "2000-02-01"
   },
   "read_only": false,
   "dimensions": [

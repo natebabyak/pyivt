@@ -13,7 +13,7 @@ use crate::header::read_header;
 use crate::metadata::{
     self, Dimension as CoreDimension, Footnote as CoreFootnote,
     Geographies as CoreGeographies, IvtMetadata as CoreMeta, LocalizedText as CoreLocalized,
-    MissingValue as CoreMissing,
+    MissingValue as CoreMissing, TimeSeriesInfo as CoreTimeSeries,
 };
 use crate::tidy::{tidy_arrays, Column};
 
@@ -42,6 +42,47 @@ impl LocalizedText {
 
     fn __repr__(&self) -> String {
         format!("LocalizedText(en={:?}, fr={:?})", self.en, self.fr)
+    }
+}
+
+#[pyclass(name = "TimeSeries", module = "pyivt")]
+#[derive(Clone)]
+pub struct TimeSeries {
+    #[pyo3(get)]
+    pub frequency: Option<String>,
+    #[pyo3(get)]
+    pub start: Option<String>,
+    #[pyo3(get)]
+    pub end: Option<String>,
+}
+
+impl From<CoreTimeSeries> for TimeSeries {
+    fn from(v: CoreTimeSeries) -> Self {
+        Self {
+            frequency: v.frequency,
+            start: v.start,
+            end: v.end,
+        }
+    }
+}
+
+#[pymethods]
+impl TimeSeries {
+    #[new]
+    #[pyo3(signature = (frequency=None, start=None, end=None))]
+    fn new(frequency: Option<String>, start: Option<String>, end: Option<String>) -> Self {
+        Self {
+            frequency,
+            start,
+            end,
+        }
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "TimeSeries(frequency={:?}, start={:?}, end={:?})",
+            self.frequency, self.start, self.end
+        )
     }
 }
 
@@ -253,8 +294,13 @@ impl IvtMetadata {
     }
 
     #[getter]
-    fn time_series(&self) -> LocalizedText {
-        self.inner.lock().unwrap().time_series.clone().into()
+    fn time_series(&self) -> Option<TimeSeries> {
+        self.inner
+            .lock()
+            .unwrap()
+            .time_series
+            .clone()
+            .map(TimeSeries::from)
     }
 
     #[getter]

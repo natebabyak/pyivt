@@ -14,6 +14,19 @@ class LocalizedText:
     def __init__(self, en: str | None = None, fr: str | None = None) -> None: ...
     def __repr__(self) -> str: ...
 
+class TimeSeries:
+    frequency: str | None
+    start: str | None
+    end: str | None
+
+    def __init__(
+        self,
+        frequency: str | None = None,
+        start: str | None = None,
+        end: str | None = None,
+    ) -> None: ...
+    def __repr__(self) -> str: ...
+
 class Dimension:
     name: str
     name_fr: str | None
@@ -75,7 +88,7 @@ class IvtMetadata:
     @property
     def number_of_datapoints(self) -> int | None: ...
     @property
-    def time_series(self) -> LocalizedText: ...
+    def time_series(self) -> TimeSeries | None: ...
     @property
     def read_only(self) -> bool | None: ...
     @property

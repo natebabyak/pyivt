@@ -27,8 +27,9 @@
   },
   "number_of_datapoints": 4680,
   "time_series": {
-    "en": "Monthly, Jan1991-Mar1994",
-    "fr": "Mensuelle, jan1991-mars1994"
+    "frequency": "Monthly",
+    "start": "1991-01-01",
+    "end": "1994-03-01"
   },
   "read_only": false,
   "dimensions": [
