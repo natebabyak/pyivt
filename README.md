@@ -1,18 +1,29 @@
 # pyivt
 
-`pyivt` is a library for Statistics Canada Beyond 20/20 `.ivt` files, written in Rust. It is design to be minimal and easily adaptable for existing codebases. Key features are:
+`pyivt` is a library for Statistics Canada Beyond 20/20 `.ivt` files, written in Rust. It is designed to be minimal and easily adaptable for existing codebases. Key features are:
 
-- **Fast**: Up to 100,000% faster than GUI automation for metadata
+- **Fast**: Orders of magnitude faster than GUI automation for metadata (see local `benchmarks/` if you want timings)
 - **Python**: Easily integrates into modern data workflows with a minimal API
 - **Typed**: Produces fully type-safe and predictable metadata
 - **Interoperable**: Exports `.ivt` file data to Apache Arrow
 
 ## Installation
 
-Install the latest pyivt version with:
-
 ```bash
 pip install pyivt
+```
+
+Requires Python 3.10+ and a platform wheel (abi3) or a local Rust toolchain for source builds.
+
+### Development
+
+```bash
+python -m venv .venv
+# Windows: .\.venv\Scripts\Activate.ps1
+pip install -e ".[dev]"
+# or: maturin develop --release
+python tests/scripts/download.py   # StatCan fixtures for pytest
+pytest
 ```
 
 ## Usage
@@ -86,7 +97,14 @@ print(ivt.metadata.product_id, ivt.metadata.title.en)
 
 ### Exporting Data
 
-`Ivt.to_arrow()` returns an Apache Arrow table. Convert from there:
+`Ivt.to_arrow()` returns an Apache Arrow table. Keyword arguments:
+
+| Argument | Default | Meaning |
+| -------- | ------- | ------- |
+| `complete` | `True` | Expand the published grid; set `False` for sparse decoded cells only |
+| `max_cells` | `100_000_000` | Raise if the complete grid would exceed this many cells |
+| `labels` | `True` | Include dimension label columns |
+| `language` | `"en"` | Label language (`"en"` or `"fr"`) |
 
 ```python
 import polars as pl

@@ -15,6 +15,7 @@ DEMO_EXPECTED_DIR = _TESTS / "fixtures" / "demo" / "expected"
 # Back-compat alias used by StatCan helpers/scripts.
 EXPECTED_DIR = STATCAN_EXPECTED_DIR
 
+
 def first_last_words(text: str | None) -> tuple[str | None, str | None]:
     """Return the first and last whitespace-split words of *text* (None-safe)."""
     if text is None:

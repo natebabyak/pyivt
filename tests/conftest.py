@@ -15,9 +15,7 @@ STATCAN_MANIFEST_PATH = STATCAN_DIR / "manifest.json"
 DEMO_DIR = _TESTS / "fixtures" / "demo"
 DEMO_MANIFEST_PATH = DEMO_DIR / "manifest.json"
 
-_DEFAULT_BEYOND_DATA = Path(
-    r"C:\Program Files\Beyond 2020\Professional Browser\Data"
-)
+_DEFAULT_BEYOND_DATA = Path(r"C:\Program Files\Beyond 2020\Professional Browser\Data")
 
 
 def _load_manifest(path: Path) -> list[dict]:

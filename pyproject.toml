@@ -1,13 +1,42 @@
 [project]
 name = "pyivt"
-version = "0.1.0"
+version = "0.0.1"
 description = "Read Statistics Canada Beyond 20/20 .ivt tables: metadata and Apache Arrow export"
 readme = "README.md"
 requires-python = ">=3.10"
-authors = [{ name = "pyivt contributors" }]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Nate Babyak" }]
+keywords = [
+  "ivt",
+  "beyond-2020",
+  "statistics-canada",
+  "statcan",
+  "arrow",
+  "pyarrow",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Rust",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+  "Typing :: Typed",
+]
 dependencies = [
   "pyarrow>=14",
 ]
+
+[project.urls]
+Homepage = "https://github.com/natebabyak/pyivt"
+Repository = "https://github.com/natebabyak/pyivt"
+Issues = "https://github.com/natebabyak/pyivt/issues"
+Changelog = "https://github.com/natebabyak/pyivt/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "ruff>=0.6", "maturin>=1.5,<2"]

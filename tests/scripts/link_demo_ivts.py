@@ -12,9 +12,7 @@ _TESTS = Path(__file__).resolve().parents[1]
 DEMO_DIR = _TESTS / "fixtures" / "demo"
 MANIFEST_PATH = DEMO_DIR / "manifest.json"
 
-_DEFAULT_BEYOND_DATA = Path(
-    r"C:\Program Files\Beyond 2020\Professional Browser\Data"
-)
+_DEFAULT_BEYOND_DATA = Path(r"C:\Program Files\Beyond 2020\Professional Browser\Data")
 
 
 def demo_source_dir() -> Path:
