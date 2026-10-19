@@ -110,7 +110,7 @@ jobs:
     name: Publish to PyPI
     needs: [linux, windows, macos, sdist]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, "refs/tags/")
+    if: startsWith(github.ref, 'refs/tags/')
     permissions:
       id-token: write
     # Configure PyPI Trusted Publisher: owner natebabyak, repo pyivt, workflow release.yml
