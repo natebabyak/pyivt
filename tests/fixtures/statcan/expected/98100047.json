@@ -37,7 +37,7 @@
       "items": 14,
       "type": "Normal",
       "description": {
-        "en": "GeographyGéographie",
+        "en": "Geography",
         "fr": "Géographie"
       }
     },
@@ -61,7 +61,7 @@
       "items": 4,
       "type": "Normal",
       "description": {
-        "en": "ViewVue",
+        "en": "View",
         "fr": "Vue"
       }
     }

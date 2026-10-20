@@ -37,7 +37,7 @@
       "items": 14,
       "type": "Normal",
       "description": {
-        "en": "GeographyGéographie",
+        "en": "Geography",
         "fr": "Géographie"
       }
     },
@@ -61,7 +61,7 @@
       "items": 2,
       "type": "Geographic",
       "description": {
-        "en": "Collective dwelLogements colle",
+        "en": "Collective dwel",
         "fr": "Logements colle"
       }
     }

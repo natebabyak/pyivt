@@ -37,7 +37,7 @@
       "items": 166,
       "type": "Normal",
       "description": {
-        "en": "GeographyGéographie",
+        "en": "Geography",
         "fr": "Géographie"
       }
     },
@@ -49,7 +49,7 @@
       "items": 3,
       "type": "Normal",
       "description": {
-        "en": "Census year (3)Année de recens",
+        "en": "Census year (3)",
         "fr": "Année de recens"
       }
     },
@@ -73,7 +73,7 @@
       "items": 4,
       "type": "Normal",
       "description": {
-        "en": "Presence of chiPrésence d'enfa",
+        "en": "Presence of chi",
         "fr": "Présence d'enfa"
       }
     }

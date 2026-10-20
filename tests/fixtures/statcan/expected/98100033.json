@@ -37,7 +37,7 @@
       "items": 14,
       "type": "Normal",
       "description": {
-        "en": "GeographyGéographie",
+        "en": "Geography",
         "fr": "Géographie"
       }
     },
@@ -61,7 +61,7 @@
       "items": 25,
       "type": "Normal",
       "description": {
-        "en": "Census year (25Année de recens",
+        "en": "Census year (25",
         "fr": "Année de recens"
       }
     },
@@ -73,7 +73,7 @@
       "items": 5,
       "type": "Normal",
       "description": {
-        "en": "Broad age groupGrands groupes",
+        "en": "Broad age group",
         "fr": "Grands groupes"
       }
     }

@@ -37,7 +37,7 @@
       "items": 592,
       "type": "Normal",
       "description": {
-        "en": "GeographyGéographie",
+        "en": "Geography",
         "fr": "Géographie"
       }
     },
@@ -49,7 +49,7 @@
       "items": 712,
       "type": "Normal",
       "description": {
-        "en": "Population, dwePopulation, log",
+        "en": "Population, dwe",
         "fr": "Population, log"
       }
     }

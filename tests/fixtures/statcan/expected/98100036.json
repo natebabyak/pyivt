@@ -37,7 +37,7 @@
       "items": 14,
       "type": "Normal",
       "description": {
-        "en": "GeographyGéographie",
+        "en": "Geography",
         "fr": "Géographie"
       }
     },
@@ -49,7 +49,7 @@
       "items": 3,
       "type": "Normal",
       "description": {
-        "en": "Broad age groupGrands groupes",
+        "en": "Broad age group",
         "fr": "Grands groupes"
       }
     },
@@ -61,7 +61,7 @@
       "items": 8,
       "type": "Normal",
       "description": {
-        "en": "Gender (8)Genre (8)",
+        "en": "Gender (8)",
         "fr": "Genre (8)"
       }
     }

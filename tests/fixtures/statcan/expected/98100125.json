@@ -41,7 +41,7 @@
       "items": 55,
       "type": "Time Series",
       "description": {
-        "en": "GeographyGéographie",
+        "en": "Geography",
         "fr": "Géographie"
       }
     },
@@ -65,7 +65,7 @@
       "items": 4,
       "type": "Normal",
       "description": {
-        "en": "Census year (4)Année de recens",
+        "en": "Census year (4)",
         "fr": "Année de recens"
       }
     },
@@ -77,7 +77,7 @@
       "items": 13,
       "type": "Normal",
       "description": {
-        "en": "Marital statusÉtat matrimonia",
+        "en": "Marital status",
         "fr": "État matrimonia"
       }
     },
@@ -89,7 +89,7 @@
       "items": 16,
       "type": "Normal",
       "description": {
-        "en": "Age (16)Âge (16)",
+        "en": "Age (16)",
         "fr": "Âge (16)"
       }
     }

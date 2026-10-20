@@ -74,6 +74,7 @@
   "missing_values": [
     {
       "symbol": "-",
+      "code": 1,
       "label": {
         "en": "Default Missing Value",
         "fr": "Valeur manquante de défaut"

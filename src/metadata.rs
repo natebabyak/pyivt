@@ -44,6 +44,9 @@ static TS_RANGE_FR_RE: Lazy<Regex> = Lazy::new(|| {
     )
     .unwrap()
 });
+/// Prefer parenthetical year spans like `(1980-1992)` over bare pairs in prose.
+static TS_YEAR_SPAN_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"\((\d{4})\s*[-–—]\s*(\d{4})\)").unwrap());
 static FR_CHARS: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"[àâäéèêëïîôùûüçœæÀÂÄÉÈÊËÏÎÔÙÛÜÇ]").unwrap()
 });
@@ -88,6 +91,8 @@ const FACET_CATEGORIES: &[&str] = &[
     "Publicaciones de la OECD",
 ];
 const READONLY_FLAG_BIT: u8 = 0x10;
+/// OECD demo tables set read-only on byte 8 of the `81 01 20 00` master block.
+const READONLY_FLAG_BIT_ALT: u8 = 0x02;
 
 #[derive(Debug, Clone)]
 pub struct Dimension {
@@ -659,10 +664,57 @@ fn iso_ym(year: u32, month: u32) -> String {
     format!("{:04}-{:02}-01", year, month)
 }
 
+fn period_months_for_frequency(frequency: Option<&str>) -> i64 {
+    let Some(f) = frequency else {
+        return 1;
+    };
+    let lower = f.to_lowercase();
+    if lower.contains("semi") {
+        6
+    } else if lower.contains("quarter") || lower.contains("trimestr") {
+        3
+    } else if lower.contains("annual") || lower.contains("year") || lower.contains("annuel") {
+        12
+    } else {
+        1
+    }
+}
+
+/// Year span `(1980-1992)` → Jan of start year; end from count×period when available.
+fn year_span_bounds(
+    text: &str,
+    time_count: Option<i64>,
+    period_months: i64,
+) -> (Option<(u32, u32)>, Option<(u32, u32)>) {
+    let Some(c) = TS_YEAR_SPAN_RE.captures(text) else {
+        return (None, None);
+    };
+    let (Ok(y1), Ok(y2)) = (c[1].parse::<u32>(), c[2].parse::<u32>()) else {
+        return (None, None);
+    };
+    if y2 < y1 {
+        return (None, None);
+    }
+    let start = Some((y1, 1));
+    let end = if let Some(count) = time_count {
+        if count >= 1 {
+            Some(add_months(y1, 1, (count - 1) * period_months))
+        } else {
+            Some((y2, 1))
+        }
+    } else {
+        Some(add_months(y2, 1, period_months.saturating_sub(1)))
+    };
+    (start, end)
+}
+
 /// Parse a start/end year-month pair from notes or file text.
+/// When `synthesize_end` is false, only explicit two-ended ranges are returned.
 fn range_bounds_from_text(
     text: &str,
     time_count: Option<i64>,
+    period_months: i64,
+    synthesize_end: bool,
 ) -> (Option<(u32, u32)>, Option<(u32, u32)>) {
     let mut start = None;
     let mut end = None;
@@ -676,9 +728,11 @@ fn range_bounds_from_text(
                 {
                     end = Some((ey, emi));
                 }
-            } else if let Some(count) = time_count {
-                if count >= 1 {
-                    end = Some(add_months(year, mi, count - 1));
+            } else if synthesize_end {
+                if let Some(count) = time_count {
+                    if count >= 1 {
+                        end = Some(add_months(year, mi, (count - 1) * period_months));
+                    }
                 }
             }
         }
@@ -695,9 +749,11 @@ fn range_bounds_from_text(
                     {
                         end = Some((ey, emi));
                     }
-                } else if let Some(count) = time_count {
-                    if count >= 1 {
-                        end = Some(add_months(year, mi, count - 1));
+                } else if synthesize_end {
+                    if let Some(count) = time_count {
+                        if count >= 1 {
+                            end = Some(add_months(year, mi, (count - 1) * period_months));
+                        }
                     }
                 }
             }
@@ -736,13 +792,14 @@ fn parse_time_series(
         }
     }
     let time_count = dim.map(|d| d.count);
+    let period_months = period_months_for_frequency(frequency.as_deref());
+    let texts = [notes_en, notes_fr, Some(searchable_text)];
     let mut start = None;
     let mut end = None;
-    for text in [notes_en, notes_fr, Some(searchable_text)]
-        .into_iter()
-        .flatten()
-    {
-        let (s, e) = range_bounds_from_text(text, time_count);
+
+    // Prefer year spans (e.g. OECD `(1980-1992)`) over lone publication months.
+    for text in texts.into_iter().flatten() {
+        let (s, e) = year_span_bounds(text, time_count, period_months);
         if start.is_none() {
             start = s;
         }
@@ -753,6 +810,39 @@ fn parse_time_series(
             break;
         }
     }
+
+    // Explicit two-ended month ranges (e.g. Products January 1991 … March 1994).
+    if start.is_none() || end.is_none() {
+        for text in texts.into_iter().flatten() {
+            let (s, e) = range_bounds_from_text(text, time_count, period_months, false);
+            if start.is_none() {
+                start = s;
+            }
+            if end.is_none() {
+                end = e;
+            }
+            if start.is_some() && end.is_some() {
+                break;
+            }
+        }
+    }
+
+    // Last resort: single month-year + count scaled by frequency.
+    if start.is_none() || end.is_none() {
+        for text in texts.into_iter().flatten() {
+            let (s, e) = range_bounds_from_text(text, time_count, period_months, true);
+            if start.is_none() {
+                start = s;
+            }
+            if end.is_none() {
+                end = e;
+            }
+            if start.is_some() && end.is_some() {
+                break;
+            }
+        }
+    }
+
     Some(TimeSeriesInfo {
         frequency,
         start: start.map(|(y, m)| iso_ym(y, m)),
@@ -770,14 +860,24 @@ fn type_label_for(d: &DimDesc) -> String {
     "Normal".into()
 }
 
+fn flag_block_read_only(blk: &[u8]) -> bool {
+    if blk.len() < 5 || &blk[..4] != *b"\x81\x01\x20\x00" {
+        return false;
+    }
+    if (blk[4] & READONLY_FLAG_BIT) != 0 {
+        return true;
+    }
+    blk.len() > 8 && (blk[8] & READONLY_FLAG_BIT_ALT) != 0
+}
+
 fn read_only_flag(data: &[u8]) -> bool {
     for (off, length) in master_dir_entries(data, 32) {
         if length < 5 {
             continue;
         }
         let blk = &data[off as usize..off as usize + length as usize];
-        if blk.len() >= 5 && &blk[..4] == b"\x81\x01\x20\x00" {
-            return (blk[4] & READONLY_FLAG_BIT) != 0;
+        if flag_block_read_only(blk) {
+            return true;
         }
     }
     false
@@ -940,17 +1040,28 @@ fn split_en_fr_glued(code: &str, glued: &str) -> (String, Option<String>) {
     let cl = code.to_ascii_lowercase();
     let gl = glued.to_ascii_lowercase();
     if gl.starts_with(&cl) && glued.len() >= code.len() {
-        let fr = glued[code.len()..].to_string();
-        let en = if glued[..code.len()]
-            .chars()
-            .any(|c| c.is_ascii_lowercase())
-        {
-            // Prefer the title-case English spelling from the glued run.
-            glued[..code.len()].to_string()
-        } else {
-            code.to_string()
-        };
-        return (en, if fr.is_empty() { None } else { Some(fr) });
+        let rest = &glued[code.len()..];
+        // FR codes are typically uppercase tokens (RÉGION, TEMPS). Reject sentence
+        // tails like " being reportedUnités" from Sample.ivt.
+        let rest_ok = !rest.is_empty()
+            && !rest.starts_with(' ')
+            && rest
+                .chars()
+                .next()
+                .map(|c| !c.is_ascii_lowercase())
+                .unwrap_or(false);
+        if rest_ok {
+            let en = if glued[..code.len()]
+                .chars()
+                .any(|c| c.is_ascii_lowercase())
+            {
+                // Prefer the title-case English spelling from the glued run.
+                glued[..code.len()].to_string()
+            } else {
+                code.to_string()
+            };
+            return (en, Some(rest.to_string()));
+        }
     }
     // e.g. "Time PeriodTEMPS" — English phrase then an uppercase French token.
     let bytes = glued.as_bytes();
@@ -966,42 +1077,170 @@ fn split_en_fr_glued(code: &str, glued: &str) -> (String, Option<String>) {
     (glued.to_string(), None)
 }
 
-/// Demo-table title block: CODE 01 04 32 EN+FR 02 05 32 …
-fn parse_dim_title_demo(block: &[u8]) -> (Option<String>, Option<String>, Option<String>) {
-    let marker = b"\x01\x042";
-    let Some(rel) = block.windows(marker.len()).position(|w| w == marker) else {
-        return (None, None, None);
+/// Bare `0x32` is also ASCII `'2'`; only treat it as a title separator when it
+/// sits between a letter (end of CODE/DESC) and a following letter (next label).
+fn is_bare_dim_title_sep(block: &[u8], at: usize) -> bool {
+    if at >= block.len() || block[at] != 0x32 {
+        return false;
+    }
+    if at == 0 || !(block[at - 1] as char).is_ascii_alphabetic() {
+        return false;
+    }
+    let next = at + 1;
+    if next >= block.len() {
+        return true;
+    }
+    let n = block[next];
+    (65..=90).contains(&n) || (97..=122).contains(&n)
+}
+
+/// Length of a language/title marker ending at `0x32`: bare, `lang 32`, or `lang len 32`.
+fn dim_title_marker_len(block: &[u8], at: usize) -> Option<usize> {
+    if at >= block.len() {
+        return None;
+    }
+    if at + 1 < block.len() && (1..=9).contains(&block[at]) && block[at + 1] == 0x32 {
+        return Some(2);
+    }
+    if at + 2 < block.len() && (1..=9).contains(&block[at]) && block[at + 2] == 0x32 {
+        return Some(3);
+    }
+    if is_bare_dim_title_sep(block, at) {
+        return Some(1);
+    }
+    None
+}
+
+fn dim_title_next_marker(block: &[u8], from: usize) -> Option<usize> {
+    let mut i = from;
+    while i < block.len() {
+        if let Some(n) = dim_title_marker_len(block, i) {
+            // Lang-prefixed markers use control bytes; bare 0x32 is printable.
+            if n >= 2 || is_bare_dim_title_sep(block, i) {
+                return Some(i);
+            }
+        }
+        if block[i] < 32 && dim_title_marker_len(block, i).is_none() {
+            return None;
+        }
+        i += 1;
+    }
+    None
+}
+
+fn trim_desc_before_next_code(desc: &str) -> String {
+    // OECD glues DESC+NEXT_CODE (`RegionRÉGION`); keep title-case / mixed DESC only.
+    let bytes = desc.as_bytes();
+    for i in 1..desc.len() {
+        if bytes[i - 1].is_ascii_lowercase() && bytes[i].is_ascii_uppercase() {
+            return desc[..i].to_string();
+        }
+    }
+    desc.to_string()
+}
+
+/// Demo / OECD title block: CODE [lang [len]] 32 DESC [CODE_FR…] [lang [len]] 32 DESC_FR …
+/// Returns (name_en, name_fr, description_en, description_fr).
+fn parse_dim_title_demo(
+    block: &[u8],
+) -> (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+) {
+    // Locate the first CODE immediately before a title marker.
+    // Prefer lang[+len]+0x32 (Products/OECD) over bare 0x32 (OECD TIME PERIOD).
+    let mut code_end = None;
+    let mut marker_len = 0usize;
+    let code_is_dim_code = |code: &str| {
+        code.chars().any(|c| c.is_ascii_uppercase())
+            && !code.chars().any(|c| c.is_ascii_lowercase())
     };
-    // Walk back over the ASCII code name.
-    let mut start = rel;
-    while start > 0 && (32..=126).contains(&block[start - 1]) {
-        start -= 1;
-    }
-    let code = latin1(&block[start..rel]).trim().to_string();
-    if code.len() < 2 {
-        return (None, None, None);
-    }
-    let p = rel + marker.len();
-    let mut end = p;
-    while end < block.len() {
-        if block[end] < 32 {
+    for min_marker in [2usize, 1] {
+        for i in 0..block.len() {
+            let Some(n) = dim_title_marker_len(block, i) else {
+                continue;
+            };
+            if n < min_marker {
+                continue;
+            }
+            let mut start = i;
+            while start > 0 && (32..=126).contains(&block[start - 1]) {
+                start -= 1;
+            }
+            let code = latin1(&block[start..i]).trim().to_string();
+            if code.len() < 2
+                || !code
+                    .chars()
+                    .next()
+                    .map(|c| c.is_ascii_alphabetic())
+                    .unwrap_or(false)
+                || !code.chars().any(|c| c.is_ascii_uppercase())
+            {
+                continue;
+            }
+            // lang+len+0x32 with lang≠1 is used by some demos (People UNITS) for
+            // ALL-CAPS codes, but Sample "Units\x02\x04\x32Units being reported…"
+            // is a sentence description — skip mixed-case codes there.
+            if n == 3 && block[i] != 1 && !code_is_dim_code(&code) {
+                continue;
+            }
+            code_end = Some((start, i, code));
+            marker_len = n;
             break;
         }
-        // Next language marker: 0x02/0x03 … 0x32
-        if end + 2 < block.len()
-            && (block[end] == 0x02 || block[end] == 0x03)
-            && block[end + 2] == 0x32
-        {
+        if code_end.is_some() {
             break;
         }
-        end += 1;
     }
-    // Trim if we over-consumed into a 0x02/0x03 marker without 0x32 yet.
-    while end > p && block[end - 1] < 32 {
-        end -= 1;
-    }
+    let Some((_start, rel, code)) = code_end else {
+        return (None, None, None, None);
+    };
+    let p = rel + marker_len;
+    let end = dim_title_next_marker(block, p).unwrap_or_else(|| {
+        let mut e = p;
+        while e < block.len() && block[e] >= 32 {
+            e += 1;
+        }
+        e
+    });
     let glued = latin1(&block[p..end]);
-    let (desc_en, desc_fr) = split_en_fr_glued(&code, &glued);
+    let (desc_en_raw, code_fr) = split_en_fr_glued(&code, &glued);
+    let desc_en = if desc_en_raw.is_empty() {
+        code.clone()
+    } else {
+        // When split kept a glued FR code via case transition, desc is already clean;
+        // when it used code-prefix split, desc_en is the EN portion.
+        desc_en_raw
+    };
+
+    let mut description_fr = code_fr.clone();
+    let mut name_fr = code_fr.clone();
+    // Second language segment: DESC_FR (and possibly further glued codes).
+    if let Some(m2) = dim_title_next_marker(block, p) {
+        if let Some(n2) = dim_title_marker_len(block, m2) {
+            let p2 = m2 + n2;
+            let end2 = dim_title_next_marker(block, p2).unwrap_or_else(|| {
+                let mut e = p2;
+                while e < block.len() && block[e] >= 32 {
+                    e += 1;
+                }
+                e
+            });
+            if p2 < end2 {
+                let raw_fr = latin1(&block[p2..end2]);
+                let fr_desc = trim_desc_before_next_code(&raw_fr);
+                // Prefer second-segment text only when it looks like a label
+                // (has lowercase). Products often repeats an ALL-CAPS FR code here
+                // and may glue Spanish without a clean separator.
+                if !fr_desc.is_empty() && fr_desc.chars().any(|c| c.is_lowercase()) {
+                    description_fr = Some(fr_desc);
+                }
+            }
+        }
+    }
+
     // COOKIE TYPE → Name COOKIE; keep TIME PERIOD / REGION as-is.
     let short = if code.to_ascii_uppercase().ends_with(" TYPE") {
         code.split_whitespace()
@@ -1011,17 +1250,27 @@ fn parse_dim_title_demo(block: &[u8]) -> (Option<String>, Option<String>, Option
     } else {
         code.clone()
     };
-    (
-        Some(short),
-        Some(if desc_en.is_empty() { code } else { desc_en }),
-        desc_fr,
-    )
+
+    // Products REGION: glued REGIONRÉGION → desc_en=REGION, name_fr=RÉGION, second seg RÉGION.
+    // OECD REGION: glued RegionRÉGION → desc_en=Region, name_fr=RÉGION, second seg Région.
+    if name_fr.is_none() {
+        name_fr = description_fr.clone();
+    }
+
+    (Some(short), name_fr, Some(desc_en), description_fr)
 }
 
-/// Returns (short_code, description_en, description_fr).
-fn parse_dim_title(block: &[u8]) -> (Option<String>, Option<String>, Option<String>) {
+/// Returns (name_en, name_fr, description_en, description_fr).
+fn parse_dim_title(
+    block: &[u8],
+) -> (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+) {
     if block.len() < 16 || block[..2] != *b"\x81\x02" {
-        return (None, None, None);
+        return (None, None, None, None);
     }
     let demo = parse_dim_title_demo(block);
     if demo.0.is_some() {
@@ -1088,7 +1337,6 @@ fn parse_dim_title(block: &[u8]) -> (Option<String>, Option<String>, Option<Stri
         let description = if glued.is_empty() {
             short.clone()
         } else if glued.starts_with(&short) && glued.len() > short.len() {
-            // Prefer the longer English label when code is a prefix (COOKIE / COOKIE TYPE).
             glued.clone()
         } else {
             glued.clone()
@@ -1110,31 +1358,36 @@ fn parse_dim_title(block: &[u8]) -> (Option<String>, Option<String>, Option<Stri
         if description_fr.is_none() && glued.starts_with(&short) && glued.len() > short.len() {
             description_fr = Some(glued[short.len()..].to_string());
         }
-        return (Some(short), Some(description), description_fr);
+        let name_fr = description_fr.clone();
+        return (Some(short), name_fr, Some(description), description_fr);
     }
-    (None, None, None)
+    (None, None, None, None)
 }
 
 fn dim_title(
     data: &[u8],
     slot_index: usize,
-) -> (Option<String>, Option<String>, Option<String>) {
+) -> (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+) {
     let slots = dim_slots(data, 32);
     if slot_index >= slots.len() {
-        return (None, None, None);
+        return (None, None, None, None);
     }
     let slot = slots[slot_index];
     for (off, length) in read_block_dir(data, slot.dir_ptr, slot.n_entries) {
         if length < 16 {
             continue;
         }
-        let (short, description, description_fr) =
-            parse_dim_title(&data[off as usize..off as usize + length as usize]);
-        if short.is_some() || description.is_some() {
-            return (short, description, description_fr);
+        let parsed = parse_dim_title(&data[off as usize..off as usize + length as usize]);
+        if parsed.0.is_some() || parsed.2.is_some() {
+            return parsed;
         }
     }
-    (None, None, None)
+    (None, None, None, None)
 }
 
 fn dim_dir_labels(
@@ -1480,14 +1733,14 @@ pub fn build_dimensions(data: &[u8], desc: &Descriptor) -> Vec<Dimension> {
         } else {
             (None, None)
         };
-        let (short, description, description_fr) = dim_title(data, i);
+        let (short, title_name_fr, description, description_fr) = dim_title(data, i);
         // Prefer the dim-title short code (COOKIE) over a long descriptor name
         // (COOKIE TYPE) when available; keep descriptor name otherwise.
         let name = short
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| d.name.clone());
         let description = description.or_else(|| Some(name.clone()));
-        let mut name_fr = description_fr.clone();
+        let mut name_fr = title_name_fr.or_else(|| description_fr.clone());
         if is_geo && name.eq_ignore_ascii_case("Geography") && name_fr.is_none() {
             name_fr = Some("Géographie".into());
         }
@@ -2157,8 +2410,8 @@ fn parse_keywords_bufs(block_bufs: &[&[u8]], product_id: Option<&str>) -> Locali
 
 fn read_only_flag_bufs(block_bufs: &[&[u8]]) -> bool {
     for blk in block_bufs {
-        if blk.len() >= 5 && &blk[..4] == b"\x81\x01\x20\x00" {
-            return (blk[4] & READONLY_FLAG_BIT) != 0;
+        if flag_block_read_only(blk) {
+            return true;
         }
     }
     false
@@ -2329,12 +2582,12 @@ fn build_dimensions_from_source(
         } else {
             (None, None)
         };
-        let (short, description, description_fr) = dim_title_src(source, i)?;
+        let (short, title_name_fr, description, description_fr) = dim_title_src(source, i)?;
         let name = short
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| d.name.clone());
         let description = description.or_else(|| Some(name.clone()));
-        let mut name_fr = description_fr.clone();
+        let mut name_fr = title_name_fr.or_else(|| description_fr.clone());
         if is_geo && name.eq_ignore_ascii_case("Geography") && name_fr.is_none() {
             name_fr = Some("Géographie".into());
         }
@@ -2420,12 +2673,20 @@ fn dim_slot_from_source(source: &IvtSource, slot_index: usize) -> Result<Option<
 fn dim_title_src(
     source: &IvtSource,
     slot_index: usize,
-) -> Result<(Option<String>, Option<String>, Option<String>), IvtError> {
+) -> Result<
+    (
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    ),
+    IvtError,
+> {
     if let Some(data) = source.as_memory_slice() {
         return Ok(dim_title(data, slot_index));
     }
     let Some(slot) = dim_slot_from_source(source, slot_index)? else {
-        return Ok((None, None, None));
+        return Ok((None, None, None, None));
     };
     let file_len = source.len()? as usize;
     let dir_bytes = source.read_range(
@@ -2445,13 +2706,13 @@ fn dim_title_src(
             continue;
         }
         if let Some(block) = find_loaded(&loaded, off as u64, length as usize) {
-            let (short, description, description_fr) = parse_dim_title(block);
-            if short.is_some() || description.is_some() {
-                return Ok((short, description, description_fr));
+            let parsed = parse_dim_title(block);
+            if parsed.0.is_some() || parsed.2.is_some() {
+                return Ok(parsed);
             }
         }
     }
-    Ok((None, None, None))
+    Ok((None, None, None, None))
 }
 
 fn dim_dir_labels_src(

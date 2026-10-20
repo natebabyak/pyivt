@@ -72,13 +72,13 @@
     {
       "name": {
         "en": "Date",
-        "fr": null
+        "fr": "TEMPS"
       },
       "items": 39,
       "type": "Time Series",
       "description": {
-        "en": "Date",
-        "fr": null
+        "en": "Monthly reporting period",
+        "fr": "TEMPS"
       }
     }
   ],

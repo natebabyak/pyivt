@@ -36,13 +36,13 @@
     {
       "name": {
         "en": "UNITS",
-        "fr": null
+        "fr": "UNITÉS"
       },
       "items": 2,
       "type": "Normal",
       "description": {
         "en": "UNITS",
-        "fr": null
+        "fr": "UNITÉS"
       }
     },
     {
@@ -71,14 +71,14 @@
     },
     {
       "name": {
-        "en": "Time Period",
-        "fr": null
+        "en": "TIME PERIOD",
+        "fr": "TEMPS"
       },
       "items": 39,
       "type": "Time Series",
       "description": {
         "en": "Time Period",
-        "fr": null
+        "fr": "TEMPS"
       }
     }
   ],
