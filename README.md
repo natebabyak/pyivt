@@ -2,7 +2,7 @@
 
 `pyivt` is a library for Statistics Canada Beyond 20/20 `.ivt` files, written in Rust. It is designed to be minimal and easily adaptable for existing codebases. Key features are:
 
-- **Fast**: Orders of magnitude faster than GUI automation for metadata (see local `benchmarks/` if you want timings)
+- **Fast**: Orders of magnitude faster than GUI automation for metadata
 - **Python**: Easily integrates into modern data workflows with a minimal API
 - **Typed**: Produces fully type-safe and predictable metadata
 - **Interoperable**: Exports `.ivt` file data to Apache Arrow
@@ -11,18 +11,6 @@
 
 ```bash
 uv add pyivt
-# or: uv pip install pyivt / pip install pyivt
-```
-
-Requires Python 3.10+ and a platform wheel (abi3) or a local Rust toolchain for source builds.
-
-### Development
-
-```bash
-uv sync --extra dev
-uv run python tests/scripts/download.py   # StatCan fixtures for pytest
-uv run pytest
-# or: uv run maturin develop --release
 ```
 
 ## Usage
@@ -41,10 +29,6 @@ pq.write_table(ivt.to_arrow(), "data.parquet")
 ```
 
 ### Opening IVT Files
-
-`pyivt.open` accepts a path, bytes-like buffer, or binary file object. Summary metadata and layout are parsed immediately; cell values decode only when you call `to_arrow()`.
-
-**I/O behavior:** Opening from a **path** uses selective range reads for large files (over 2 MiB) so summary metadata does not pull the entire IVT across a network share. Opening from **bytes** or a file object still uses the buffer you already loaded. Accessing `dimensions`, `geographies`, `footnotes`, or `missing_values` may perform additional file reads. `to_arrow()` reads the full file when opened from a path. See [docs/ivt-ranges.md](docs/ivt-ranges.md).
 
 #### From Path
 
@@ -72,20 +56,20 @@ ivt = pyivt.open(res.content)
 
 `ivt.metadata` is a typed `IvtMetadata` object. Summary fields are eager; heavy fields load on first access.
 
-| Beyond 20/20 Summary | `pyivt` Metadata             |
-| -------------------- | ---------------------------- |
-| Title                | `title.en`, `title.fr`       |
-| Author               | `author.en`, `author.fr`     |
-| Category             | `category.en`, `category.fr` |
-| Keywords             | `keywords.en`, `keywords.fr` |
-| Notes                | `notes.en`, `notes.fr`       |
-| Number of Datapoints | `number_of_datapoints`       |
+| Beyond 20/20 Summary | `pyivt` Metadata                                         |
+| -------------------- | -------------------------------------------------------- |
+| Title                | `title.en`, `title.fr`                                   |
+| Author               | `author.en`, `author.fr`                                 |
+| Category             | `category.en`, `category.fr`                             |
+| Keywords             | `keywords.en`, `keywords.fr`                             |
+| Notes                | `notes.en`, `notes.fr`                                   |
+| Number of Datapoints | `number_of_datapoints`                                   |
 | Time Series          | `time_series` (`.frequency`, `.start`, `.end`) or `None` |
-| Read-Only            | `read_only`                  |
-| Dimensions           | `dimensions`                 |
-| Geographies          | `geographies`                |
-| Footnotes            | `footnotes`                  |
-| Missing Values       | `missing_values`             |
+| Read-Only            | `read_only`                                              |
+| Dimensions           | `dimensions`                                             |
+| Geographies          | `geographies`                                            |
+| Footnotes            | `footnotes`                                              |
+| Missing Values       | `missing_values`                                         |
 
 `geographies` is a `Geographies` object (`member_id`, `geo_label`, `geo_uid`, …), not a dict.
 
@@ -100,12 +84,12 @@ print(ivt.metadata.product_id, ivt.metadata.title.en)
 
 `Ivt.to_arrow()` returns an Apache Arrow table. Keyword arguments:
 
-| Argument | Default | Meaning |
-| -------- | ------- | ------- |
-| `complete` | `True` | Expand the published grid; set `False` for sparse decoded cells only |
-| `max_cells` | `100_000_000` | Raise if the complete grid would exceed this many cells |
-| `labels` | `True` | Include dimension label columns |
-| `language` | `"en"` | Label language (`"en"` or `"fr"`) |
+| Argument    | Default       | Meaning                                                              |
+| ----------- | ------------- | -------------------------------------------------------------------- |
+| `complete`  | `True`        | Expand the published grid; set `False` for sparse decoded cells only |
+| `max_cells` | `100_000_000` | Raise if the complete grid would exceed this many cells              |
+| `labels`    | `True`        | Include dimension label columns                                      |
+| `language`  | `"en"`        | Label language (`"en"` or `"fr"`)                                    |
 
 ```python
 import polars as pl
