@@ -1,6 +1,6 @@
 [project]
 name = "pyivt"
-version = "0.0.1"
+version = "0.0.2"
 description = "Read Statistics Canada Beyond 20/20 .ivt tables: metadata and Apache Arrow export"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -8,12 +8,12 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Nate Babyak" }]
 keywords = [
-  "ivt",
-  "beyond-2020",
-  "statistics-canada",
-  "statcan",
   "arrow",
+  "beyond-2020",
+  "ivt",
   "pyarrow",
+  "statcan",
+  "statistics-canada",
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -33,10 +33,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/natebabyak/pyivt"
-Repository = "https://github.com/natebabyak/pyivt"
-Issues = "https://github.com/natebabyak/pyivt/issues"
 Changelog = "https://github.com/natebabyak/pyivt/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/natebabyak/pyivt"
+Issues = "https://github.com/natebabyak/pyivt/issues"
+Repository = "https://github.com/natebabyak/pyivt"
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "ruff>=0.6", "maturin>=1.5,<2"]
@@ -46,10 +46,10 @@ requires = ["maturin>=1.5,<2"]
 build-backend = "maturin"
 
 [tool.maturin]
+features = ["pyo3/extension-module"]
 module-name = "pyivt._native"
 python-source = "python"
-features = ["pyo3/extension-module"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
 pythonpath = ["python"]
+testpaths = ["tests"]
