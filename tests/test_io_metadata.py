@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-from conftest import STATCAN_DIR
-
 import pyivt
+import pytest
+from conftest import STATCAN_DIR
 
 
 def _largest_statcan() -> Path:

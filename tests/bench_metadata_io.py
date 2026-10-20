@@ -15,9 +15,8 @@ from pathlib import Path
 _TESTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(_TESTS))
 
-from conftest import DEMO_MANIFEST, STATCAN_DIR, STATCAN_MANIFEST, resolve_demo_ivt  # noqa: E402
-
-import pyivt  # noqa: E402
+import pyivt
+from conftest import DEMO_MANIFEST, STATCAN_DIR, STATCAN_MANIFEST, resolve_demo_ivt
 
 
 def _paths() -> list[Path]:

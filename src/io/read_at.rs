@@ -120,10 +120,10 @@ impl ReadAt for FileReadAt {
 
     fn read_exact_at(&self, offset: u64, buffer: &mut [u8]) -> Result<(), IvtError> {
         check_bounds(offset, buffer.len(), self.len)?;
-        let file = self.file.lock().unwrap();
         #[cfg(windows)]
         {
             use std::os::windows::fs::FileExt;
+            let file = self.file.lock().unwrap();
             let mut read = 0usize;
             while read < buffer.len() {
                 let n = file
@@ -142,6 +142,7 @@ impl ReadAt for FileReadAt {
         }
         #[cfg(not(windows))]
         {
+            let mut file = self.file.lock().unwrap();
             file.seek(SeekFrom::Start(offset))?;
             let mut read = 0usize;
             while read < buffer.len() {

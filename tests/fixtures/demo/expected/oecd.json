@@ -28,45 +28,45 @@
   "number_of_datapoints": 14820,
   "time_series": {
     "frequency": "Semi-annual",
-    "start": "1996-06-01",
-    "end": "1998-07-01"
+    "start": "1980-01-01",
+    "end": "1992-07-01"
   },
-  "read_only": false,
+  "read_only": true,
   "dimensions": [
     {
       "name": {
-        "en": "Region",
-        "fr": null
+        "en": "REGION",
+        "fr": "RÉGION"
       },
       "items": 30,
       "type": "Geographic",
       "description": {
         "en": "Region",
-        "fr": null
+        "fr": "Région"
       }
     },
     {
       "name": {
-        "en": "Item",
-        "fr": null
+        "en": "ITEM",
+        "fr": "POINTE"
       },
       "items": 19,
       "type": "Normal",
       "description": {
         "en": "Item",
-        "fr": null
+        "fr": "Pointe"
       }
     },
     {
       "name": {
-        "en": "Time Period",
-        "fr": null
+        "en": "TIME PERIOD",
+        "fr": "TEMPS"
       },
       "items": 26,
       "type": "Time Series",
       "description": {
         "en": "Time Period",
-        "fr": null
+        "fr": "Temps"
       }
     }
   ],
@@ -74,7 +74,6 @@
   "missing_values": [
     {
       "symbol": "-",
-      "code": 1,
       "label": {
         "en": "Default Missing Value",
         "fr": "Valeur manquante de défaut"

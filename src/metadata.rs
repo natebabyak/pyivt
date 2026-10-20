@@ -13,7 +13,7 @@ use crate::descriptor::{
 use crate::error::IvtError;
 use crate::header::{
     dim_slots, read_block_dir, read_block_dir_bytes, read_header, read_header_ex, HeaderLayout,
-    HDR_DESCRIPTOR_PTR, HDR_DIM_SLOT0, HDR_DIR_PTR, HDR_MASTER_PTR, HDR_STATUS_LEGEND,
+    HDR_DESCRIPTOR_PTR, HDR_DIM_SLOT0, HDR_MASTER_PTR, HDR_STATUS_LEGEND,
     DIM_SLOT_STRIDE,
 };
 use crate::io::{ByteRange, IvtSource, LoadedRange, DEFAULT_MERGE_GAP};
