@@ -26,56 +26,42 @@
     }
   },
   "number_of_datapoints": 5250,
-  "time_series": null,
+  "frequency": null,
+  "start_date": null,
+  "end_date": null,
   "read_only": true,
   "dimensions": [
     {
-      "name": {
-        "en": "Geography",
-        "fr": "Géographie"
-      },
+      "name_en": "Geography",
+      "name_fr": "Géographie",
       "items": 14,
       "type": "Normal",
-      "description": {
-        "en": "Geography",
-        "fr": "Géographie"
-      }
+      "description_en": "Geography",
+      "description_fr": "Géographie"
     },
     {
-      "name": {
-        "en": "Gender (3a)",
-        "fr": "Genre (3a)"
-      },
+      "name_en": "Gender (3a)",
+      "name_fr": "Genre (3a)",
       "items": 3,
       "type": "Normal",
-      "description": {
-        "en": "Gender (3a)Genre (3a)",
-        "fr": "Genre (3a)"
-      }
+      "description_en": "Gender (3a)Genre (3a)",
+      "description_fr": "Genre (3a)"
     },
     {
-      "name": {
-        "en": "Census year (25",
-        "fr": "Année de recens"
-      },
+      "name_en": "Census year (25",
+      "name_fr": "Année de recens",
       "items": 25,
       "type": "Normal",
-      "description": {
-        "en": "Census year (25",
-        "fr": "Année de recens"
-      }
+      "description_en": "Census year (25",
+      "description_fr": "Année de recens"
     },
     {
-      "name": {
-        "en": "Broad age group",
-        "fr": "Grands groupes"
-      },
+      "name_en": "Broad age group",
+      "name_fr": "Grands groupes",
       "items": 5,
       "type": "Normal",
-      "description": {
-        "en": "Broad age group",
-        "fr": "Grands groupes"
-      }
+      "description_en": "Broad age group",
+      "description_fr": "Grands groupes"
     }
   ],
   "footnotes": [

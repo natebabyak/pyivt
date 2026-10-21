@@ -3,12 +3,11 @@ mod types;
 use pyo3::prelude::*;
 use types::{
     open_ivt, Dimension, Footnote, Geographies, Ivt, IvtMetadata, LocalizedText, MissingValue,
-    PyLayout, TimeSeries,
+    PyLayout,
 };
 
 pub fn init_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<LocalizedText>()?;
-    m.add_class::<TimeSeries>()?;
     m.add_class::<Dimension>()?;
     m.add_class::<Footnote>()?;
     m.add_class::<MissingValue>()?;

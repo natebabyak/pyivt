@@ -26,60 +26,42 @@
     }
   },
   "number_of_datapoints": 4680,
-  "time_series": {
-    "frequency": "Monthly",
-    "start": "1996-12-01",
-    "end": "2000-02-01"
-  },
+  "frequency": "Monthly",
+  "start_date": "1996-12-01",
+  "end_date": "2000-02-01",
   "read_only": false,
   "dimensions": [
     {
-      "name": {
-        "en": "Units",
-        "fr": null
-      },
+      "name_en": "Units",
+      "name_fr": null,
       "items": 2,
       "type": "Normal",
-      "description": {
-        "en": "Units",
-        "fr": null
-      }
+      "description_en": "Units",
+      "description_fr": null
     },
     {
-      "name": {
-        "en": "Project",
-        "fr": "Profession"
-      },
+      "name_en": "Project",
+      "name_fr": "Profession",
       "items": 12,
       "type": "Normal",
-      "description": {
-        "en": "IAAH Project",
-        "fr": "Profession"
-      }
+      "description_en": "IAAH Project",
+      "description_fr": "Profession"
     },
     {
-      "name": {
-        "en": "Region",
-        "fr": null
-      },
+      "name_en": "Region",
+      "name_fr": null,
       "items": 5,
       "type": "Geographic",
-      "description": {
-        "en": "Region",
-        "fr": null
-      }
+      "description_en": "Region",
+      "description_fr": null
     },
     {
-      "name": {
-        "en": "Date",
-        "fr": "TEMPS"
-      },
+      "name_en": "Date",
+      "name_fr": "TEMPS",
       "items": 39,
       "type": "Time Series",
-      "description": {
-        "en": "Monthly reporting period",
-        "fr": "TEMPS"
-      }
+      "description_en": "Monthly reporting period",
+      "description_fr": "TEMPS"
     }
   ],
   "footnotes": [],

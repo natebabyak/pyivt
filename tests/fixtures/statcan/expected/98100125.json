@@ -26,72 +26,50 @@
     }
   },
   "number_of_datapoints": 137280,
-  "time_series": {
-    "frequency": null,
-    "start": null,
-    "end": null
-  },
+  "frequency": null,
+  "start_date": null,
+  "end_date": null,
   "read_only": true,
   "dimensions": [
     {
-      "name": {
-        "en": "Geography",
-        "fr": "Géographie"
-      },
+      "name_en": "Geography",
+      "name_fr": "Géographie",
       "items": 55,
       "type": "Time Series",
-      "description": {
-        "en": "Geography",
-        "fr": "Géographie"
-      }
+      "description_en": "Geography",
+      "description_fr": "Géographie"
     },
     {
-      "name": {
-        "en": "Gender (3a)",
-        "fr": "Genre (3a)"
-      },
+      "name_en": "Gender (3a)",
+      "name_fr": "Genre (3a)",
       "items": 3,
       "type": "Normal",
-      "description": {
-        "en": "Gender (3a)Genre (3a)",
-        "fr": "Genre (3a)"
-      }
+      "description_en": "Gender (3a)Genre (3a)",
+      "description_fr": "Genre (3a)"
     },
     {
-      "name": {
-        "en": "Census year (4)",
-        "fr": "Année de recens"
-      },
+      "name_en": "Census year (4)",
+      "name_fr": "Année de recens",
       "items": 4,
       "type": "Normal",
-      "description": {
-        "en": "Census year (4)",
-        "fr": "Année de recens"
-      }
+      "description_en": "Census year (4)",
+      "description_fr": "Année de recens"
     },
     {
-      "name": {
-        "en": "Marital status",
-        "fr": "État matrimonia"
-      },
+      "name_en": "Marital status",
+      "name_fr": "État matrimonia",
       "items": 13,
       "type": "Normal",
-      "description": {
-        "en": "Marital status",
-        "fr": "État matrimonia"
-      }
+      "description_en": "Marital status",
+      "description_fr": "État matrimonia"
     },
     {
-      "name": {
-        "en": "Age (16)",
-        "fr": "Âge (16)"
-      },
+      "name_en": "Age (16)",
+      "name_fr": "Âge (16)",
       "items": 16,
       "type": "Normal",
-      "description": {
-        "en": "Age (16)",
-        "fr": "Âge (16)"
-      }
+      "description_en": "Age (16)",
+      "description_fr": "Âge (16)"
     }
   ],
   "footnotes": [

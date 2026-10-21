@@ -1,0 +1,36 @@
+{
+  "title": {
+    "en": "IAAH - North American Public Health Campaigns",
+    "fr": "Campagnes de santé publique de l'Amérique du Nord"
+  },
+  "author": {
+    "en": "Beyond 20/20 Inc.",
+    "fr": "Beyond 20/20 Inc"
+  },
+  "category": {
+    "en": "Beyond 20/20 Demonstration Tables and Extract",
+    "fr": "Tables et Extrait de démonstration de Beyond 20/20"
+  },
+  "keywords": {
+    "en": null,
+    "fr": null
+  },
+  "notes": {
+    "en": {
+      "first": null,
+      "last": null
+    },
+    "fr": {
+      "first": null,
+      "last": null
+    }
+  },
+  "number_of_datapoints": 16848,
+  "frequency": "Monthly",
+  "start_date": null,
+  "end_date": null,
+  "read_only": true,
+  "dimensions": [],
+  "footnotes": [],
+  "missing_values": []
+}

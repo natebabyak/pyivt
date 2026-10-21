@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from pyivt import IvtMetadata, LocalizedText, TimeSeries
+from pyivt import IvtMetadata, LocalizedText
 
 _TESTS = Path(__file__).resolve().parent
 STATCAN_EXPECTED_DIR = _TESTS / "fixtures" / "statcan" / "expected"
@@ -44,23 +44,15 @@ def _notes_endpoints(text: LocalizedText) -> dict[str, dict[str, str | None]]:
     }
 
 
-def _dim_name(d) -> dict[str, str | None]:
-    return {"en": d.name, "fr": d.name_fr}
+def _dim_description_en(d) -> str | None:
+    return d.description_en
 
 
-def _dim_description(d) -> dict[str, str | None]:
-    # Prefer explicit bilingual description when present; else EN description + FR name.
-    en = d.description
-    fr = getattr(d, "description_fr", None)
+def _dim_description_fr(d) -> str | None:
+    fr = d.description_fr
     if fr is None:
         fr = d.name_fr
-    return {"en": en, "fr": fr}
-
-
-def _time_series(ts: TimeSeries | None) -> dict[str, str | None] | None:
-    if ts is None:
-        return None
-    return {"frequency": ts.frequency, "start": ts.start, "end": ts.end}
+    return fr
 
 
 def snapshot_metadata(meta: IvtMetadata) -> dict[str, Any]:
@@ -72,14 +64,18 @@ def snapshot_metadata(meta: IvtMetadata) -> dict[str, Any]:
         "keywords": _localized(meta.keywords),
         "notes": _notes_endpoints(meta.notes),
         "number_of_datapoints": meta.number_of_datapoints,
-        "time_series": _time_series(meta.time_series),
+        "frequency": meta.frequency,
+        "start_date": meta.start_date,
+        "end_date": meta.end_date,
         "read_only": meta.read_only,
         "dimensions": [
             {
-                "name": _dim_name(d),
+                "name_en": d.name_en,
+                "name_fr": d.name_fr,
                 "items": d.count,
                 "type": d.type_label,
-                "description": _dim_description(d),
+                "description_en": _dim_description_en(d),
+                "description_fr": _dim_description_fr(d),
             }
             for d in meta.dimensions
         ],

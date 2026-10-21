@@ -5,6 +5,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Flattened time series onto `IvtMetadata`: `frequency`, `start_date`, `end_date` replace nested `time_series` / `TimeSeries`
+- Dimension bilingual fields are EN/FR-symmetric: `name_en`, `description_en`, `members_en` (with existing `*_fr`); removed public `is_geography`
+
+### Added
+
+- `tests/scripts/beyond_summary_expected.py` — optional pywinauto + BeautifulSoup helper that scrapes Beyond File Summary HTML into the golden metadata shape (`uv sync --group beyond`)
+- Local dev/test deps managed with uv (`dependency-groups`, `uv.lock`; `uv sync` installs the default `dev` group)
+
+### Migration
+
+- Replace `meta.time_series.frequency` / `.start` / `.end` with `meta.frequency` / `meta.start_date` / `meta.end_date`
+- Replace `dim.name` / `dim.description` / `dim.members` with `dim.name_en` / `dim.description_en` / `dim.members_en`
+- Drop use of `dim.is_geography` (use `dim.type_label == "Geographic"` or `layout.geo_dim` instead)
+- `from pyivt import TimeSeries` is removed
+
 ## [0.0.2] - 2026-10-20
 
 ### Changed

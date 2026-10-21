@@ -14,7 +14,7 @@ use crate::header::read_header;
 use crate::metadata::{
     self, Dimension as CoreDimension, Footnote as CoreFootnote,
     Geographies as CoreGeographies, IvtMetadata as CoreMeta, LocalizedText as CoreLocalized,
-    MissingValue as CoreMissing, TimeSeriesInfo as CoreTimeSeries,
+    MissingValue as CoreMissing,
 };
 use crate::tidy::{tidy_arrays, Column};
 
@@ -53,52 +53,11 @@ impl LocalizedText {
     }
 }
 
-#[pyclass(name = "TimeSeries", module = "pyivt")]
-#[derive(Clone)]
-pub struct TimeSeries {
-    #[pyo3(get)]
-    pub frequency: Option<String>,
-    #[pyo3(get)]
-    pub start: Option<String>,
-    #[pyo3(get)]
-    pub end: Option<String>,
-}
-
-impl From<CoreTimeSeries> for TimeSeries {
-    fn from(v: CoreTimeSeries) -> Self {
-        Self {
-            frequency: v.frequency,
-            start: v.start,
-            end: v.end,
-        }
-    }
-}
-
-#[pymethods]
-impl TimeSeries {
-    #[new]
-    #[pyo3(signature = (frequency=None, start=None, end=None))]
-    fn new(frequency: Option<String>, start: Option<String>, end: Option<String>) -> Self {
-        Self {
-            frequency,
-            start,
-            end,
-        }
-    }
-
-    fn __repr__(&self) -> String {
-        format!(
-            "TimeSeries(frequency={:?}, start={:?}, end={:?})",
-            self.frequency, self.start, self.end
-        )
-    }
-}
-
 #[pyclass(name = "Dimension", module = "pyivt")]
 #[derive(Clone)]
 pub struct Dimension {
     #[pyo3(get)]
-    pub name: String,
+    pub name_en: String,
     #[pyo3(get)]
     pub name_fr: Option<String>,
     #[pyo3(get)]
@@ -106,15 +65,13 @@ pub struct Dimension {
     #[pyo3(get, name = "type")]
     pub type_code: i64,
     #[pyo3(get)]
-    pub is_geography: bool,
-    #[pyo3(get)]
-    pub description: Option<String>,
+    pub description_en: Option<String>,
     #[pyo3(get)]
     pub description_fr: Option<String>,
     #[pyo3(get)]
     pub type_label: String,
     #[pyo3(get)]
-    pub members: Option<Vec<String>>,
+    pub members_en: Option<Vec<String>>,
     #[pyo3(get)]
     pub members_fr: Option<Vec<String>>,
     #[pyo3(get)]
@@ -124,15 +81,14 @@ pub struct Dimension {
 impl From<CoreDimension> for Dimension {
     fn from(d: CoreDimension) -> Self {
         Self {
-            name: d.name,
+            name_en: d.name_en,
             name_fr: d.name_fr,
             count: d.count,
             type_code: d.type_code,
-            is_geography: d.is_geography,
-            description: d.description,
+            description_en: d.description_en,
             description_fr: d.description_fr,
             type_label: d.type_label,
-            members: d.members,
+            members_en: d.members_en,
             members_fr: d.members_fr,
             ordinal: d.ordinal,
         }
@@ -143,8 +99,8 @@ impl From<CoreDimension> for Dimension {
 impl Dimension {
     fn __repr__(&self) -> String {
         format!(
-            "Dimension(name={:?}, count={}, is_geography={})",
-            self.name, self.count, self.is_geography
+            "Dimension(name_en={:?}, count={})",
+            self.name_en, self.count
         )
     }
 }
@@ -302,13 +258,18 @@ impl IvtMetadata {
     }
 
     #[getter]
-    fn time_series(&self) -> Option<TimeSeries> {
-        self.inner
-            .lock()
-            .unwrap()
-            .time_series
-            .clone()
-            .map(TimeSeries::from)
+    fn frequency(&self) -> Option<String> {
+        self.inner.lock().unwrap().frequency.clone()
+    }
+
+    #[getter]
+    fn start_date(&self) -> Option<String> {
+        self.inner.lock().unwrap().start_date.clone()
+    }
+
+    #[getter]
+    fn end_date(&self) -> Option<String> {
+        self.inner.lock().unwrap().end_date.clone()
     }
 
     #[getter]

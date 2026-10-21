@@ -1,0 +1,36 @@
+{
+  "title": {
+    "en": "Economic Outlook No 59: Semi-annual data",
+    "fr": "Perspectives Economiques No 59 : Données semi-annuelles"
+  },
+  "author": {
+    "en": "OECD",
+    "fr": "OCDE"
+  },
+  "category": {
+    "en": "OECD Publications",
+    "fr": "Publication d'OCDE"
+  },
+  "keywords": {
+    "en": null,
+    "fr": null
+  },
+  "notes": {
+    "en": {
+      "first": null,
+      "last": null
+    },
+    "fr": {
+      "first": null,
+      "last": null
+    }
+  },
+  "number_of_datapoints": 14820,
+  "frequency": "Semi-annual",
+  "start_date": null,
+  "end_date": null,
+  "read_only": true,
+  "dimensions": [],
+  "footnotes": [],
+  "missing_values": []
+}

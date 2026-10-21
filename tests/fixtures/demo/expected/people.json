@@ -26,60 +26,42 @@
     }
   },
   "number_of_datapoints": 4680,
-  "time_series": {
-    "frequency": "Monthly",
-    "start": "1991-01-01",
-    "end": "1994-03-01"
-  },
+  "frequency": "Monthly",
+  "start_date": "1991-01-01",
+  "end_date": "1994-03-01",
   "read_only": false,
   "dimensions": [
     {
-      "name": {
-        "en": "UNITS",
-        "fr": "UNITÉS"
-      },
+      "name_en": "UNITS",
+      "name_fr": "UNITÉS",
       "items": 2,
       "type": "Normal",
-      "description": {
-        "en": "UNITS",
-        "fr": "UNITÉS"
-      }
+      "description_en": "UNITS",
+      "description_fr": "UNITÉS"
     },
     {
-      "name": {
-        "en": "OCCUPATION",
-        "fr": "PROFESSION"
-      },
+      "name_en": "OCCUPATION",
+      "name_fr": "PROFESSION",
       "items": 12,
       "type": "Normal",
-      "description": {
-        "en": "OCCUPATION",
-        "fr": "PROFESSION"
-      }
+      "description_en": "OCCUPATION",
+      "description_fr": "PROFESSION"
     },
     {
-      "name": {
-        "en": "REGION",
-        "fr": "RÉGION"
-      },
+      "name_en": "REGION",
+      "name_fr": "RÉGION",
       "items": 5,
       "type": "Geographic",
-      "description": {
-        "en": "REGION",
-        "fr": "RÉGION"
-      }
+      "description_en": "REGION",
+      "description_fr": "RÉGION"
     },
     {
-      "name": {
-        "en": "TIME PERIOD",
-        "fr": "TEMPS"
-      },
+      "name_en": "TIME PERIOD",
+      "name_fr": "TEMPS",
       "items": 39,
       "type": "Time Series",
-      "description": {
-        "en": "Time Period",
-        "fr": "TEMPS"
-      }
+      "description_en": "Time Period",
+      "description_fr": "TEMPS"
     }
   ],
   "footnotes": [],

@@ -26,48 +26,34 @@
     }
   },
   "number_of_datapoints": 14820,
-  "time_series": {
-    "frequency": "Semi-annual",
-    "start": "1980-01-01",
-    "end": "1992-07-01"
-  },
+  "frequency": "Semi-annual",
+  "start_date": "1980-01-01",
+  "end_date": "1992-07-01",
   "read_only": true,
   "dimensions": [
     {
-      "name": {
-        "en": "REGION",
-        "fr": "RÉGION"
-      },
+      "name_en": "REGION",
+      "name_fr": "RÉGION",
       "items": 30,
       "type": "Geographic",
-      "description": {
-        "en": "Region",
-        "fr": "Région"
-      }
+      "description_en": "Region",
+      "description_fr": "Région"
     },
     {
-      "name": {
-        "en": "ITEM",
-        "fr": "POINTE"
-      },
+      "name_en": "ITEM",
+      "name_fr": "POINTE",
       "items": 19,
       "type": "Normal",
-      "description": {
-        "en": "Item",
-        "fr": "Pointe"
-      }
+      "description_en": "Item",
+      "description_fr": "Pointe"
     },
     {
-      "name": {
-        "en": "TIME PERIOD",
-        "fr": "TEMPS"
-      },
+      "name_en": "TIME PERIOD",
+      "name_fr": "TEMPS",
       "items": 26,
       "type": "Time Series",
-      "description": {
-        "en": "Time Period",
-        "fr": "Temps"
-      }
+      "description_en": "Time Period",
+      "description_fr": "Temps"
     }
   ],
   "footnotes": [],

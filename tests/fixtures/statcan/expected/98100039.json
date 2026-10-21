@@ -26,32 +26,26 @@
     }
   },
   "number_of_datapoints": 421504,
-  "time_series": null,
+  "frequency": null,
+  "start_date": null,
+  "end_date": null,
   "read_only": true,
   "dimensions": [
     {
-      "name": {
-        "en": "Geography",
-        "fr": "Géographie"
-      },
+      "name_en": "Geography",
+      "name_fr": "Géographie",
       "items": 592,
       "type": "Normal",
-      "description": {
-        "en": "Geography",
-        "fr": "Géographie"
-      }
+      "description_en": "Geography",
+      "description_fr": "Géographie"
     },
     {
-      "name": {
-        "en": "Population, dwe",
-        "fr": "Population, log"
-      },
+      "name_en": "Population, dwe",
+      "name_fr": "Population, log",
       "items": 712,
       "type": "Normal",
-      "description": {
-        "en": "Population, dwe",
-        "fr": "Population, log"
-      }
+      "description_en": "Population, dwe",
+      "description_fr": "Population, log"
     }
   ],
   "footnotes": [

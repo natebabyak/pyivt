@@ -64,9 +64,9 @@ ivt = pyivt.open(res.content)
 | Keywords             | `keywords.en`, `keywords.fr`                             |
 | Notes                | `notes.en`, `notes.fr`                                   |
 | Number of Datapoints | `number_of_datapoints`                                   |
-| Time Series          | `time_series` (`.frequency`, `.start`, `.end`) or `None` |
+| Time Series          | `frequency`, `start_date`, `end_date` (each `None` if absent) |
 | Read-Only            | `read_only`                                              |
-| Dimensions           | `dimensions`                                             |
+| Dimensions           | `dimensions` (`name_en` / `name_fr`, `description_en` / `description_fr`, …) |
 | Geographies          | `geographies`                                            |
 | Footnotes            | `footnotes`                                              |
 | Missing Values       | `missing_values`                                         |
@@ -105,6 +105,23 @@ pq.write_table(table, "data.parquet")
 
 # Polars
 df = pl.from_arrow(table)
+```
+
+## Development
+
+Local setup uses [uv](https://docs.astral.sh/uv/). From the repo root:
+
+```bash
+uv sync
+uv run maturin develop --uv
+uv run pytest
+```
+
+`uv sync` installs the package editable plus the default `dev` group (`pytest`, `ruff`, `maturin`). Use `maturin develop --uv` so the Rust extension rebuilds against the uv-managed env. For the Beyond File Summary expected-value script:
+
+```bash
+uv sync --group beyond
+uv run python tests/scripts/beyond_summary_expected.py --suite demo
 ```
 
 ## License

@@ -53,7 +53,9 @@ def _bench_one(path: Path, warm: bool) -> dict:
         meta.keywords.en,
         meta.notes.en,
         meta.number_of_datapoints,
-        meta.time_series,
+        meta.frequency,
+        meta.start_date,
+        meta.end_date,
         meta.read_only,
     )
     t_summary = time.perf_counter() - t1

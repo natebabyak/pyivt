@@ -96,15 +96,16 @@ const READONLY_FLAG_BIT_ALT: u8 = 0x02;
 
 #[derive(Debug, Clone)]
 pub struct Dimension {
-    pub name: String,
+    pub name_en: String,
     pub name_fr: Option<String>,
     pub count: i64,
     pub type_code: i64,
+    /// Internal: geo dim flag for tidy export (not exposed to Python).
     pub is_geography: bool,
-    pub description: Option<String>,
+    pub description_en: Option<String>,
     pub description_fr: Option<String>,
     pub type_label: String,
-    pub members: Option<Vec<String>>,
+    pub members_en: Option<Vec<String>>,
     pub members_fr: Option<Vec<String>>,
     pub ordinal: Option<Vec<i64>>,
 }
@@ -125,11 +126,18 @@ pub struct LocalizedText {
     pub fr: Option<String>,
 }
 
+/// Parse intermediate for time-series bounds (flattened onto `IvtMetadata`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct TimeSeriesInfo {
-    pub frequency: Option<String>,
-    pub start: Option<String>,
-    pub end: Option<String>,
+struct TimeSeriesInfo {
+    frequency: Option<String>,
+    start: Option<String>,
+    end: Option<String>,
+}
+
+impl TimeSeriesInfo {
+    fn into_fields(self) -> (Option<String>, Option<String>, Option<String>) {
+        (self.frequency, self.start, self.end)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -161,7 +169,9 @@ pub struct IvtMetadata {
     pub category: LocalizedText,
     pub keywords: LocalizedText,
     pub number_of_datapoints: Option<i64>,
-    pub time_series: Option<TimeSeriesInfo>,
+    pub frequency: Option<String>,
+    pub start_date: Option<String>,
+    pub end_date: Option<String>,
     pub read_only: Option<bool>,
     source: IvtSource,
     desc: Descriptor,
@@ -1728,32 +1738,32 @@ pub fn build_dimensions(data: &[u8], desc: &Descriptor) -> Vec<Dimension> {
     let mut dims = Vec::new();
     for (i, d) in desc.dims.iter().enumerate() {
         let is_geo = (i + 1) == gd;
-        let (members, members_fr) = if !is_geo {
+        let (members_en, members_fr) = if !is_geo {
             dim_dir_labels(data, d, i, false)
         } else {
             (None, None)
         };
-        let (short, title_name_fr, description, description_fr) = dim_title(data, i);
+        let (short, title_name_fr, description_en, description_fr) = dim_title(data, i);
         // Prefer the dim-title short code (COOKIE) over a long descriptor name
         // (COOKIE TYPE) when available; keep descriptor name otherwise.
-        let name = short
+        let name_en = short
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| d.name.clone());
-        let description = description.or_else(|| Some(name.clone()));
+        let description_en = description_en.or_else(|| Some(name_en.clone()));
         let mut name_fr = title_name_fr.or_else(|| description_fr.clone());
-        if is_geo && name.eq_ignore_ascii_case("Geography") && name_fr.is_none() {
+        if is_geo && name_en.eq_ignore_ascii_case("Geography") && name_fr.is_none() {
             name_fr = Some("Géographie".into());
         }
         dims.push(Dimension {
-            name,
+            name_en,
             name_fr,
             count: d.count,
             type_code: d.type_code,
             is_geography: is_geo,
-            description,
+            description_en,
             description_fr,
             type_label: type_label_for(d),
-            members,
+            members_en,
             members_fr,
             ordinal: None,
         });
@@ -1832,13 +1842,15 @@ fn build_metadata_memory(
         desc.dims.iter().fold(1i64, |a, d| a.saturating_mul(d.count))
     };
     let searchable = latin1(data);
-    let time_series = parse_time_series(
+    let (frequency, start_date, end_date) = parse_time_series(
         &[data],
         &searchable,
         &desc.dims,
         notes_en.as_deref(),
         notes_fr.as_deref(),
-    );
+    )
+    .map(TimeSeriesInfo::into_fields)
+    .unwrap_or((None, None, None));
     Ok(IvtMetadata {
         product_id,
         title: LocalizedText {
@@ -1862,7 +1874,9 @@ fn build_metadata_memory(
         },
         keywords,
         number_of_datapoints: Some(number_of_datapoints),
-        time_series,
+        frequency,
+        start_date,
+        end_date,
         read_only: Some(read_only_flag(data)),
         source,
         desc,
@@ -2018,6 +2032,9 @@ fn build_metadata_selective(
             );
         }
     }
+    let (frequency, start_date, end_date) = time_series
+        .map(TimeSeriesInfo::into_fields)
+        .unwrap_or((None, None, None));
     let read_only = read_only_flag_bufs(&block_bufs);
 
     // Prefer FACET titles/authors when present (same as parse_table_identity).
@@ -2071,7 +2088,9 @@ fn build_metadata_selective(
         },
         keywords,
         number_of_datapoints: Some(number_of_datapoints),
-        time_series,
+        frequency,
+        start_date,
+        end_date,
         read_only: Some(read_only),
         source,
         desc,
@@ -2577,30 +2596,30 @@ fn build_dimensions_from_source(
     let mut dims = Vec::new();
     for (i, d) in desc.dims.iter().enumerate() {
         let is_geo = (i + 1) == gd;
-        let (members, members_fr) = if !is_geo {
+        let (members_en, members_fr) = if !is_geo {
             dim_dir_labels_src(source, d, i, false)?
         } else {
             (None, None)
         };
-        let (short, title_name_fr, description, description_fr) = dim_title_src(source, i)?;
-        let name = short
+        let (short, title_name_fr, description_en, description_fr) = dim_title_src(source, i)?;
+        let name_en = short
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| d.name.clone());
-        let description = description.or_else(|| Some(name.clone()));
+        let description_en = description_en.or_else(|| Some(name_en.clone()));
         let mut name_fr = title_name_fr.or_else(|| description_fr.clone());
-        if is_geo && name.eq_ignore_ascii_case("Geography") && name_fr.is_none() {
+        if is_geo && name_en.eq_ignore_ascii_case("Geography") && name_fr.is_none() {
             name_fr = Some("Géographie".into());
         }
         dims.push(Dimension {
-            name,
+            name_en,
             name_fr,
             count: d.count,
             type_code: d.type_code,
             is_geography: is_geo,
-            description,
+            description_en,
             description_fr,
             type_label: type_label_for(d),
-            members,
+            members_en,
             members_fr,
             ordinal: None,
         });

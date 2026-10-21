@@ -126,9 +126,9 @@ pub fn tidy_arrays(
             }
         } else {
             let mem = if lang.starts_with("fr") {
-                dim.members_fr.as_ref().or(dim.members.as_ref())
+                dim.members_fr.as_ref().or(dim.members_en.as_ref())
             } else {
-                dim.members.as_ref()
+                dim.members_en.as_ref()
             };
             if let Some(mem) = mem {
                 let mapped: Vec<Option<String>> = id_i64

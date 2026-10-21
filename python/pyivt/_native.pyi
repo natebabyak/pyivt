@@ -11,28 +11,15 @@ class LocalizedText:
 
     def __init__(self, en: str | None = None, fr: str | None = None) -> None: ...
 
-class TimeSeries:
-    frequency: str | None
-    start: str | None
-    end: str | None
-
-    def __init__(
-        self,
-        frequency: str | None = None,
-        start: str | None = None,
-        end: str | None = None,
-    ) -> None: ...
-
 class Dimension:
-    name: str
+    name_en: str
     name_fr: str | None
     count: int
     type: int
-    is_geography: bool
-    description: str | None
+    description_en: str | None
     description_fr: str | None
     type_label: str
-    members: list[str] | None
+    members_en: list[str] | None
     members_fr: list[str] | None
     ordinal: list[int] | None
 
@@ -80,7 +67,11 @@ class IvtMetadata:
     @property
     def number_of_datapoints(self) -> int | None: ...
     @property
-    def time_series(self) -> TimeSeries | None: ...
+    def frequency(self) -> str | None: ...
+    @property
+    def start_date(self) -> str | None: ...
+    @property
+    def end_date(self) -> str | None: ...
     @property
     def read_only(self) -> bool | None: ...
     @property
