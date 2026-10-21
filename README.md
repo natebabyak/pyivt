@@ -12,9 +12,17 @@
 
 ## Installation
 
-```bash
-uv add pyivt
-```
+- Using `uv` (Recommended):
+
+  ```bash
+  uv add pyivt
+  ```
+
+- Using `pip`
+
+  ```bash
+  pip install pyivt
+  ```
 
 ## Usage
 
@@ -59,73 +67,67 @@ ivt = pyivt.open(res.content)
 
 `ivt.metadata` is a typed `IvtMetadata` object. Summary fields are eager; heavy fields load on first access.
 
-| Beyond 20/20 Summary | `pyivt` Metadata                                         |
-| -------------------- | -------------------------------------------------------- |
-| Title                | `title.en`, `title.fr`                                   |
-| Author               | `author.en`, `author.fr`                                 |
-| Category             | `category.en`, `category.fr`                             |
-| Keywords             | `keywords.en`, `keywords.fr`                             |
-| Notes                | `notes.en`, `notes.fr`                                   |
-| Number of Datapoints | `number_of_datapoints`                                   |
-| Time Series          | `frequency`, `start_date`, `end_date` (each `None` if absent) |
-| Read-Only            | `read_only`                                              |
+| Beyond 20/20 Summary | `pyivt` Metadata                                                             |
+| -------------------- | ---------------------------------------------------------------------------- |
+| Title                | `title.en`, `title.fr`                                                       |
+| Author               | `author.en`, `author.fr`                                                     |
+| Category             | `category.en`, `category.fr`                                                 |
+| Keywords             | `keywords.en`, `keywords.fr`                                                 |
+| Notes                | `notes.en`, `notes.fr`                                                       |
+| Number of Datapoints | `number_of_datapoints`                                                       |
+| Time Series          | `frequency`, `start_date`, `end_date` (each `None` if absent)                |
+| Read-Only            | `read_only`                                                                  |
 | Dimensions           | `dimensions` (`name_en` / `name_fr`, `description_en` / `description_fr`, …) |
-| Geographies          | `geographies`                                            |
-| Footnotes            | `footnotes`                                              |
-| Missing Values       | `missing_values`                                         |
-
-`geographies` is a `Geographies` object (`member_id`, `geo_label`, `geo_uid`, …), not a dict.
-
-```python
-import pyivt
-
-ivt = pyivt.open("data.ivt")
-print(ivt.metadata.product_id, ivt.metadata.title.en)
-```
+| Geographies          | `geographies`                                                                |
+| Footnotes            | `footnotes`                                                                  |
+| Missing Values       | `missing_values`                                                             |
 
 ### Exporting Data
 
-`Ivt.to_arrow()` returns an Apache Arrow table. Keyword arguments:
+Use `Ivt.to_arrow()` to export to Apache Arrow.
 
-| Argument    | Default       | Meaning                                                              |
-| ----------- | ------------- | -------------------------------------------------------------------- |
-| `complete`  | `True`        | Expand the published grid; set `False` for sparse decoded cells only |
-| `max_cells` | `100_000_000` | Raise if the complete grid would exceed this many cells              |
-| `labels`    | `True`        | Include dimension label columns                                      |
-| `language`  | `"en"`        | Label language (`"en"` or `"fr"`)                                    |
+Apache Arrow is ready to use with your current data stack.
 
-```python
-import polars as pl
-import pyarrow.parquet as pq
+- `pandas`:
 
-table = ivt.to_arrow()
+  ```python
+  import pandas as pd
+  import pyivt
 
-# pandas
-df = table.to_pandas()
+  ivt = pyivt.open("example.ivt")
 
-# Parquet
-pq.write_table(table, "data.parquet")
+  tab = ivt.to_arrow()
 
-# Polars
-df = pl.from_arrow(table)
-```
+  df = pd.DataFrame.from_arrow(tab)
+  print(df)
+  ```
 
-## Development
+- `polars`:
 
-Local setup uses [uv](https://docs.astral.sh/uv/). From the repo root:
+  ```python
+  import polars as pl
+  import pyivt
 
-```bash
-uv sync
-uv run maturin develop --uv
-uv run pytest
-```
+  ivt = pyivt.open("example.ivt")
 
-`uv sync` installs the package editable plus the default `dev` group (`pytest`, `ruff`, `maturin`). Use `maturin develop --uv` so the Rust extension rebuilds against the uv-managed env. For the Beyond File Summary expected-value script:
+  tab = ivt.to_arrow()
 
-```bash
-uv sync --group beyond
-uv run python tests/scripts/beyond_summary_expected.py --suite demo
-```
+  df = pl.from_arrow(tab)
+  print(df)
+  ```
+
+- `pyarrow`:
+
+  ```python
+  import pyarrow.parquet as pq
+  import pyivt
+
+  ivt = pyivt.open("example.ivt")
+
+  tab = ivt.to_arrow()
+
+  pq.write_table(tab, "example.parquet")
+  ```
 
 ## License
 
