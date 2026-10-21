@@ -5,15 +5,20 @@ Windows-only. Not run by pytest::
     uv sync --group beyond
     uv run python tests/scripts/beyond_summary_expected.py --suite demo
 
-Per file:
+    # parser check against checked-in samples (no GUI):
+    uv run python tests/scripts/beyond_summary_expected.py --parse-samples
 
-1. Open the IVT
+Per file (Beyond stays open for the whole run):
+
+1. ``os.startfile`` the IVT (first call launches Beyond; later calls reuse it)
 2. Alt+F Y — File Summary
 3. Copy newest %TEMP%/~iv####.htm (English)
-4. Tab, then Alt+V H — switch language
-5. Alt+F Y — File Summary again
+4. Tab, Alt+V H — switch language
+5. Alt+F Y — File Summary
 6. Copy newest %TEMP%/~iv####.htm (French)
-7. Parse both with bs4 into golden-shaped JSON
+7. Tab, Alt+V H — restore language
+8. Alt+F C — close the IVT in Beyond
+9. Parse both with bs4 into golden-shaped JSON
 """
 
 from __future__ import annotations
@@ -23,8 +28,9 @@ import json
 import os
 import re
 import sys
-import time
 from pathlib import Path
+
+from bs4 import BeautifulSoup, NavigableString
 
 _TESTS = Path(__file__).resolve().parents[1]
 _ROOT = _TESTS.parent
@@ -40,7 +46,8 @@ BRWPRO = Path(
         r"C:\Program Files\Beyond 2020\Professional Browser\Brwpro.exe",
     )
 )
-TEMP = Path(os.environ.get("TEMP") or os.environ.get("TMP") or os.getenv("TMPDIR", "."))
+TEMP = Path(os.environ.get("TEMP") or os.environ.get("TMP") or ".")
+SAMPLES = _ROOT / "temp_summaries"
 SUMMARY_RE = re.compile(r"^~iv\d{4,5}\.htm$", re.IGNORECASE)
 
 MONTHS = {
@@ -71,18 +78,32 @@ MONTHS = {
 }
 
 
-def newest_summary_htm(timeout: float = 15.0) -> Path:
-    """Return the newest %TEMP%/~iv####.htm, waiting until one appears."""
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        matches = []
-        for name in os.listdir(TEMP):
-            if SUMMARY_RE.match(name):
-                matches.append(TEMP / name)
-        if matches:
-            return max(matches, key=lambda p: p.stat().st_mtime)
-        time.sleep(0.25)
-    raise TimeoutError(f"no ~iv####.htm in {TEMP}")
+def _summary_files() -> list[Path]:
+    return [TEMP / n for n in os.listdir(TEMP) if SUMMARY_RE.match(n)]
+
+
+def _newest_mtime() -> float:
+    matches = _summary_files()
+    return max((p.stat().st_mtime for p in matches), default=0.0)
+
+
+def newest_summary_htm(after_mtime: float = 0.0, timeout: float = 10.0) -> Path:
+    """Newest ~iv####.htm whose mtime is strictly greater than *after_mtime*."""
+    from pywinauto.timings import TimeoutError as WaitTimeoutError
+    from pywinauto.timings import wait_until
+
+    def found() -> bool:
+        matches = _summary_files()
+        if not matches:
+            return False
+        newest = max(matches, key=lambda p: p.stat().st_mtime)
+        return newest.stat().st_mtime > after_mtime
+
+    try:
+        wait_until(timeout, 0.05, found)
+    except WaitTimeoutError as e:
+        raise TimeoutError(f"no new ~iv####.htm in {TEMP}") from e
+    return max(_summary_files(), key=lambda p: p.stat().st_mtime)
 
 
 class Beyond2020:
@@ -94,16 +115,6 @@ class Beyond2020:
         self.app = None
         self.win = None
 
-    def open(self, ivt_path: Path) -> None:
-        self.close()
-        ivt_path = Path(ivt_path).resolve()
-        self.app = self._Application(backend="uia").start(
-            f'"{self.exe}" "{ivt_path}"', wait_for_idle=False
-        )
-        time.sleep(2)
-        self.win = self.app.top_window()
-        self.win.set_focus()
-
     def close(self) -> None:
         if self.app is None:
             return
@@ -114,64 +125,116 @@ class Beyond2020:
         self.app = None
         self.win = None
 
-    def keys(self, sequence: str) -> None:
+    def _main(self):
+        self.win = self.app.top_window()
+        self.win.wait("ready", timeout=30)
         self.win.set_focus()
-        self.win.type_keys(sequence, with_spaces=True, pause=0.05)
+        return self.win
+
+    def keys(self, sequence: str) -> None:
+        self._main().type_keys(sequence, with_spaces=True, pause=0.02)
+
+    def open_ivt(self, ivt_path: Path) -> None:
+        """Open via Windows file association; first call also launches Beyond."""
+        path = Path(ivt_path).resolve()
+        os.startfile(path)  # noqa: S606 — intentional local IVT open
+        if self.app is None:
+            self.app = self._Application(backend="uia").connect(
+                path=str(self.exe), timeout=30
+            )
+        stem = path.stem
+        self.win = self.app.window(title_re=f".*{re.escape(stem)}.*")
+        self.win.wait("ready", timeout=30)
+        self.win.set_focus()
+
+    def close_ivt(self) -> None:
+        """Close the current table in Beyond (Alt+F C)."""
+        self.keys("%fc")
+        self._main()
+
+    def read_summary_html(self) -> str:
+        before = _newest_mtime()
+        self.keys("%fy")
+        path = newest_summary_htm(after_mtime=before)
+        html = path.read_text(encoding="utf-8", errors="replace")
+        print(f"  {path.name}", flush=True)
+        self.keys("{ESC}")
+        self._main()
+        return html
+
+    def switch_language(self) -> None:
+        self.keys("{TAB}")
+        self.keys("%vh")
+        self._main()
 
     def extract(self, ivt_path: Path) -> tuple[str, str]:
-        """Open one IVT and return (en_html, fr_html)."""
-        self.open(ivt_path)
-
-        # English summary
-        self.keys("%fy")
-        en_path = newest_summary_htm()
-        en_html = en_path.read_text(encoding="utf-8", errors="replace")
-        print(f"  en: {en_path.name}", flush=True)
-
-        # Tab to focus, then switch language
-        self.keys("{TAB}")
-        time.sleep(0.3)
-        self.keys("%vh")
-        time.sleep(1.5)
-
-        # French summary
-        self.keys("%fy")
-        fr_path = newest_summary_htm()
-        fr_html = fr_path.read_text(encoding="utf-8", errors="replace")
-        print(f"  fr: {fr_path.name}", flush=True)
-
-        # Restore language for the next file
-        self.keys("{TAB}")
-        time.sleep(0.3)
-        self.keys("%vh")
-        time.sleep(0.5)
-        self.close()
-        return en_html, fr_html
+        self.open_ivt(ivt_path)
+        try:
+            en_html = self.read_summary_html()
+            self.switch_language()
+            fr_html = self.read_summary_html()
+            self.switch_language()
+            return en_html, fr_html
+        finally:
+            self.close_ivt()
 
 
-def _fields(soup) -> dict[str, str]:
+def _clean(text: str | None) -> str | None:
+    if text is None:
+        return None
+    text = text.replace("\xa0", " ").strip()
+    return text or None
+
+
+def _fields(soup: BeautifulSoup) -> dict[str, str]:
     out: dict[str, str] = {}
     for tr in soup.find_all("tr"):
-        cells = tr.find_all(["td", "th"])
-        if len(cells) < 2:
+        th = tr.find("th")
+        td = tr.find("td")
+        if not th or not td:
             continue
-        label = cells[0].get_text(" ", strip=True).rstrip(":").strip().lower()
-        value = cells[1].get_text(" ", strip=True)
+        label = th.get_text(" ", strip=True).rstrip(":").strip().lower()
+        value = td.get_text(" ", strip=True).replace("\xa0", " ").strip()
         if label:
             out[label] = value
     return out
 
 
-def _dims(soup) -> list[dict]:
+def _notes(soup: BeautifulSoup) -> str | None:
+    h4 = soup.find("h4", string=lambda s: bool(s) and "note" in s.lower())
+    if h4 is None:
+        return None
+    parts: list[str] = []
+    for sib in h4.next_siblings:
+        name = getattr(sib, "name", None)
+        if name in ("hr", "h4"):
+            break
+        if isinstance(sib, NavigableString):
+            parts.append(str(sib))
+        elif hasattr(sib, "get_text"):
+            parts.append(sib.get_text("\n", strip=False))
+    text = re.sub(r"[ \t]+", " ", "".join(parts))
+    text = re.sub(r"\n+", "\n", text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
+    return text or None
+
+
+def _dims(soup: BeautifulSoup) -> list[dict]:
     for table in soup.find_all("table"):
         rows = table.find_all("tr")
         if not rows:
             continue
-        headers = [c.get_text(" ", strip=True).lower() for c in rows[0].find_all(["th", "td"])]
+        headers = [
+            c.get_text(" ", strip=True).lower() for c in rows[0].find_all(["th", "td"])
+        ]
         try:
-            name_i = next(i for i, h in enumerate(headers) if h in ("name", "nom"))
+            name_i = next(
+                i for i, h in enumerate(headers) if h in ("dimension", "name", "nom")
+            )
             items_i = next(
-                i for i, h in enumerate(headers) if h in ("items", "éléments", "elements")
+                i
+                for i, h in enumerate(headers)
+                if h in ("items", "éléments", "elements")
             )
         except StopIteration:
             continue
@@ -186,15 +249,18 @@ def _dims(soup) -> list[dict]:
                 items = int(cells[items_i].get_text(" ", strip=True).replace(",", ""))
             except ValueError:
                 continue
+            name = cells[name_i].get_text(" ", strip=True)
             dims.append(
                 {
-                    "name": cells[name_i].get_text(" ", strip=True),
+                    "name": name,
                     "items": items,
-                    "type": cells[type_i].get_text(" ", strip=True) if type_i is not None else None,
+                    "type": cells[type_i].get_text(" ", strip=True)
+                    if type_i is not None
+                    else None,
                     "description": (
                         cells[desc_i].get_text(" ", strip=True)
                         if desc_i is not None
-                        else cells[name_i].get_text(" ", strip=True)
+                        else name
                     ),
                 }
             )
@@ -205,17 +271,20 @@ def _dims(soup) -> list[dict]:
 
 def _get(fields: dict[str, str], *keys: str) -> str | None:
     for key in keys:
-        if fields.get(key):
-            return fields[key]
+        value = _clean(fields.get(key))
+        if value:
+            return value
     return None
 
 
 def _parse_ts(text: str | None) -> tuple[str | None, str | None, str | None]:
+    """Parse Beyond Time Series values like 'Monthly, Jan1991-Mar1994'."""
     if not text:
         return None, None, None
     freq = None
-    m = re.search(
-        r"(?i)\b(Annual|Yearly|Quarterly|Monthly|Weekly|Daily|Semi-?annual)\b", text
+    m = re.match(
+        r"(?i)\s*(Annual|Yearly|Quarterly|Monthly|Weekly|Daily|Semi-?annual)\s*,\s*(.+)\s*$",
+        text,
     )
     if m:
         freq = m.group(1)
@@ -223,38 +292,48 @@ def _parse_ts(text: str | None) -> tuple[str | None, str | None, str | None]:
             freq = "Semi-annual"
         else:
             freq = freq[:1].upper() + freq[1:]
-    start = end = None
-    m = re.search(r"\((\d{4})\s*[-–—]\s*(\d{4})\)", text)
+        rest = m.group(2)
+    else:
+        rest = text
+
+    # 1H1980-2H1992
+    m = re.match(r"(?i)\s*([12])H(\d{4})\s*[-–—]\s*([12])H(\d{4})\s*$", rest)
     if m:
-        return freq, f"{int(m.group(1)):04d}-01-01", f"{int(m.group(2)):04d}-01-01"
-    m = re.search(
-        r"(?i)\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
+
+        def half(h: str, year: str) -> str:
+            month = 1 if h == "1" else 7
+            return f"{int(year):04d}-{month:02d}-01"
+
+        return freq, half(m.group(1), m.group(2)), half(m.group(3), m.group(4))
+
+    # Jan1991-Mar1994 (no space)
+    m = re.match(
+        r"(?i)\s*(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
         r"Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|"
-        r"Dec(?:ember)?)\s+(\d{4})\b(?:.*?\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|"
-        r"Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|"
-        r"Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{4})\b)?",
-        text,
+        r"Dec(?:ember)?)(\d{4})\s*[-–—]\s*"
+        r"(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
+        r"Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|"
+        r"Dec(?:ember)?)(\d{4})\s*$",
+        rest,
     )
     if m:
-        mo = MONTHS[m.group(1).lower().rstrip(".")]
-        start = f"{int(m.group(2)):04d}-{mo:02d}-01"
-        if m.group(3) and m.group(4):
-            mo2 = MONTHS[m.group(3).lower().rstrip(".")]
-            end = f"{int(m.group(4)):04d}-{mo2:02d}-01"
-        else:
-            end = start
-    return freq, start, end
+        mo1 = MONTHS[m.group(1).lower().rstrip(".")]
+        mo2 = MONTHS[m.group(3).lower().rstrip(".")]
+        return (
+            freq,
+            f"{int(m.group(2)):04d}-{mo1:02d}-01",
+            f"{int(m.group(4)):04d}-{mo2:02d}-01",
+        )
+
+    return freq, None, None
 
 
 def parse_summary(html: str) -> dict:
-    from bs4 import BeautifulSoup
-
     soup = BeautifulSoup(html, "html.parser")
     f = _fields(soup)
     n_dp = _get(
         f,
         "number of datapoints",
-        "number of data points",
         "nombre de points de données",
         "nombre de points de donnees",
     )
@@ -264,7 +343,7 @@ def parse_summary(html: str) -> dict:
             datapoints = int(n_dp.replace(",", "").replace(" ", ""))
         except ValueError:
             pass
-    ro = _get(f, "read-only", "read only", "lecture seule")
+    ro = _get(f, "read-only", "lecture seule")
     freq, start, end = _parse_ts(
         _get(f, "time series", "série chronologique", "serie chronologique")
     )
@@ -273,12 +352,12 @@ def parse_summary(html: str) -> dict:
         "author": _get(f, "author", "auteur"),
         "category": _get(f, "category", "catégorie", "categorie"),
         "keywords": _get(f, "keywords", "mots-clés", "mots-cles", "mots clés"),
-        "notes": _get(f, "notes", "note"),
+        "notes": _notes(soup),
         "number_of_datapoints": datapoints,
         "frequency": freq,
         "start_date": start,
         "end_date": end,
-        "read_only": (ro.strip().lower() in ("yes", "oui", "true", "1") if ro else None),
+        "read_only": (ro.lower() in ("yes", "oui", "true", "1") if ro else None),
         "dimensions": _dims(soup),
     }
 
@@ -286,9 +365,10 @@ def parse_summary(html: str) -> dict:
 def merge_en_fr(en: dict, fr: dict) -> dict:
     notes_en = first_last_words(en.get("notes"))
     notes_fr = first_last_words(fr.get("notes"))
+    fr_dims = fr.get("dimensions") or []
     dims = []
     for i, d_en in enumerate(en.get("dimensions") or []):
-        d_fr = (fr.get("dimensions") or [{}])[i] if i < len(fr.get("dimensions") or []) else {}
+        d_fr = fr_dims[i] if i < len(fr_dims) else {}
         dims.append(
             {
                 "name_en": d_en.get("name"),
@@ -330,7 +410,9 @@ def jobs_for(suite: str | None, paths: list[Path]) -> list[tuple[str, Path]]:
         for entry in DEMO_MANIFEST:
             path = resolve_demo_ivt(entry["filename"])
             if path is None:
-                print(f"skip {entry['id']}: missing {entry['filename']}", file=sys.stderr)
+                print(
+                    f"skip {entry['id']}: missing {entry['filename']}", file=sys.stderr
+                )
                 continue
             out.append((entry["id"], path))
     else:
@@ -343,15 +425,52 @@ def jobs_for(suite: str | None, paths: list[Path]) -> list[tuple[str, Path]]:
     return out
 
 
+def parse_samples() -> int:
+    """Run parser against temp_summaries/*.htm and print a short dump."""
+    files = sorted(SAMPLES.glob("~iv*.htm"))
+    if not files:
+        print(f"no samples in {SAMPLES}", file=sys.stderr)
+        return 1
+    for path in files:
+        parsed = parse_summary(path.read_text(encoding="utf-8", errors="replace"))
+        print(path.name)
+        print(
+            json.dumps(
+                {
+                    "title": parsed["title"],
+                    "author": parsed["author"],
+                    "number_of_datapoints": parsed["number_of_datapoints"],
+                    "frequency": parsed["frequency"],
+                    "start_date": parsed["start_date"],
+                    "end_date": parsed["end_date"],
+                    "read_only": parsed["read_only"],
+                    "notes": first_last_words(parsed["notes"]),
+                    "dimensions": parsed["dimensions"],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        print()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="*", type=Path)
     parser.add_argument("--suite", choices=("statcan", "demo"))
     parser.add_argument("--out-dir", type=Path)
     parser.add_argument("--exe", type=Path, default=BRWPRO)
+    parser.add_argument(
+        "--parse-samples",
+        action="store_true",
+        help="Parse temp_summaries HTML only (no GUI)",
+    )
     args = parser.parse_args(argv)
+    if args.parse_samples:
+        return parse_samples()
     if not args.paths and not args.suite:
-        parser.error("pass IVT paths or --suite demo|statcan")
+        parser.error("pass IVT paths, --suite, or --parse-samples")
 
     out_dir = args.out_dir
     if out_dir is None and args.suite == "demo":
@@ -361,17 +480,16 @@ def main(argv: list[str] | None = None) -> int:
     if out_dir is not None:
         out_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"TEMP={TEMP}", flush=True)
+    jobs = jobs_for(args.suite, args.paths)
     beyond = Beyond2020(exe=args.exe)
     wrote = 0
     try:
-        for product_id, ivt_path in jobs_for(args.suite, args.paths):
+        for product_id, ivt_path in jobs:
             print(f"processing {ivt_path} …", flush=True)
             try:
                 en_html, fr_html = beyond.extract(ivt_path)
             except Exception as e:
-                print(f"error {product_id}: {e}", file=sys.stderr)
-                beyond.close()
+                print(f"error {product_id}: {type(e).__name__}: {e!r}", file=sys.stderr)
                 continue
             payload = merge_en_fr(parse_summary(en_html), parse_summary(fr_html))
             text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
