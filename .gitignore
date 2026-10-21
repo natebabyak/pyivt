@@ -1,21 +1,4 @@
+/.venv/
+/data/
 __pycache__/
-*.py[cod]
-*.pyd
-*.so
-*.dll
-*.pdb
-*.egg-info/
-.eggs/
-dist/
-build/
-.pytest_cache/
-.venv/
-venv/
-*.parquet
-*.IVT
-*.ivt
-tests/fixtures/statcan/*.zip
-.mypy_cache/
-
-# Cargo / maturin build outputs
-/target
+/target/

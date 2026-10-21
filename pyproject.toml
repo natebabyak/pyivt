@@ -38,18 +38,18 @@ Homepage = "https://github.com/natebabyak/pyivt"
 Issues = "https://github.com/natebabyak/pyivt/issues"
 Repository = "https://github.com/natebabyak/pyivt"
 
-[project.optional-dependencies]
-beyond = ["pywinauto>=0.6", "beautifulsoup4>=4.12"]
-
 [dependency-groups]
 dev = [
+  "maturin>=1.5,<2",
   "pytest>=7",
   "ruff>=0.6",
-  "maturin>=1.5,<2",
 ]
-beyond = [
-  "pywinauto>=0.6",
-  "beautifulsoup4>=4.12",
+
+download_data = ["httpx"]
+
+generate_expected = [
+  "pywinauto",
+  "selectolax",
 ]
 
 [build-system]
@@ -61,9 +61,9 @@ features = ["pyo3/extension-module"]
 module-name = "pyivt._native"
 python-source = "python"
 
-[tool.uv]
-default-groups = ["dev"]
-
 [tool.pytest.ini_options]
 pythonpath = ["python"]
 testpaths = ["tests"]
+
+[tool.uv]
+default-groups = ["dev"]
