@@ -11,10 +11,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Self
 
+from bs4 import BeautifulSoup, Tag
+from bs4.element import PageElement
 from pywinauto import Application, Desktop, ElementNotFoundError
 from pywinauto.keyboard import send_keys
-from selectolax.lexbor import LexborHTMLParser, LexborNode
-from src.constants import BEYOND_PATH
 from tqdm import tqdm
 
 
@@ -74,11 +74,18 @@ class IvtSummary:
     )
 
 
-SUMMARY_TIMEOUT_SECONDS = 5.0
+BEYOND_2020_PATH = Path(
+    r"C:\Program Files (x86)\Beyond 2020\Professional Browser\Brwpro.exe",
+)
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+EXPECTED_DIR = Path(__file__).resolve().parent.parent / "tests" / "expected"
+TIMEOUT = 5
 
 
-def text(node: LexborNode) -> str:
-    return node.text(deep=True, separator="", strip=True).strip()
+def text(node: PageElement) -> str:
+    if isinstance(node, Tag):
+        return node.get_text(separator="", strip=True)
+    return str(node).strip()
 
 
 def summary_path() -> Path | None:
@@ -93,8 +100,8 @@ def summary_path() -> Path | None:
     return latest[1] if latest else None
 
 
-def read_summary() -> LexborHTMLParser:
-    deadline = time.monotonic() + SUMMARY_TIMEOUT_SECONDS
+def read_summary() -> BeautifulSoup:
+    deadline = time.monotonic() + TIMEOUT
     while time.monotonic() < deadline:
         path = summary_path()
         if path is not None:
@@ -103,13 +110,13 @@ def read_summary() -> LexborHTMLParser:
             except OSError:
                 html = ""
             if html[:6].upper() == "<HTML>" and html[-7:].upper() == "</HTML>":
-                return LexborHTMLParser(html)
+                return BeautifulSoup(html, "html.parser")
         time.sleep(0.1)
     raise RuntimeError("Timed out waiting for summary HTML")
 
 
 class Beyond:
-    def __init__(self, executable: Path = BEYOND_PATH) -> None:
+    def __init__(self, executable: Path = BEYOND_2020_PATH) -> None:
         self.executable = executable
         self.app: Application | None = None
 
@@ -130,7 +137,7 @@ class Beyond:
             self.app.kill()
             self.app = None
 
-    def summaries(self, path: Path) -> tuple[LexborHTMLParser, LexborHTMLParser]:
+    def summaries(self, path: Path) -> tuple[BeautifulSoup, BeautifulSoup]:
         if self.app is None:
             raise RuntimeError("Beyond is not running")
         os.startfile(str(path))
@@ -151,76 +158,76 @@ class Beyond:
             self.app.top_window().wait("ready").type_keys("{TAB}%fc")
 
 
-def field(tree: LexborHTMLParser, labels: tuple[str, ...]) -> str:
-    for row in tree.css("tr"):
-        cells = row.css("th, td")
+def field(tree: BeautifulSoup, labels: tuple[str, ...]) -> str:
+    for row in tree.select("tr"):
+        cells = row.select("th, td")
         if len(cells) >= 2 and text(cells[0]) in labels:
             return text(cells[1])
     raise ValueError(f"Missing field: {labels}")
 
 
-def optional_field(tree: LexborHTMLParser, labels: tuple[str, ...]) -> str | None:
+def optional_field(tree: BeautifulSoup, labels: tuple[str, ...]) -> str | None:
     value = field(tree, labels)
     return value or None
 
 
-def section_table(
-    tree: LexborHTMLParser, headings: tuple[str, ...]
-) -> LexborNode | None:
-    for heading in tree.css("h4"):
+def section_table(tree: BeautifulSoup, headings: tuple[str, ...]) -> Tag | None:
+    for heading in tree.select("h4"):
         if text(heading) in headings:
-            node = heading.next
+            node = heading.next_sibling
             while node is not None:
-                if node.tag == "table":
+                if isinstance(node, Tag) and node.name == "table":
                     return node
-                if node.tag == "h4":
+                if isinstance(node, Tag) and node.name == "h4":
                     break
-                node = node.next
+                node = node.next_sibling
     return None
 
 
-def notes(tree: LexborHTMLParser) -> str | None:
-    for heading in tree.css("h4"):
+def notes(tree: BeautifulSoup) -> str | None:
+    for heading in tree.select("h4"):
         if text(heading) in ("Notes:", "Notes :"):
             values: list[str] = []
-            node = heading.next
-            while node is not None and node.tag != "hr":
-                if node.tag == "br":
+            node = heading.next_sibling
+            while node is not None and not (
+                isinstance(node, Tag) and node.name == "hr"
+            ):
+                if isinstance(node, Tag) and node.name == "br":
                     values.append("\n")
                 else:
                     value = text(node)
                     if value:
                         values.append(value)
-                node = node.next
+                node = node.next_sibling
             return "".join(values).rstrip("\n") or None
     raise ValueError("Missing notes section")
 
 
 def dimensions(
-    english_summary: LexborHTMLParser,
-    french_summary: LexborHTMLParser,
+    english_summary: BeautifulSoup,
+    french_summary: BeautifulSoup,
 ) -> list[IvtSummaryStatisticsDimension]:
     english_table = next(
         (
             table
-            for table in english_summary.css("table")
-            if any(text(node) == "Dimension" for node in table.css("b"))
+            for table in english_summary.select("table")
+            if any(text(node) == "Dimension" for node in table.select("b"))
         ),
         None,
     )
     french_table = next(
         (
             table
-            for table in french_summary.css("table")
-            if any(text(node) == "Dimension" for node in table.css("b"))
+            for table in french_summary.select("table")
+            if any(text(node) == "Dimension" for node in table.select("b"))
         ),
         None,
     )
     if english_table is None or french_table is None:
         return []
 
-    english_cells = english_table.css("td")
-    french_cells = french_table.css("td")
+    english_cells = english_table.select("td")
+    french_cells = french_table.select("td")
     if len(english_cells) != len(french_cells) or len(english_cells) % 4:
         raise ValueError("Invalid dimension table")
 
@@ -238,8 +245,8 @@ def dimensions(
 
 
 def footnotes(
-    english_summary: LexborHTMLParser,
-    french_summary: LexborHTMLParser,
+    english_summary: BeautifulSoup,
+    french_summary: BeautifulSoup,
 ) -> list[IvtSummaryFootnote]:
     english_table = section_table(
         english_summary,
@@ -252,8 +259,8 @@ def footnotes(
     if english_table is None or french_table is None:
         return []
 
-    english_cells = english_table.css("td")
-    french_cells = french_table.css("td")
+    english_cells = english_table.select("td")
+    french_cells = french_table.select("td")
     if len(english_cells) % 2 or len(french_cells) < len(english_cells):
         raise ValueError("Invalid footnote table")
 
@@ -268,8 +275,8 @@ def footnotes(
 
 
 def missing_values(
-    english_summary: LexborHTMLParser,
-    french_summary: LexborHTMLParser,
+    english_summary: BeautifulSoup,
+    french_summary: BeautifulSoup,
 ) -> list[IvtSummaryMissingValue]:
     english_table = section_table(
         english_summary,
@@ -282,8 +289,8 @@ def missing_values(
     if english_table is None or french_table is None:
         return []
 
-    english_cells = english_table.css("td")
-    french_cells = french_table.css("td")
+    english_cells = english_table.select("td")
+    french_cells = french_table.select("td")
     if len(english_cells) % 2:
         raise ValueError("Invalid missing-value table")
 
@@ -403,28 +410,30 @@ def build_ivt_summary(beyond: Beyond, ivt_path: Path) -> IvtSummary:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Generate local JSON metadata from Beyond 20/20 IVT files."
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--beyond",
+        "-b",
+        type=Path,
+        default=BEYOND_2020_PATH,
     )
-    parser.add_argument("paths", nargs="+", type=Path)
-    parser.add_argument("--out-dir", type=Path, required=True)
-    parser.add_argument("--exe", type=Path, default=BEYOND_PATH)
     args = parser.parse_args(argv)
 
-    args.out_dir.mkdir(parents=True, exist_ok=True)
-    written_count = 0
+    EXPECTED_DIR.mkdir(parents=True, exist_ok=True)
 
-    with (
-        Beyond(args.exe) as beyond,
-        tqdm(
-            desc="Generating summaries", total=len(args.paths), unit="IVTs"
-        ) as progress,
-    ):
-        for ivt_path in args.paths:
+    paths = DATA_DIR.glob("*.ivt")
+
+    with Beyond(args.beyond) as beyond:
+        for path in tqdm(paths, "Generating Expected Test Outptus"):
+            out_path = EXPECTED_DIR / path.name.replace(".ivt", ".json")
+
+            if out_path.exists():
+                continue
+
             try:
-                summary = build_ivt_summary(beyond, ivt_path)
-                output_path = args.out_dir / f"{ivt_path.stem.lower()}.beyond.json"
-                output_path.write_text(
+                summary = build_ivt_summary(beyond, path)
+
+                out_path.write_text(
                     json.dumps(
                         asdict(summary),
                         default=datetime.isoformat,
@@ -434,15 +443,10 @@ def main(argv: list[str] | None = None) -> int:
                     + "\n",
                     encoding="utf-8",
                 )
-                tqdm.write(f"Wrote {output_path}")
-                written_count += 1
-            except (OSError, RuntimeError, ValueError) as error:
-                tqdm.write(f"Skipping {ivt_path}: {error}")
-            finally:
-                progress.update()
+            except (OSError, RuntimeError, ValueError):
+                return 1
 
-    print(f"Done: {written_count} written")
-    return 0 if written_count else 1
+    return 0
 
 
 if __name__ == "__main__":
