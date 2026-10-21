@@ -2,6 +2,9 @@
 
 `pyivt` is a library for Statistics Canada Beyond 20/20 `.ivt` files, written in Rust. It is designed to be minimal and easily adaptable for existing codebases. Key features are:
 
+> [!NOTE]
+> `pyivt` is under active development and is not considered stable until v0.1.0
+
 - **Fast**: Orders of magnitude faster than GUI automation for metadata
 - **Python**: Easily integrates into modern data workflows with a minimal API
 - **Typed**: Produces fully type-safe and predictable metadata
