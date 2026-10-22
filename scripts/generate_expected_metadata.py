@@ -73,9 +73,11 @@ class IvtMetadata:
     )
 
 
-BEYOND_2020_PATH = Path(
-    r"C:\Program Files\Beyond 2020\Professional Browser\Brwpro.exe",
+BEYOND_PATHS = (
+    Path(r"C:\Program Files\Beyond 2020\Professional Browser\Brwpro.exe"),
+    Path(r"C:\Program Files (x86)\Beyond 2020\Professional Browser\Brwpro.exe"),
 )
+BEYOND_PATH = next(path for path in BEYOND_PATHS if path.exists())
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 EXPECTED_DIR = Path(__file__).resolve().parent.parent / "tests" / "expected"
 TIMEOUT = 5
@@ -115,7 +117,7 @@ def read_summary() -> BeautifulSoup:
 
 
 class Beyond:
-    def __init__(self, executable: Path = BEYOND_2020_PATH) -> None:
+    def __init__(self, executable: Path) -> None:
         self.executable = executable
         self.app: Application | None = None
 
@@ -414,7 +416,7 @@ def main(argv: list[str] | None = None) -> int:
         "--beyond",
         "-b",
         type=Path,
-        default=BEYOND_2020_PATH,
+        default=BEYOND_PATH,
     )
     args = parser.parse_args(argv)
 

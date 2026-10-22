@@ -67,9 +67,7 @@ def snapshot_comparable(meta: IvtMetadata, path: Path) -> dict:
         # Not in COMPARED_KEYS yet — whitespace/content still drifts from Beyond.
         "notes_en": meta.notes.en,
         "notes_fr": meta.notes.fr,
-        "last_update": datetime.fromtimestamp(
-            stats.st_mtime, timezone.utc
-        ).isoformat(),
+        "last_update": datetime.fromtimestamp(stats.st_mtime, timezone.utc).isoformat(),
         "file_size": stats.st_size,
         # Not in COMPARED_KEYS yet — Beyond grid size can disagree with pyivt.
         "number_of_datapoints": meta.number_of_datapoints,

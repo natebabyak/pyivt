@@ -36,24 +36,22 @@ dependencies = [
 Changelog = "https://github.com/natebabyak/pyivt/blob/main/CHANGELOG.md"
 Homepage = "https://github.com/natebabyak/pyivt"
 Issues = "https://github.com/natebabyak/pyivt/issues"
-Repository = "https://github.com/natebabyak/pyivt"
+Repository = "https://github.com/natebabyak/pyivt.git"
 
 [dependency-groups]
 dev = [
-  "maturin>=1.5,<2",
-  "pytest>=7",
-  "ruff>=0.6",
-]
-
-download_data = ["httpx"]
-
-generate_expected = [
-  "pywinauto",
-  "selectolax",
+  "beautifulsoup4>=4",
+  "maturin>=1.0,<2.0",
+  "polars>=2.0",
+  "pyperclip>=1.0",
+  "pytest>=9.0",
+  "pywinauto>=0.6",
+  "rpy2>=3.0",
+  "ruff>=0.17",
 ]
 
 [build-system]
-requires = ["maturin>=1.5,<2"]
+requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [tool.maturin]
