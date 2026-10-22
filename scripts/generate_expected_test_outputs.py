@@ -15,11 +15,10 @@ from bs4 import BeautifulSoup, Tag
 from bs4.element import PageElement
 from pywinauto import Application, Desktop, ElementNotFoundError
 from pywinauto.keyboard import send_keys
-from tqdm import tqdm
 
 
 @dataclass
-class IvtSummaryStatisticsDimension:
+class IvtDimension:
     name_en: str
     name_fr: str
     items: int
@@ -29,21 +28,21 @@ class IvtSummaryStatisticsDimension:
 
 
 @dataclass
-class IvtSummaryFootnote:
+class IvtFootnote:
     symbol: str
     description_en: str
     description_fr: str
 
 
 @dataclass
-class IvtSummaryMissingValue:
+class IvtMissingValue:
     symbol: str
     description_en: str
     description_fr: str
 
 
 @dataclass
-class IvtSummary:
+class IvtMetadata:
     title_en: str
     title_fr: str
     file_name: str
@@ -63,19 +62,19 @@ class IvtSummary:
     start_date: datetime | None
     end_date: datetime | None
     read_only: bool
-    dimensions: list[IvtSummaryStatisticsDimension] = dataclass_field(
+    dimensions: list[IvtDimension] = dataclass_field(
         default_factory=list,
     )
-    footnotes: list[IvtSummaryFootnote] = dataclass_field(
+    footnotes: list[IvtFootnote] = dataclass_field(
         default_factory=list,
     )
-    missing_values: list[IvtSummaryMissingValue] = dataclass_field(
+    missing_values: list[IvtMissingValue] = dataclass_field(
         default_factory=list,
     )
 
 
 BEYOND_2020_PATH = Path(
-    r"C:\Program Files (x86)\Beyond 2020\Professional Browser\Brwpro.exe",
+    r"C:\Program Files\Beyond 2020\Professional Browser\Brwpro.exe",
 )
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 EXPECTED_DIR = Path(__file__).resolve().parent.parent / "tests" / "expected"
@@ -206,7 +205,7 @@ def notes(tree: BeautifulSoup) -> str | None:
 def dimensions(
     english_summary: BeautifulSoup,
     french_summary: BeautifulSoup,
-) -> list[IvtSummaryStatisticsDimension]:
+) -> list[IvtDimension]:
     english_table = next(
         (
             table
@@ -232,7 +231,7 @@ def dimensions(
         raise ValueError("Invalid dimension table")
 
     return [
-        IvtSummaryStatisticsDimension(
+        IvtDimension(
             name_en=text(english_cells[index]),
             name_fr=text(french_cells[index]),
             items=int(text(english_cells[index + 1]).replace(",", "")),
@@ -247,7 +246,7 @@ def dimensions(
 def footnotes(
     english_summary: BeautifulSoup,
     french_summary: BeautifulSoup,
-) -> list[IvtSummaryFootnote]:
+) -> list[IvtFootnote]:
     english_table = section_table(
         english_summary,
         ("Footnotes:", "Notes en bas de page :"),
@@ -265,7 +264,7 @@ def footnotes(
         raise ValueError("Invalid footnote table")
 
     return [
-        IvtSummaryFootnote(
+        IvtFootnote(
             symbol=text(english_cells[index]),
             description_en=text(english_cells[index + 1]),
             description_fr=text(french_cells[index + 1]),
@@ -277,7 +276,7 @@ def footnotes(
 def missing_values(
     english_summary: BeautifulSoup,
     french_summary: BeautifulSoup,
-) -> list[IvtSummaryMissingValue]:
+) -> list[IvtMissingValue]:
     english_table = section_table(
         english_summary,
         ("Missing Values:", "Valeurs manquantes:"),
@@ -294,7 +293,7 @@ def missing_values(
     if len(english_cells) % 2:
         raise ValueError("Invalid missing-value table")
 
-    values: list[IvtSummaryMissingValue] = []
+    values: list[IvtMissingValue] = []
     for index in range(0, len(english_cells), 2):
         english_description = text(english_cells[index + 1])
         french_description = (
@@ -303,7 +302,7 @@ def missing_values(
             else english_description
         )
         values.append(
-            IvtSummaryMissingValue(
+            IvtMissingValue(
                 symbol=text(english_cells[index]),
                 description_en=english_description,
                 description_fr=french_description,
@@ -336,7 +335,7 @@ def parse_time_series(
     return frequency.strip() or None, start_date, end_date
 
 
-def build_ivt_summary(beyond: Beyond, ivt_path: Path) -> IvtSummary:
+def build_ivt_summary(beyond: Beyond, ivt_path: Path) -> IvtMetadata:
     english_summary, french_summary = beyond.summaries(ivt_path)
     file_stats = ivt_path.stat()
 
@@ -375,7 +374,7 @@ def build_ivt_summary(beyond: Beyond, ivt_path: Path) -> IvtSummary:
         time_series_en or time_series_fr
     )
 
-    return IvtSummary(
+    return IvtMetadata(
         title_en=title_en,
         title_fr=title_fr,
         file_name=ivt_path.name,
@@ -424,7 +423,7 @@ def main(argv: list[str] | None = None) -> int:
     paths = DATA_DIR.glob("*.ivt")
 
     with Beyond(args.beyond) as beyond:
-        for path in tqdm(paths, "Generating Expected Test Outptus"):
+        for path in paths:
             out_path = EXPECTED_DIR / path.name.replace(".ivt", ".json")
 
             if out_path.exists():

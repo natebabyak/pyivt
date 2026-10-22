@@ -1,5 +1,7 @@
 /.venv/
 /data/
+/dist/
 __pycache__/
+/python/pyivt/_native.pyd
 /target/
 /tests/expected/

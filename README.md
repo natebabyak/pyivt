@@ -150,13 +150,13 @@ Apache Arrow is ready to use with your current data stack.
    Put any number of `.ivt` files in `data`, or use the default dataset using:
 
    ```bash
-   uv run --no-project --with httpx scripts/download.py
+   uv run --no-project scripts/copy_test_inputs.py
    ```
 
 2. Generate expected test outputs
 
    ```bash
-   uv run --no-project --with bs4 --with pywinauto scripts/generate.py
+   uv run --no-project --with bs4 --with pywinauto scripts/generate_expected_test_outputs.py
    ```
 
    `generate.py` finds all `.ivt` files in `data` and generates expected test outputs in `tests/expected` using `bs4` and `pywinauto`

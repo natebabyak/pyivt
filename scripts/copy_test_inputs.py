@@ -6,6 +6,7 @@ from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DEFAULT_DIRECTORIES = [
+    Path(r"C:\Program Files\Beyond 2020\Professional Browser\Data"),
     Path(r"C:\Program Files (x86)\Beyond 2020\Professional Browser\Data"),
 ]
 
