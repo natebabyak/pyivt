@@ -7,4 +7,7 @@
 __pycache__/
 /python/pyivt/_native.pyd
 /target/
-/tests/expected/
+/tests/expected/*
+!/tests/expected/47ffb2b43e083b83853c814467f0ca1c4fa09bffe2e0df7594f780108589de1c.json
+!/tests/expected/625ff7c387bd3d45af25b0bfd48aff3e186d46d93e749d0632f1840dee806192.json
+!/tests/expected/ac8356156f994c45bf464eed0e0cf114e48ccdadf23b00bb65bea8c546ffa99b.json

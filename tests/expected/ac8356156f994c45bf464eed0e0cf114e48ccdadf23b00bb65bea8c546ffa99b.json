@@ -1,0 +1,103 @@
+{
+  "title_en": "Population and dwelling counts: Regional county municipalities (RCM), Quebec",
+  "title_fr": "Chiffres de population et des logements : Les municipalités régionales de comté (MRC), Québec",
+  "file_name": "ac8356156f994c45bf464eed0e0cf114e48ccdadf23b00bb65bea8c546ffa99b.ivt",
+  "directory": "C:\\Users\\nateb\\Projects\\pyivt\\data",
+  "author_en": "Statistics Canada",
+  "author_fr": "Statistique Canada",
+  "category_en": "",
+  "category_fr": "",
+  "keywords_en": [],
+  "keywords_fr": [],
+  "notes_en": "Product ID: 98100018\nTitle: Population and dwelling counts: Regional county municipalities (RCM), Quebec\nArchive Status: Current\nFrequency: Occasional\nUniverse: All persons, 2021 and 2016 censuses – 100% data\nVariable List: Population and dwelling counts (11)\nStart Reference Period: 2021-01-01\nEnd Reference Period: 2021-01-01\nSurvey Code: 3901\nSurvey Name: Census of Population\n\nSubjects:\n\nHigh Level Corrections:\n\nFootnotes :\n\nFootnote 1\n<p><strong>Regional county municipality (RCM)</strong></p><p><strong>Legal and geographic regional county municipality</strong></p><p>A regional county municipality (RCM) is a consolidated territory of municipalities and, in some cases, unorganized territories, governed by a law of general application (Geographical Names Board, 2016). In the geographic coding system, the legal RCM code is used to designate legally constituted RCMs, which cover only part of the territory in Quebec. It also distinguishes them from geographic RCMs, which are designated only for statistical purposes to ensure full territorial coverage in Quebec. Changes to the legal RCMs are announced in the Gazette officielle du Québec.</p><p>Geographic RCMs include legal RCMs and territories equivalent to an RCM, as well as Indigenous communities and northern villages on the perimeter of an RCM or that constitute equivalent territories.</p> <p>The geographic RCM represents a geographic breakdown established by the Institut de la statistique du Québec (ISQ) for statistical purposes. Compared with legally defined RCMs, geographic RCMs provide complete coverage of the province.</p> <p>This breakdown covers all of Quebec.</p>",
+  "notes_fr": "Identificateur de produit : 98100018\nTitre : Chiffres de population et des logements : Les municipalités régionales de comté (MRC), Québec\nStatut d'archivage : Courant\nFréquence : Occasionnelle\nUnivers : Toutes les personnes, recensements de 2021 et 2016 – Données intégrales\nListe de variables : Chiffres de population et des logements (11)\nDate de début de la période de référence : 2021-01-01\nDate de fin de la période de référence : 2021-01-01\nNuméro d'enquête : 3901\nNom de l'enquête : Recensement de la population\n\nSujets:\n\nCorrections de grande importance:\n\nRenvois :\n\nRenvoi 1\n<p><strong>Municipalité régionale de comté (MRC)</strong></p><p><strong>Municipalité régionale de comté juridique et géographique</strong></p><p>La municipalité régionale de comté (MRC) est un territoire regroupant des municipalités et, dans certains cas, des territoires non organisés, sur lequel s'exerce une autorité fixée par une loi d'application générale (Commission de toponymie, 2016). Dans le système du code géographique, l'expression MRC juridique est employée pour désigner les MRC juridiquement constituées, lesquelles ne couvrent qu'une partie du territoire québécois et pour les distinguer des MRC géographiques, désignées uniquement à des fins statistiques, de manière à s'assurer d'une couverture territoriale complète du Québec. Les changements apportés aux MRC juridiques passent par la Gazette officielle du Québec.</p><p>La version géographique des MRC comprend les MRC au sens juridique et les territoires équivalents à une MRC, de même que les communautés autochtones et les villages nordiques situés dans le périmètre des MRC ou qui constituent des territoires équivalents.</p><p>La version géographique des MRC est un découpage territorial établi par l'Institut de la statistique du Québec (ISQ) pour des fins statistiques. En comparaison aux MRC définies juridiquement, les MRC géographiques offrent une couverture exhaustive de la province.</p><p>Ce découpage couvre tout le Québec.</p>",
+  "last_update": "2026-10-23T18:21:28.189711+00:00",
+  "file_size": 37009,
+  "number_of_datapoints": 1155,
+  "frequency": "No",
+  "start_date": null,
+  "end_date": null,
+  "read_only": true,
+  "dimensions": [
+    {
+      "name_en": "Geographic name",
+      "name_fr": "Nom géographiqu",
+      "items": 105,
+      "type": "Normal",
+      "description_en": "Geographic name",
+      "description_fr": "Nom géographiqu"
+    },
+    {
+      "name_en": "Population and",
+      "name_fr": "Chiffres de pop",
+      "items": 11,
+      "type": "Normal",
+      "description_en": "Population and",
+      "description_fr": "Chiffres de pop"
+    }
+  ],
+  "footnotes": [
+    {
+      "symbol": "(A)",
+      "description_en": "Data quality: excellent",
+      "description_fr": "Qualité des données : excellente"
+    },
+    {
+      "symbol": "(B)",
+      "description_en": "Data quality: very good",
+      "description_fr": "Qualité des données : très bonne"
+    },
+    {
+      "symbol": "(C)",
+      "description_en": "Data quality: good",
+      "description_fr": "Qualité des données : bonne"
+    },
+    {
+      "symbol": "(D)",
+      "description_en": "Data quality: acceptable",
+      "description_fr": "Qualité des données : acceptable"
+    },
+    {
+      "symbol": "(E)",
+      "description_en": "use with caution",
+      "description_fr": "À utiliser avec prudence"
+    },
+    {
+      "symbol": "(R)",
+      "description_en": "Revised",
+      "description_fr": "Révisé"
+    },
+    {
+      "symbol": "(P)",
+      "description_en": "Preliminary",
+      "description_fr": "Provisoire"
+    }
+  ],
+  "missing_values": [
+    {
+      "symbol": "..",
+      "description_en": "Not available for a specific reference period",
+      "description_fr": "Indisponible pour une période de référence précise"
+    },
+    {
+      "symbol": "X",
+      "description_en": "Suppressed to meet the confidentiality requirements of the Statistics Act",
+      "description_fr": "Confidentiel en vertu des dispositions de la Loi sur la statistique"
+    },
+    {
+      "symbol": "...",
+      "description_en": "Not applicable",
+      "description_fr": "N'ayant pas lieu de figurer"
+    },
+    {
+      "symbol": "F",
+      "description_en": "Too unreliable to be published",
+      "description_fr": "Trop peu fiable pour être publié"
+    },
+    {
+      "symbol": "0 s",
+      "description_en": "value rounded to 0 (zero) where there is a meaningful distinction between true zero and the value that was rounded",
+      "description_fr": "valeur arrondie à 0 (zéro) là où il y a une distinction importante entre le zéro absolu et la valeur arrondie"
+    }
+  ]
+}

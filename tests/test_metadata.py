@@ -44,6 +44,8 @@ COMPARED_KEYS: tuple[str, ...] = (
 
 def _load_expect(case: SimpleNamespace) -> dict:
     expect = json.loads(case.expect_path.read_text(encoding="utf-8"))
+    # The checkout location is not part of the hashed IVT contents.
+    expect["directory"] = str(case.path.resolve().parent)
     # The copy's filesystem timestamp is not part of the hashed IVT contents.
     expect["last_update"] = datetime.fromtimestamp(
         case.path.stat().st_mtime, timezone.utc

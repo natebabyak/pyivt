@@ -32,6 +32,6 @@ def demo_ivt(request) -> SimpleNamespace:
     case = request.param
     assert case.expect_path.is_file(), (
         f"missing golden {case.expect_path.name}; "
-        "run: python scripts/generate_expected_test_outputs.py"
+        "run: python scripts/generate_expected_metadata.py"
     )
     return case

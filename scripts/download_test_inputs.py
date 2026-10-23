@@ -16,6 +16,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--number", "-n", type=int, default=10)
     parser.add_argument(
+        "--expected-dir",
+        type=Path,
+        help="Only download inputs whose SHA-256 has a JSON reference in this directory.",
+    )
+    parser.add_argument(
         "--clear",
         "-c",
         action="store_true",
@@ -24,6 +29,11 @@ def main() -> int:
     args = parser.parse_args()
     if args.number < 1:
         parser.error("--number must be positive")
+    expected_hashes = None
+    if args.expected_dir is not None:
+        expected_hashes = {path.stem for path in args.expected_dir.glob("*.json")}
+        if len(expected_hashes) < args.number:
+            parser.error("--expected-dir contains fewer JSON references than --number")
 
     DATA_DIR.mkdir(exist_ok=True)
     if args.clear:
@@ -57,6 +67,8 @@ def main() -> int:
                     continue
                 content = archive.read(name)
                 digest = hashlib.sha256(content).hexdigest()
+                if expected_hashes is not None and digest not in expected_hashes:
+                    continue
                 if digest in downloaded:
                     continue
                 destination = DATA_DIR / f"{digest}.ivt"

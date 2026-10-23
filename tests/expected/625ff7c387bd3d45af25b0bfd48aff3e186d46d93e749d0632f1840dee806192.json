@@ -1,0 +1,103 @@
+{
+  "title_en": "Population and dwelling counts: Canada, provinces and territories",
+  "title_fr": "Chiffres de population et des logements : Canada, provinces et territoires",
+  "file_name": "625ff7c387bd3d45af25b0bfd48aff3e186d46d93e749d0632f1840dee806192.ivt",
+  "directory": "C:\\Users\\nateb\\Projects\\pyivt\\data",
+  "author_en": "Statistics Canada",
+  "author_fr": "Statistique Canada",
+  "category_en": "",
+  "category_fr": "",
+  "keywords_en": [],
+  "keywords_fr": [],
+  "notes_en": "Product ID: 98100001\nTitle: Population and dwelling counts: Canada, provinces and territories\nArchive Status: Current\nFrequency: Occasional\nUniverse: All persons, 2021 and 2016 censuses – 100% data\nVariable List: Population and dwelling counts (11)\nStart Reference Period: 2021-01-01\nEnd Reference Period: 2021-01-01\nSurvey Code: 3901\nSurvey Name: Census of Population\n\nSubjects:\n\nHigh Level Corrections:\n\nFootnotes :\n\nFootnote 1\n<p><strong>Content considerations</strong></p>  <p>The 2021 Census population counts for a particular geographic area represent the number of Canadians whose usual place of residence is in that area, regardless of where they happened to be on Census Day. Also included are any Canadians who were staying in that area on Census Day and who had no usual place of residence elsewhere in Canada, as well as those considered to be non-permanent residents. For most areas, there is little difference between the number of usual residents and the number of people staying in the area on Census Day. For certain places, however, such as tourist or vacation areas, or those including large work camps, the number of people staying in that area at any particular time could significantly exceed the number of usual residents shown here. The population counts include Canadians living in other countries, but do not include foreign residents living in Canada. Given these differences, users are advised not to interpret population counts as being the number of people living in the reported dwellings.</p>  <p>The dwelling counts refer to total private dwellings and private dwellings occupied by usual residents in Canada. The census dwelling counts do not include collective dwellings, which are dwellings of a commercial, institutional or communal nature. The usual residents in collective dwellings are, however, included in the population counts.</p>  <p>Changes occur to the names, boundaries and other characteristics of geographic areas (e.g., census subdivisions may amalgamate, or there may be an annexation or a change of name or status). Since the geographic framework is used for census data collection, the geographic reference date must be set several months before the date of the census in order to have these changes made in time. For the 2021 Census, the geographic reference date was January 1, 2021.</p>  <p>Land area is the area in square kilometres of the land-based portions of standard geographic areas. The data are unofficial, and are provided for the sole purpose of calculating population density. Land area data for the standard geographic areas reflect the boundaries in effect on January 1, 2021 (the geographic reference date for the 2021 Census of Canada).</p>  <p><strong>Definitions</strong></p>  <p>The Census Dictionary is a reference document which contains detailed definitions of Census of Population concepts, universes, variables, and geographic terms, as well as historical information.</p> <p><strong>Incompletely enumerated reserves and settlements</strong></p><p>In 2021, a total of 63 census subdivisions defined as reserves and settlements were incompletely enumerated. For these reserves and settlements, dwelling enumeration was either not permitted or could not be completed because of the various reasons below.</p><p>This represents an increase compared with the 14 census subdivisions defined as reserves and settlements that were incompletely enumerated in the 2016 Census. Health and safety restrictions put in place to slow the spread of COVID-19 and natural events (including evacuations because of forest fires) contributed to the incomplete enumeration of many reserves and settlements.</p><p>The 2021 Census population and dwelling counts are not available for the 63 incompletely enumerated reserves and settlements, and are not included in 2021 Census tabulations. Data for geographic areas containing one or more of these reserves and settlements are noted accordingly. Because of the missing data, users are cautioned that—for the affected geographic areas—comparisons (e.g., percentage change) between 2016 and 2021 may not be precise. The impact of the missing data for higher-level geographic areas (Canada, provinces and territories, census metropolitan areas and census agglomerations) is usually very/ small. However, the impact can be significant for lower-level geographic areas (e.g., census divisions), where incompletely enumerated reserves and settlements account for a higher proportion of the population. This is especially true for lower-level geographic areas where a particular reserve or settlement was incompletely enumerated for the 2021 Census but enumerated for the 2016 Census and, vice versa.</p> <p><strong>Adjustment of population counts</strong></p>  <p>Statistics Canada is committed to protect the privacy of all Canadians and the confidentiality of the data they provide to us. As part of this commitment, some population counts of geographic areas are adjusted in order to ensure confidentiality.</p>  <p>Counts of the total population are rounded to a base of 5 for any dissemination block having a population of less than 15. Population counts for all standard geographic areas above the dissemination block level are derived by summing the adjusted dissemination block counts. The adjustment of dissemination block counts is controlled to ensure that the population counts for dissemination areas will always be within 5 of the actual values. The adjustment has no impact on the population counts of census divisions and large census subdivisions. Dwelling counts are not adjusted.</p>  <p><strong>Difference between census counts and population estimates</strong></p>  <p>The Census of Population is designed to conduct a complete count of the population. Inevitably, however, some individuals will not be enumerated (undercoverage), while others, usually less numerous, will be enumerated more than once (overcoverage).</p>  <p>To determine the number of people who were missed or counted more than once, Statistics Canada conducts postcensal studies of the coverage of the census population, using representative samples of the population. Results of these studies are usually available two years after Census Day. They are used, in combination with census figures and other sources, to develop the population estimates produced by Statistics Canada on a regular basis. Population estimates are used for equalization payments, to follow trends in the Canadian population on a quarterly basis and to understand the underlying components of population change (for example, births, deaths, immigrants, emigrants and non-permanent residents). Population estimates differ from census counts and are usually higher, because census counts are not adjusted for undercoverage or overcoverage.</p>",
+  "notes_fr": "Identificateur de produit : 98100001\nTitre : Chiffres de population et des logements : Canada, provinces et territoires\nStatut d'archivage : Courant\nFréquence : Occasionnelle\nUnivers : Toutes les personnes, recensements de 2021 et 2016 – Données intégrales\nListe de variables : Chiffres de population et des logements (11)\nDate de début de la période de référence : 2021-01-01\nDate de fin de la période de référence : 2021-01-01\nNuméro d'enquête : 3901\nNom de l'enquête : Recensement de la population\n\nSujets:\n\nCorrections de grande importance:\n\nRenvois :\n\nRenvoi 1\n<p><strong>Considérations relatives au contenu</strong></p>  <p>Les chiffres de population du Recensement de 2021 pour une région géographique particulière représentent le nombre de Canadiens dont le lieu de résidence habituel est dans cette région, quel que soit l'endroit où ils se trouvaient le jour du recensement. Sont également compris dans ces chiffres tous les Canadiens qui demeuraient dans un logement de cette région le jour du recensement et qui n'avaient pas de lieu de résidence habituel ailleurs au Canada, de même que ceux qui étaient considérés comme des résidents non permanents. Dans la plupart des régions, la différence entre le nombre de résidents habituels et le nombre de résidents qui demeuraient dans cette région le jour du recensement est minime. Toutefois, à certains endroits, notamment dans des régions touristiques ou de villégiature, ou dans celles où l'on trouve d'importants campements de travailleurs, le nombre de personnes qui demeurent dans la région à n'importe quel moment pourrait être considérablement supérieur au nombre de résidents habituels dont il est ici fait mention. Les chiffres de population tiennent compte des Canadiens qui habitent dans d'autres pays, mais non pas des résidents étrangers qui habitent au Canada. Compte tenu de ces divergences, les utilisateurs ne doivent pas déduire que les chiffres de population correspondent au nombre de personnes qui habitent dans les logements déclarés.</p>   <p>Les chiffres des logements correspondent au total des logements privés et aux logements privés occupés par des résidents habituels au Canada. Les chiffres des logements du recensement ne comprennent pas les logements collectifs, qui sont des établissements commerciaux, institutionnels ou communautaires. Les résidents habituels dénombrés dans des logements collectifs sont toutefois inclus dans les chiffres de population.</p>  <p>Des modifications sont apportées aux noms, limites et autres caractéristiques des régions géographiques (p. ex., des subdivisions de recensement peuvent fusionner, ou il peut y avoir une annexion ou un changement de nom ou de statut). Étant donné que le cadre géographique est utilisé aux fins de la collecte des données du recensement, la date de référence géographique doit être fixée plusieurs mois avant la date du recensement pour que ces modifications puissent être apportées à temps. Pour le Recensement de 2021, la date de référence géographique était le 1er janvier 2021.</p>  <p>La superficie des terres correspond à la surface en kilomètres carrés des parties terrestres des régions géographiques normalisées. Les données ne sont pas officielles et servent uniquement à calculer la densité de la population. Les données sur la superficie des terres des régions géographiques normalisées reflètent les limites en vigueur le 1er janvier 2021 (date de référence géographique du Recensement du Canada de 2021).</p>  <p><strong>Définitions</strong></p>  <p>Le Dictionnaire du recensement est un document de référence qui comprend des définitions détaillées des concepts, des univers, des variables, des termes géographiques ainsi que les renseignements historiques du Recensement de la population.</p> <p><strong>Réserves et établissements partiellement dénombrés dénombrés</strong></p><p>En 2021, un total de 63 subdivisions de recensement définies comme des réserves et établissements ont été partiellement dénombrées. Pour ces réserves et établissements, le dénombrement des logements n’a pas été autorisé ou n’a pas pu être complété pour diverses raisons mentionnées ci-dessous.</p><p>Cela représente une augmentation par rapport aux 14 subdivisions de recensement définies comme des réserves et établissements ayant été partiellement dénombrées lors du Recensement de 2016. Les restrictions en matière de santé et de sécurité mises en œuvre pour ralentir la propagation de la COVID-19, de même que les catastrophes naturelles survenues (notamment les feux de forêt ayant entraîné des évacuations), ont contribué au dénombrement partiel de nombreuses réserves et de nombreux établissements.</p><p>Les chiffres de population et des logements du Recensement de 2021 ne sont pas offerts pour les 63 réserves et établissements partiellement dénombrés et ils ne sont pas compris dans les totalisations du Recensement de 2021. Les données sur les régions géographiques comptant un ou plusieurs de ces établissements ou réserves font donc l’objet d’une note en ce sens. En raison des données manquantes, les utilisateurs doivent prendre note que les comparaisons (p. ex. les variations en pourcentage) entre 2016 et 2021 pourraient ne pas être précises pour les régions géographiques en cause. L’effet des données manquantes est habituellement très faible pour les régions géographiques de niveau supérieur (Canada, provinces et territoires, régions métropolitaines de recensement et agglomérations de recensement). Par contre, il peut être important pour les régions géographiques de niveau inférieur (p. ex. divisions de recensement), où les réserves et établissements partiellement dénombrés représentent une plus grande proportion de la population. Cela est particulièrement vrai pour les régions géographiques de niveau inférieur où une réserve ou un établissement donné a été partiellement dénombré au Recensement de 2021 mais dénombré au Recensement de 2016, et vice versa.</p> <p><strong>Ajustement des chiffres de population</strong></p>  <p>Statistique Canada prend des mesures supplémentaires afin de protéger la vie privée de tous les Canadiens et la confidentialité des données qu'ils fournissent. À ce titre, certains chiffres de population des régions géographiques sont ajustés afin d'assurer la confidentialité des données.</p>  <p>Dans le cas des îlots de diffusion dont la population est inférieure à 15 habitants, les chiffres de population totale sont arrondis à un multiple de 5. Les chiffres de population de toutes les régions géographiques normalisées de niveau supérieur à celui de l'îlot de diffusion sont calculés en additionnant les chiffres ajustés des îlots de diffusion. L'ajustement des chiffres des îlots de diffusion est contrôlé de sorte que les chiffres de population des aires de diffusion se situent toujours à plus ou moins 5 de la valeur réelle. L'ajustement n'aura pas d'incidence sur les chiffres de population des divisions de recensement et des grandes subdivisions de recensement. Les chiffres des logements ne sont pas ajustés.</p>  <p><strong>Différence entre les effectifs dénombrés et les estimations démographiques</strong></p>  <p>Le Recensement de la population vise à effectuer un dénombrement complet de la population. Il est toutefois inévitable qu'un certain nombre de personnes ne soient pas dénombrées (sous-dénombrement) et que d'autres personnes, habituellement moins nombreuses, le soient plus d'une fois (surdénombrement).</p>  <p>Afin de déterminer le nombre de personnes ayant été omises où dénombrées plus d'une fois, Statistique Canada mène des études postcensitaires de couverture de la population du recensement à l'aide d'échantillons représentatifs de la population. Les résultats de ces études sont normalement disponibles environ deux ans après le jour du recensement. Ils sont utilisés, en combinaison avec les chiffres du recensement et d'autres sources, dans l'élaboration des estimations démographiques produites par Statistique Canada à intervalles réguliers. Ces estimations démographiques sont utilisées dans le calcul des paiements de transfert, permettent de suivre trimestriellement les tendances de la population canadienne et d'en comprendre les facteurs sous-jacents (par exemple, les naissances, les décès, les immigrants, les émigrants et les résidents non permanents). Les estimations démographiques diffèrent, le plus souvent à la hausse, des effectifs dénombrés au recensement en raison du fait que les effectifs dénombrés au recensement ne sont jamais rajustés pour tenir compte du sous-dénombrement ou du surdénombrement.</p>",
+  "last_update": "2026-10-23T12:40:13.506950+00:00",
+  "file_size": 27680,
+  "number_of_datapoints": 154,
+  "frequency": "No",
+  "start_date": null,
+  "end_date": null,
+  "read_only": true,
+  "dimensions": [
+    {
+      "name_en": "Geographic name",
+      "name_fr": "Nom géographiqu",
+      "items": 14,
+      "type": "Normal",
+      "description_en": "Geographic name",
+      "description_fr": "Nom géographiqu"
+    },
+    {
+      "name_en": "Population and",
+      "name_fr": "Chiffres de pop",
+      "items": 11,
+      "type": "Normal",
+      "description_en": "Population and",
+      "description_fr": "Chiffres de pop"
+    }
+  ],
+  "footnotes": [
+    {
+      "symbol": "(A)",
+      "description_en": "Data quality: excellent",
+      "description_fr": "Qualité des données : excellente"
+    },
+    {
+      "symbol": "(B)",
+      "description_en": "Data quality: very good",
+      "description_fr": "Qualité des données : très bonne"
+    },
+    {
+      "symbol": "(C)",
+      "description_en": "Data quality: good",
+      "description_fr": "Qualité des données : bonne"
+    },
+    {
+      "symbol": "(D)",
+      "description_en": "Data quality: acceptable",
+      "description_fr": "Qualité des données : acceptable"
+    },
+    {
+      "symbol": "(E)",
+      "description_en": "use with caution",
+      "description_fr": "À utiliser avec prudence"
+    },
+    {
+      "symbol": "(R)",
+      "description_en": "Revised",
+      "description_fr": "Révisé"
+    },
+    {
+      "symbol": "(P)",
+      "description_en": "Preliminary",
+      "description_fr": "Provisoire"
+    }
+  ],
+  "missing_values": [
+    {
+      "symbol": "..",
+      "description_en": "Not available for a specific reference period",
+      "description_fr": "Indisponible pour une période de référence précise"
+    },
+    {
+      "symbol": "X",
+      "description_en": "Suppressed to meet the confidentiality requirements of the Statistics Act",
+      "description_fr": "Confidentiel en vertu des dispositions de la Loi sur la statistique"
+    },
+    {
+      "symbol": "...",
+      "description_en": "Not applicable",
+      "description_fr": "N'ayant pas lieu de figurer"
+    },
+    {
+      "symbol": "F",
+      "description_en": "Too unreliable to be published",
+      "description_fr": "Trop peu fiable pour être publié"
+    },
+    {
+      "symbol": "0 s",
+      "description_en": "value rounded to 0 (zero) where there is a meaningful distinction between true zero and the value that was rounded",
+      "description_fr": "valeur arrondie à 0 (zéro) là où il y a une distinction importante entre le zéro absolu et la valeur arrondie"
+    }
+  ]
+}

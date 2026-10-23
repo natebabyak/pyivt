@@ -145,6 +145,11 @@ Apache Arrow is ready to use with your current data stack.
 
 ## Tests
 
+CI downloads three Census samples with committed JSON metadata references.
+Parquet references are generated locally and are not committed; comparisons
+against them are skipped when they are unavailable. Arrow export and round-trip
+tests still run without these references.
+
 1. Populate `data` with test inputs
 
    Put any number of `.ivt` files in `data`, or use the default dataset using:
