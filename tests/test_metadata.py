@@ -11,9 +11,8 @@ from types import SimpleNamespace
 from pyivt import IvtMetadata
 from pyivt import open as open_ivt
 
-# Top-level Beyond golden keys that already match pyivt (+ path stats) on all
-# current fixtures. Add a key here and a branch in snapshot_comparable when
-# more fields align.
+# All top-level Beyond File Summary keys. Dimension notes/members are exposed on
+# the API but intentionally omitted from golden comparison.
 COMPARED_KEYS: tuple[str, ...] = (
     "title_en",
     "title_fr",
@@ -23,20 +22,21 @@ COMPARED_KEYS: tuple[str, ...] = (
     "author_fr",
     "category_en",
     "category_fr",
+    "keywords_en",
+    "keywords_fr",
+    "notes_en",
+    "notes_fr",
     "last_update",
     "file_size",
+    "number_of_datapoints",
     "frequency",
+    "start_date",
+    "end_date",
+    "read_only",
+    "dimensions",
+    "footnotes",
+    "missing_values",
 )
-
-# Not compared yet (Beyond golden vs current pyivt disagree or shapes differ):
-# - notes_en / notes_fr        (whitespace / content drift)
-# - number_of_datapoints       (Beyond grid vs pyivt decode counts)
-# - start_date / end_date      (Beyond summary often null; pyivt fills ISO dates)
-# - read_only                  (Beyond Yes/No vs pyivt bool disagrees on some demos)
-# - dimensions                 (items / FR labels / descriptions diverge on some demos)
-# - keywords_en / keywords_fr  (list[str] vs LocalizedText)
-# - footnotes                  ({symbol, description_*} vs language/number/text)
-# - missing_values             (description_* vs label / code)
 
 
 def _load_expect(case: SimpleNamespace) -> dict:
@@ -47,11 +47,48 @@ def _expect_slice(expect: dict) -> dict:
     return {key: expect[key] for key in COMPARED_KEYS}
 
 
-def snapshot_comparable(meta: IvtMetadata, path: Path) -> dict:
-    """Build Beyond-shaped fields; return only keys listed in COMPARED_KEYS.
+def _keywords_list(text: str | None) -> list[str]:
+    if not text or not text.strip():
+        return []
+    return [part.strip() for part in text.split(",") if part.strip()]
 
-    Values for not-yet-compared keys are still computed here so enabling a
-    field later is usually just adding its name to COMPARED_KEYS.
+
+def _footnotes_beyond(meta: IvtMetadata) -> list[dict]:
+    """Pair EN/FR footnote rows into Beyond {symbol, description_*} shape."""
+    by_symbol: dict[str, dict] = {}
+    order: list[str] = []
+    for footnote in meta.footnotes:
+        symbol = footnote.symbol
+        if symbol not in by_symbol:
+            by_symbol[symbol] = {
+                "symbol": symbol,
+                "description_en": None,
+                "description_fr": None,
+            }
+            order.append(symbol)
+        if footnote.language == "fr":
+            by_symbol[symbol]["description_fr"] = footnote.text
+        else:
+            by_symbol[symbol]["description_en"] = footnote.text
+    return [by_symbol[symbol] for symbol in order]
+
+
+def _missing_values_beyond(meta: IvtMetadata) -> list[dict]:
+    return [
+        {
+            "symbol": missing.symbol,
+            "description_en": missing.label.en,
+            "description_fr": missing.label.fr,
+        }
+        for missing in meta.missing_values
+    ]
+
+
+def snapshot_comparable(meta: IvtMetadata, path: Path) -> dict:
+    """Build Beyond-shaped fields for every COMPARED_KEYS entry.
+
+    Dimension ``notes_*`` / ``members_*`` are available on ``meta.dimensions``
+    but are not included in the golden snapshot.
     """
     stats = path.stat()
     path = path.resolve()
@@ -64,31 +101,30 @@ def snapshot_comparable(meta: IvtMetadata, path: Path) -> dict:
         "author_fr": meta.author.fr,
         "category_en": meta.category.en,
         "category_fr": meta.category.fr,
-        # Not in COMPARED_KEYS yet — whitespace/content still drifts from Beyond.
+        "keywords_en": _keywords_list(meta.keywords.en),
+        "keywords_fr": _keywords_list(meta.keywords.fr),
         "notes_en": meta.notes.en,
         "notes_fr": meta.notes.fr,
         "last_update": datetime.fromtimestamp(stats.st_mtime, timezone.utc).isoformat(),
         "file_size": stats.st_size,
-        # Not in COMPARED_KEYS yet — Beyond grid size can disagree with pyivt.
         "number_of_datapoints": meta.number_of_datapoints,
         "frequency": meta.frequency,
-        # Not in COMPARED_KEYS yet — Beyond summary often leaves these null.
         "start_date": meta.start_date,
         "end_date": meta.end_date,
-        # Not in COMPARED_KEYS yet — disagrees on some demo tables.
         "read_only": meta.read_only,
-        # Not in COMPARED_KEYS yet — items / FR labels diverge on some demos.
         "dimensions": [
             {
-                "name_en": d.name_en,
-                "name_fr": d.name_fr,
-                "items": d.count,
-                "type": d.type_label,
-                "description_en": d.description_en,
-                "description_fr": d.description_fr,
+                "name_en": dimension.name_en,
+                "name_fr": dimension.name_fr,
+                "items": dimension.count,
+                "type": dimension.type_label,
+                "description_en": dimension.description_en,
+                "description_fr": dimension.description_fr,
             }
-            for d in meta.dimensions
+            for dimension in meta.dimensions
         ],
+        "footnotes": _footnotes_beyond(meta),
+        "missing_values": _missing_values_beyond(meta),
     }
     return {key: full[key] for key in COMPARED_KEYS}
 
@@ -97,7 +133,7 @@ def test_metadata_matches_expected(demo_ivt):
     expect = _load_expect(demo_ivt)
     meta = open_ivt(demo_ivt.path).metadata
     assert snapshot_comparable(meta, demo_ivt.path) == _expect_slice(expect)
-    # Internal consistency: published grid size is the product of dim lengths.
+    # Summary datapoints are the product of Beyond Items (may exceed decode cube).
     assert prod(d.count for d in meta.dimensions) == meta.number_of_datapoints
 
 
@@ -134,14 +170,17 @@ def test_open_bytes_defers_decode(demo_ivt):
 
 def test_to_arrow_row_count(demo_ivt):
     ivt = open_ivt(demo_ivt.path)
-    n = ivt.metadata.number_of_datapoints
-    assert n is not None and n > 0
-    if n > 5_000_000:
+    # Decode grid uses descriptor cube counts (may be smaller than Summary Items).
+    n_decode = prod(ivt.layout.counts)
+    assert n_decode > 0
+    n_summary = ivt.metadata.number_of_datapoints
+    assert n_summary is not None and n_summary >= n_decode
+    if n_decode > 5_000_000:
         # Keep CI / local runs bounded for very large published grids.
         table = ivt.to_arrow(complete=False, labels=False)
         assert table.num_rows > 0
         assert "value" in table.column_names
         return
     table = ivt.to_arrow(complete=True, labels=True)
-    assert table.num_rows == n
+    assert table.num_rows == n_decode
     assert "value" in table.column_names

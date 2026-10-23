@@ -313,6 +313,110 @@ def missing_values(
     return values
 
 
+_MONTH_INDEX = {
+    "jan": 1,
+    "january": 1,
+    "ene": 1,
+    "enero": 1,
+    "janvier": 1,
+    "feb": 2,
+    "february": 2,
+    "febrero": 2,
+    "février": 2,
+    "fevrier": 2,
+    "mar": 3,
+    "march": 3,
+    "marzo": 3,
+    "mars": 3,
+    "apr": 4,
+    "april": 4,
+    "abr": 4,
+    "abril": 4,
+    "avril": 4,
+    "avr": 4,
+    "may": 5,
+    "mayo": 5,
+    "mai": 5,
+    "jun": 6,
+    "june": 6,
+    "junio": 6,
+    "juin": 6,
+    "jul": 7,
+    "july": 7,
+    "julio": 7,
+    "juillet": 7,
+    "juil": 7,
+    "aug": 8,
+    "august": 8,
+    "ago": 8,
+    "agosto": 8,
+    "août": 8,
+    "aout": 8,
+    "sep": 9,
+    "sept": 9,
+    "september": 9,
+    "septiembre": 9,
+    "septembre": 9,
+    "oct": 10,
+    "october": 10,
+    "octubre": 10,
+    "octobre": 10,
+    "nov": 11,
+    "november": 11,
+    "noviembre": 11,
+    "novembre": 11,
+    "dec": 12,
+    "dic": 12,
+    "december": 12,
+    "diciembre": 12,
+    "décembre": 12,
+    "decembre": 12,
+}
+
+
+def _month_token_to_index(token: str) -> int | None:
+    return _MONTH_INDEX.get(token.strip().lower())
+
+
+def _beyond_range_to_dates(
+    date_range: str,
+) -> tuple[datetime | None, datetime | None]:
+    """Convert Beyond File Summary ranges to ISO datetimes (generic, no fixtures)."""
+    import re
+
+    text = date_range.strip()
+    compact = re.fullmatch(
+        r"([A-Za-zÀ-ÿ]+)\s*(\d{4})\s*[-–—]\s*([A-Za-zÀ-ÿ]+)\s*(\d{4})",
+        text,
+    )
+    if compact:
+        m1 = _month_token_to_index(compact.group(1))
+        m2 = _month_token_to_index(compact.group(3))
+        if m1 and m2:
+            return (
+                datetime(int(compact.group(2)), m1, 1),
+                datetime(int(compact.group(4)), m2, 1),
+            )
+    semester = re.fullmatch(
+        r"([12])\s*S\s*(\d{4})\s*[-–—]\s*([12])\s*S\s*(\d{4})",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if semester:
+        month = lambda sem: 1 if int(sem) == 1 else 7
+        return (
+            datetime(int(semester.group(2)), month(semester.group(1)), 1),
+            datetime(int(semester.group(4)), month(semester.group(3)), 1),
+        )
+    try:
+        start, separator, end = text.partition("-")
+        if separator:
+            return datetime.fromisoformat(start.strip()), datetime.fromisoformat(end.strip())
+    except ValueError:
+        pass
+    return None, None
+
+
 def parse_time_series(
     value: str | None,
 ) -> tuple[str | None, datetime | None, datetime | None]:
@@ -323,17 +427,7 @@ def parse_time_series(
     if not separator:
         return frequency.strip() or None, None, None
 
-    start, separator, end = date_range.strip().partition("-")
-    if not separator:
-        return frequency.strip() or None, None, None
-
-    try:
-        start_date = datetime.fromisoformat(start.strip())
-        end_date = datetime.fromisoformat(end.strip())
-    except ValueError:
-        start_date = None
-        end_date = None
-
+    start_date, end_date = _beyond_range_to_dates(date_range.strip())
     return frequency.strip() or None, start_date, end_date
 
 

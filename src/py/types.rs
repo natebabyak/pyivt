@@ -75,6 +75,10 @@ pub struct Dimension {
     #[pyo3(get)]
     pub members_fr: Option<Vec<String>>,
     #[pyo3(get)]
+    pub notes_en: Option<String>,
+    #[pyo3(get)]
+    pub notes_fr: Option<String>,
+    #[pyo3(get)]
     pub ordinal: Option<Vec<i64>>,
 }
 
@@ -90,6 +94,8 @@ impl From<CoreDimension> for Dimension {
             type_label: d.type_label,
             members_en: d.members_en,
             members_fr: d.members_fr,
+            notes_en: d.notes_en,
+            notes_fr: d.notes_fr,
             ordinal: d.ordinal,
         }
     }
@@ -109,6 +115,8 @@ impl Dimension {
 #[derive(Clone)]
 pub struct Footnote {
     #[pyo3(get)]
+    pub symbol: String,
+    #[pyo3(get)]
     pub language: String,
     #[pyo3(get)]
     pub number: i64,
@@ -125,6 +133,7 @@ pub struct Footnote {
 impl From<CoreFootnote> for Footnote {
     fn from(f: CoreFootnote) -> Self {
         Self {
+            symbol: f.symbol,
             language: f.language,
             number: f.number,
             text: f.text,

@@ -21,9 +21,12 @@ class Dimension:
     type_label: str
     members_en: list[str] | None
     members_fr: list[str] | None
+    notes_en: str | None
+    notes_fr: str | None
     ordinal: list[int] | None
 
 class Footnote:
+    symbol: str
     language: str
     number: int
     text: str
