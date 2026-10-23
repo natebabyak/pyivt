@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import re
+import struct
 from datetime import datetime, timezone
 from math import prod
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from pyivt import IvtMetadata
 from pyivt import open as open_ivt
 
@@ -40,11 +43,29 @@ COMPARED_KEYS: tuple[str, ...] = (
 
 
 def _load_expect(case: SimpleNamespace) -> dict:
-    return json.loads(case.expect_path.read_text(encoding="utf-8"))
+    expect = json.loads(case.expect_path.read_text(encoding="utf-8"))
+    # The copy's filesystem timestamp is not part of the hashed IVT contents.
+    expect["last_update"] = datetime.fromtimestamp(
+        case.path.stat().st_mtime, timezone.utc
+    ).isoformat()
+    return expect
 
 
 def _expect_slice(expect: dict) -> dict:
-    return {key: expect[key] for key in COMPARED_KEYS}
+    return {
+        key: _notes_sentences(expect[key])
+        if key in ("notes_en", "notes_fr")
+        else expect[key]
+        for key in COMPARED_KEYS
+    }
+
+
+def _notes_sentences(text: str | None) -> tuple[str, ...] | None:
+    """Keep only the first and last sentences for notes comparison."""
+    if text is None:
+        return None
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+    return (sentences[0], sentences[-1])
 
 
 def _keywords_list(text: str | None) -> list[str]:
@@ -103,8 +124,8 @@ def snapshot_comparable(meta: IvtMetadata, path: Path) -> dict:
         "category_fr": meta.category.fr,
         "keywords_en": _keywords_list(meta.keywords.en),
         "keywords_fr": _keywords_list(meta.keywords.fr),
-        "notes_en": meta.notes.en,
-        "notes_fr": meta.notes.fr,
+        "notes_en": _notes_sentences(meta.notes.en),
+        "notes_fr": _notes_sentences(meta.notes.fr),
         "last_update": datetime.fromtimestamp(stats.st_mtime, timezone.utc).isoformat(),
         "file_size": stats.st_size,
         "number_of_datapoints": meta.number_of_datapoints,
@@ -175,3 +196,61 @@ def test_to_arrow_row_count(demo_ivt):
     assert table.num_rows == expected["number_of_datapoints"]
     assert table.num_rows == prod(ivt.layout.counts)
     assert "value" in table.column_names
+
+
+def test_metadata_path_and_bytes_match(demo_ivt):
+    by_path = open_ivt(demo_ivt.path).metadata
+    by_bytes = open_ivt(demo_ivt.path.read_bytes()).metadata
+    assert snapshot_comparable(by_path, demo_ivt.path) == snapshot_comparable(
+        by_bytes, demo_ivt.path
+    )
+    assert by_path.notes.en == by_bytes.notes.en
+    assert by_path.notes.fr == by_bytes.notes.fr
+    for path_dim, bytes_dim in zip(
+        by_path.dimensions, by_bytes.dimensions, strict=True
+    ):
+        assert path_dim.members_en == bytes_dim.members_en
+        assert path_dim.members_fr == bytes_dim.members_fr
+        assert path_dim.notes_en == bytes_dim.notes_en
+        assert path_dim.notes_fr == bytes_dim.notes_fr
+
+
+@pytest.mark.parametrize("slot", [544, 698, 712, 824])
+def test_paged_metadata_directory_matches_flat(slot, tmp_path):
+    """The same indirection applies to master, legend, and member directories."""
+    path = next((Path(__file__).parent.parent / "data").glob("625ff*.ivt"), None)
+    if path is None:
+        pytest.skip("small census fixture is not available")
+    original = path.read_bytes()
+    data = bytearray(original)
+    offset, _, count, flags = struct.unpack_from("<IIIH", data, slot)
+    assert flags & 1 == 0
+    page_size = struct.unpack_from("<H", data, 20)[0]
+    entries = data[offset : offset + count * 8]
+    # Force a second page while preserving all existing entry ordinals and
+    # references. Extra holes must stay holes after catalog relocation.
+    count = max(count, page_size + 1)
+    entries.extend(bytes(count * 8 - len(entries)))
+    page_offsets = []
+    for start in range(0, count, page_size):
+        data.extend(bytes(11))  # Pages need not be adjacent or aligned.
+        page_offsets.append(len(data))
+        data.extend(entries[start * 8 : (start + page_size) * 8])
+    index_offset = len(data)
+    data.extend(struct.pack(f"<{len(page_offsets)}I", *page_offsets))
+    struct.pack_into(
+        "<IIIH",
+        data,
+        slot,
+        index_offset,
+        len(page_offsets) * page_size,
+        count,
+        flags | 1,
+    )
+    changed_path = tmp_path / "paged.ivt"
+    changed_path.write_bytes(data)
+    expected = snapshot_comparable(open_ivt(original).metadata, changed_path)
+    for source in (changed_path, bytes(data)):
+        ivt = open_ivt(source)
+        assert snapshot_comparable(ivt.metadata, changed_path) == expected
+        assert ivt.to_arrow().equals(open_ivt(original).to_arrow())

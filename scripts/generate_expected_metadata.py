@@ -411,7 +411,9 @@ def _beyond_range_to_dates(
     try:
         start, separator, end = text.partition("-")
         if separator:
-            return datetime.fromisoformat(start.strip()), datetime.fromisoformat(end.strip())
+            return datetime.fromisoformat(start.strip()), datetime.fromisoformat(
+                end.strip()
+            )
     except ValueError:
         pass
     return None, None

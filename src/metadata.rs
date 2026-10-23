@@ -2,78 +2,26 @@
 
 use once_cell::sync::Lazy;
 use regex::Regex;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 
-use crate::bytes::{latin1, rd_pascal, u16, u32};
-use crate::descriptor::{
-    geo_dim_index, parse_descriptor, scan_dim_marker_in_buffers, walk_at_window, Descriptor,
-    DimDesc,
-};
+use crate::bytes::{latin1, u16, u32};
+use crate::descriptor::{geo_dim_index, parse_descriptor, Descriptor, DimDesc};
 use crate::error::IvtError;
 use crate::header::{
-    dim_slots, read_block_dir, read_block_dir_bytes, read_header, read_header_ex, HeaderLayout,
-    HDR_DESCRIPTOR_PTR, HDR_DIM_SLOT0, HDR_MASTER_PTR, HDR_STATUS_LEGEND,
-    DIM_SLOT_STRIDE,
+    dim_slots, read_header, read_header_ex, HeaderLayout, DIM_SLOT_STRIDE, HDR_DESCRIPTOR_PTR,
+    HDR_DIM_SLOT0, HDR_MASTER_PTR, HDR_STATUS_LEGEND,
 };
-use crate::io::{ByteRange, IvtSource, LoadedRange, DEFAULT_MERGE_GAP};
+use crate::io::IvtSource;
 
-static FACET_AUTHOR_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(
-        r"(?:\d{4} Census - Statistics Canada|Recensement de \d{4}-Statistique Canada|Beyond 20/20 Inc\.?|Ivation|OCDE|OECD)$",
-    )
-    .unwrap()
-});
 static TIME_SERIES_NAME_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?i)timeseries|time\s*series|time\s*period|\bdate\b").unwrap());
-static FREQ_NAME_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(
-        r"(?i)\b(annual|yearly|quarterly|monthly|weekly|daily|semi-?annual|annuel(?:le)?|trimestriel(?:le)?|mensuel(?:le)?|hebdomadaire|quotidien(?:ne)?|semi-?annuel(?:le)?)\b",
-    )
-    .unwrap()
-});
-static TS_RANGE_EN_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(
-        r"(?i)\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s*(\d{4})\b(?:.*?\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s*(\d{4})\b)?",
-    )
-    .unwrap()
-});
-static TS_RANGE_FR_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(
-        r"(?i)\b(jan(?:vier)?|f[eé]v(?:rier)?|mars|avr(?:il)?|mai|juin|juil(?:let)?|ao[uû]t|sep(?:t(?:embre)?)?|oct(?:obre)?|nov(?:embre)?|d[eé]c(?:embre)?)\s*(\d{4})\b(?:.*?\b(jan(?:vier)?|f[eé]v(?:rier)?|mars|avr(?:il)?|mai|juin|juil(?:let)?|ao[uû]t|sep(?:t(?:embre)?)?|oct(?:obre)?|nov(?:embre)?|d[eé]c(?:embre)?)\s*(\d{4})\b)?",
-    )
-    .unwrap()
-});
-/// Prefer parenthetical year spans like `(1980-1992)` over bare pairs in prose.
-static TS_YEAR_SPAN_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"\((\d{4})\s*[-–—]\s*(\d{4})\)").unwrap());
-/// Beyond File Summary compact ranges: `Jan1991-Mar1994`, `Ene1991-Mar1994`.
-static TS_COMPACT_MONTH_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(
-        r"(?i)\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?|Ene|Abr|Ago|Dic|jan(?:vier)?|f[eé]v(?:rier)?|mars|avr(?:il)?|mai|juin|juil(?:let)?|ao[uû]t|sep(?:t(?:embre)?)?|oct(?:obre)?|nov(?:embre)?|d[eé]c(?:embre)?)\s*(\d{4})\s*[-–—]\s*(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?|Ene|Abr|Ago|Dic|jan(?:vier)?|f[eé]v(?:rier)?|mars|avr(?:il)?|mai|juin|juil(?:let)?|ao[uû]t|sep(?:t(?:embre)?)?|oct(?:obre)?|nov(?:embre)?|d[eé]c(?:embre)?)\s*(\d{4})\b",
-    )
-    .unwrap()
-});
-/// Beyond semi-annual display: `1S1980-2S1992` (1S=Jan, 2S=Jul).
-static TS_SEMESTER_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?i)\b([12])\s*S\s*(\d{4})\s*[-–—]\s*([12])\s*S\s*(\d{4})\b").unwrap());
-/// Rollover footnotes: "rollover … from Dec1996" → first published period is next month.
-static TS_ROLLOVER_FROM_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(
-        r"(?i)rollover\b.{0,40}?\bfrom\s+(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s*(\d{4})\b",
-    )
-    .unwrap()
-});
-static FR_CHARS: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"[àâäéèêëïîôùûüçœæÀÂÄÉÈÊËÏÎÔÙÛÜÇ]").unwrap()
-});
-static FR_WORDS: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)\b(de|des|les|une|pour|dans|recensement|année|âge)\b").unwrap()
-});
+static FR_CHARS: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"[àâäéèêëïîôùûüçœæÀÂÄÉÈÊËÏÎÔÙÛÜÇ]").unwrap());
+static FR_WORDS: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?i)\b(de|des|les|une|pour|dans|recensement|année|âge)\b").unwrap());
 static PID_FIRST: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[\w.-]+$").unwrap());
 static PID_FULL: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[\dA-Za-z][\w./-]*$").unwrap());
-static FOOTNOTE_START_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?i)(Footnote|Renvoi)\s*(\d+)\s*").unwrap());
 static GEO_INLINE_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
         r"^(.*)\s+\(([0-9A-Za-z.]+)\)(?:,\s*|\s+)(?:([^0-9\s]\S*)\s+)?([0-9]+)(?:\s*\(([^)]*)\))?\s*$",
@@ -84,9 +32,6 @@ static GEO_SIMPLE_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^(.*?)\s*\(([0-9A-Za-z.]+)\)\s*$").unwrap());
 static TNR_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^\s*([0-9]+(?:[.,][0-9]+)?)\s*%\s*$").unwrap());
-/// Match Python 3 `re` `\s` on 8-bit/Latin text (includes file-separator controls).
-static WS_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"[\t\n\x0b\x0c\r\x1c-\x1f \x85\xa0]+").unwrap());
 static PRODUCT_ID_HEAD: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"Product ID:\s*([^\r\n]+)").unwrap());
 static TITLE_EN_HEAD: Lazy<Regex> = Lazy::new(|| Regex::new(r"Title:\s*([^\r\n]+)").unwrap());
@@ -94,23 +39,6 @@ static TITLE_FR_HEAD: Lazy<Regex> = Lazy::new(|| Regex::new(r"Titre\s*:\s*([^\r\
 static UNIVERSE_HEAD: Lazy<Regex> = Lazy::new(|| Regex::new(r"Universe:\s*([^\r\n]+)").unwrap());
 static PID_FALLBACK: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"\b(\d{2}-\d{3}-[A-Z]\d{7,}|\d{8})\b").unwrap());
-static GEO_CODE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"[\(\[]\d").unwrap());
-
-/// Longest-first category suffixes stripped from glued FACET04 runs.
-const FACET_CATEGORIES: &[&str] = &[
-    "Beyond 20/20 Demonstration Tables and Extract",
-    "Tables et Extrait de démonstration de Beyond 20/20",
-    "Demostración de Tablas y Extractos de Beyond 20/20",
-    "Tableaux de données",
-    "Data Tables",
-    "OECD Publications",
-    "Publication d'OCDE",
-    "Publicaciones de la OECD",
-];
-const READONLY_FLAG_BIT: u8 = 0x10;
-/// Beyond File Summary "Read-Only: Yes" when either published bit is set on the
-/// `81 01 20 00` master block: byte8 `0x01` (demo tables) and/or `0x02` (OECD).
-const READONLY_FLAG_BITS_B8: u8 = 0x03;
 
 #[derive(Debug, Clone)]
 pub struct Dimension {
@@ -126,7 +54,7 @@ pub struct Dimension {
     pub type_label: String,
     pub members_en: Option<Vec<String>>,
     pub members_fr: Option<Vec<String>>,
-    /// Dimension-level notes (DIMENSIONNOTES / dim-slot prose); not golden-tested.
+    /// Dimension-level notes referenced by the summary language rows.
     pub notes_en: Option<String>,
     pub notes_fr: Option<String>,
     pub ordinal: Option<Vec<i64>>,
@@ -198,6 +126,7 @@ pub struct IvtMetadata {
     pub end_date: Option<String>,
     pub read_only: Option<bool>,
     source: IvtSource,
+    metadata_image: Option<Vec<u8>>,
     desc: Descriptor,
     #[allow(dead_code)]
     master_entries: Vec<(u32, u16)>,
@@ -220,15 +149,22 @@ impl IvtMetadata {
 
     pub fn footnotes(&mut self) -> Result<&Vec<Footnote>, String> {
         if self.footnotes.is_none() {
-            self.footnotes = Some(footnotes_from_source(&self.source).map_err(|e| e.to_string())?);
+            self.footnotes = Some(if let Some(data) = &self.metadata_image {
+                footnotes(data)
+            } else {
+                footnotes_from_source(&self.source).map_err(|e| e.to_string())?
+            });
         }
         Ok(self.footnotes.as_ref().unwrap())
     }
 
     pub fn missing_values(&mut self) -> Result<&Vec<MissingValue>, String> {
         if self.missing_values.is_none() {
-            self.missing_values =
-                Some(missing_values_from_source(&self.source).map_err(|e| e.to_string())?);
+            self.missing_values = Some(if let Some(data) = &self.metadata_image {
+                missing_values(data)
+            } else {
+                missing_values_from_source(&self.source).map_err(|e| e.to_string())?
+            });
         }
         Ok(self.missing_values.as_ref().unwrap())
     }
@@ -237,7 +173,11 @@ impl IvtMetadata {
         if self.dimensions.is_some() {
             return Ok(());
         }
-        let dims = build_dimensions_from_source(&self.source, &self.desc)?;
+        let dims = if let Some(data) = &self.metadata_image {
+            build_dimensions(data, &self.desc)
+        } else {
+            build_dimensions_from_source(&self.source, &self.desc)?
+        };
         self.dimensions = Some(dims);
         Ok(())
     }
@@ -247,7 +187,11 @@ impl IvtMetadata {
             return Ok(());
         }
         let gd = geo_dim_index(&self.desc.dims);
-        let geos = geo_from_source(&self.source, &self.desc.dims[gd - 1], gd - 1)?;
+        let geos = if let Some(data) = &self.metadata_image {
+            geo_from_dir(data, &self.desc.dims[gd - 1], gd - 1)
+        } else {
+            geo_from_source(&self.source, &self.desc.dims[gd - 1], gd - 1)?
+        };
         self.geographies = Some(geos);
         Ok(())
     }
@@ -283,19 +227,17 @@ fn frscore(s: &str) -> usize {
 }
 
 fn master_dir_entries(data: &[u8], max_entries: usize) -> Vec<(u32, u16)> {
-    let master = u32(data, HDR_MASTER_PTR) as usize;
     let mut out = Vec::new();
-    if !(0 < master && master < data.len().saturating_sub(8)) {
+    let Ok(directory) = crate::metadata_directory::MetadataDirectory::new(data, HDR_MASTER_PTR)
+    else {
         return out;
-    }
-    let mut o = master;
-    for _ in 0..max_entries {
-        if o + 8 > data.len() {
+    };
+    for index in 0..max_entries.min(directory.count) {
+        let Ok(raw) = directory.entry(data, index) else {
             break;
-        }
-        let off = u32(data, o);
-        let s1 = u16(data, o + 4);
-        o += 8;
+        };
+        let off = u32(raw, 0);
+        let s1 = u16(raw, 4);
         if off == 0 && s1 == 0 {
             continue;
         }
@@ -307,118 +249,99 @@ fn master_dir_entries(data: &[u8], max_entries: usize) -> Vec<(u32, u16)> {
     out
 }
 
-fn split_facet_run(text: &str) -> (Option<String>, Option<String>, Option<String>) {
-    let mut rest = text.trim().trim_end_matches(|c: char| (c as u32) < 32 || c == '\u{fffd}').to_string();
-    if rest.is_empty() {
-        return (None, None, None);
-    }
-    // Strip trailing control / high junk that sometimes sticks to FACET runs.
-    while rest
-        .chars()
-        .last()
-        .map(|c| (c as u32) < 32 || c == '\u{81}' || c == '\u{fffd}')
-        .unwrap_or(false)
-    {
-        rest.pop();
-    }
-    let mut category = None;
-    for cat in FACET_CATEGORIES {
-        if rest.ends_with(cat) {
-            category = Some((*cat).to_string());
-            rest.truncate(rest.len() - cat.len());
-            break;
+/// Indexed master entries retain holes: language references are entry ordinals.
+fn master_record(data: &[u8], index: usize) -> Option<&[u8]> {
+    crate::metadata_directory::record(data, HDR_MASTER_PTR, index)
+}
+
+/// Language matrix rows: language ID, FACET index, notes index, keywords index.
+fn summary_language_record(data: &[u8], language: u32, column: usize) -> Option<&[u8]> {
+    if let Some(raw) = master_record(data, 7) {
+        let decoded = crate::decode::decompress_component(raw).ok()?;
+        if decoded.get(..2) != Some(&[1, 2]) || decoded.len() < 6 || u16(&decoded, 4) != 32 {
+            return None;
         }
-    }
-    let mut author = None;
-    if let Some(m) = FACET_AUTHOR_RE.find(&rest) {
-        author = Some(m.as_str().to_string());
-        rest.truncate(m.start());
-    }
-    let title = {
-        let t = rest.trim();
-        if t.is_empty() {
-            None
-        } else {
-            Some(t.to_string())
+        for row in decoded[6..].chunks_exact(32) {
+            if u32(row, 0) == language {
+                let index = u32(row, column) as usize;
+                // Zero is the default FACET record, but means absent for notes/keywords.
+                return if column != 4 && index == 0 {
+                    None
+                } else {
+                    master_record(data, index)
+                };
+            }
         }
-    };
-    (title, author, category)
+        return None;
+    }
+    if language == 1 {
+        master_record(
+            data,
+            match column {
+                4 => 0,
+                8 => 3,
+                12 => 4,
+                _ => return None,
+            },
+        )
+    } else {
+        None
+    }
 }
 
 fn parse_facet_summary(data: &[u8]) -> HashMap<&'static str, Option<String>> {
-    parse_facet_summary_bufs(&[data])
-}
-
-fn parse_facet_summary_bufs(bufs: &[&[u8]]) -> HashMap<&'static str, Option<String>> {
-    let mut runs = Vec::new();
-    for data in bufs {
-        let mut start = 0;
-        while let Some(rel) = data[start..]
-            .windows(7)
-            .position(|w| w == b"FACET04")
-        {
-            let i = start + rel;
-            let run = &data[i + 7..];
-            let mut end = 0;
-            while end < run.len() && run[end] >= 32 {
-                end += 1;
+    let mut out = HashMap::new();
+    for (language, keys) in [
+        (1, ["title_en", "author_en", "category_en"]),
+        (2, ["title_fr", "author_fr", "category_fr"]),
+    ] {
+        let fields = summary_language_record(data, language, 4).and_then(|raw| {
+            let decoded = crate::decode::decompress_component(raw).ok()?;
+            if decoded.get(4..9) != Some(b"FACET") {
+                return None;
             }
-            let text = latin1(&run[..end]).trim().to_string();
-            if !text.is_empty() {
-                runs.push(text);
-            }
-            start = i + 7;
+            let layout = match u16(&decoded, 2) {
+                0x304 | 0x3cc => [(11, 255), (266, 255), (521, 255)],
+                0xc3 => [(11, 60), (71, 64), (135, 64)],
+                _ => return None,
+            };
+            Some(layout.map(|(offset, length)| {
+                let raw = &decoded[offset..offset + length];
+                let end = raw.iter().position(|&b| b == 0).unwrap_or(raw.len());
+                latin1(&raw[..end]).trim().to_string()
+            }))
+        });
+        for (i, key) in keys.into_iter().enumerate() {
+            out.insert(key, fields.as_ref().map(|fields| fields[i].clone()));
         }
     }
-    let mut parsed: Vec<_> = runs.iter().map(|r| split_facet_run(r)).collect();
-    parsed.retain(|(t, _, _)| t.is_some());
-    parsed.sort_by_key(|(t, _, _)| frscore(t.as_deref().unwrap_or("")));
-
-    let mut out = HashMap::new();
-    out.insert("title_en", None);
-    out.insert("title_fr", None);
-    out.insert("author_en", None);
-    out.insert("author_fr", None);
-    out.insert("category_en", None);
-    out.insert("category_fr", None);
-
-    if parsed.is_empty() {
-        return out;
-    }
-    let en = parsed[0].clone();
-    let mut fr = None;
-    if parsed.len() > 1
-        && frscore(parsed.last().unwrap().0.as_deref().unwrap_or(""))
-            > frscore(parsed[0].0.as_deref().unwrap_or(""))
-    {
-        fr = Some(parsed.last().unwrap().clone());
-    }
-    let (mut title_en, mut author_en, mut category_en) = en;
-    let (mut title_fr, mut author_fr, mut category_fr) = (None, None, None);
-    if let Some(f) = fr {
-        title_fr = f.0;
-        author_fr = f.1;
-        category_fr = f.2;
-    } else if frscore(title_en.as_deref().unwrap_or("")) >= 2 {
-        title_fr = title_en.take();
-        author_fr = author_en.take();
-        category_fr = category_en.take();
-    }
-    out.insert("title_en", title_en);
-    out.insert("title_fr", title_fr);
-    out.insert("author_en", author_en);
-    out.insert("author_fr", author_fr);
-    out.insert("category_en", category_en);
-    out.insert("category_fr", category_fr);
     out
+}
+
+fn summary_text(data: &[u8], language: u32, column: usize) -> Option<String> {
+    let decoded =
+        crate::decode::decompress_component(summary_language_record(data, language, column)?)
+            .ok()?;
+    if decoded.get(..2) != Some(&[1, 1]) {
+        return None;
+    }
+    let raw = decoded.get(4..)?;
+    let end = raw.iter().position(|&b| b == 0).unwrap_or(raw.len());
+    Some(normalize_notes_text(&latin1(&raw[..end])))
 }
 
 fn identity_from_blob(text: &str) -> (Option<String>, Option<String>) {
     let text = text.trim_start();
     let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
     let mut lines = normalized.splitn(2, '\n');
-    let pid = lines.next().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-    let title = lines.next().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    let pid = lines
+        .next()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let title = lines
+        .next()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
     if let Some(ref p) = pid {
         let first = p.split_whitespace().next().unwrap_or("");
         if !PID_FIRST.is_match(first) {
@@ -429,245 +352,25 @@ fn identity_from_blob(text: &str) -> (Option<String>, Option<String>) {
 }
 
 fn parse_identity_notes(data: &[u8]) -> (Option<String>, Option<String>, Option<String>) {
-    let mut notes_en = None;
-    let mut notes_fr = None;
-    let mut product_id = None;
-    let mut long_blobs = Vec::new();
-    for (off, length) in master_dir_entries(data, 32) {
-        let blk = &data[off as usize..off as usize + length as usize];
-        if blk.len() < 2 || &blk[..2] != b"\x01\x01" || length < 40 {
-            continue;
-        }
-        let payload = &blk[4..];
-        let mut i = 0;
-        while i < payload.len() && payload[i] < 0x20 {
-            i += 1;
-        }
-        let text = normalize_notes_text(latin1(&payload[i..]).trim_end_matches('\0'));
-        if text.is_empty() || !text.contains('\n') {
-            continue;
-        }
-        long_blobs.push(text.clone());
-        let (pid, _) = identity_from_blob(&text);
-        if let Some(p) = pid {
-            if PID_FULL.is_match(&p) {
-                product_id = product_id.or(Some(p));
-            }
-        }
-    }
-    long_blobs.sort_by_key(|s| frscore(s));
-    if !long_blobs.is_empty() {
-        let en = long_blobs[0].clone();
-        let mut fr = None;
-        if long_blobs.len() > 1
-            && frscore(long_blobs.last().unwrap()) > frscore(&long_blobs[0])
-        {
-            fr = Some(long_blobs.last().unwrap().clone());
-        }
-        notes_en = Some(en.clone());
-        notes_fr = fr;
-        if notes_fr.is_none() && frscore(&en) >= 2 {
-            notes_fr = Some(en);
-            notes_en = None;
-        }
-    }
-    (notes_en, notes_fr, product_id)
+    let en = summary_text(data, 1, 8);
+    let fr = summary_text(data, 2, 8);
+    let product_id = en.as_deref().and_then(|text| {
+        PRODUCT_ID_HEAD
+            .captures(text)
+            .map(|m| m[1].trim().to_string())
+            .or_else(|| {
+                let (pid, _) = identity_from_blob(text);
+                pid.filter(|p| PID_FULL.is_match(p))
+            })
+    });
+    (en, fr, product_id)
 }
 
-fn parse_keywords(data: &[u8], product_id: Option<&str>) -> LocalizedText {
-    let mut candidates = Vec::new();
-    for (off, length) in master_dir_entries(data, 32) {
-        if !(8..=40).contains(&length) {
-            continue;
-        }
-        let blk = &data[off as usize..off as usize + length as usize];
-        if blk.len() < 2 || &blk[..2] != b"\x01\x01" {
-            continue;
-        }
-        let payload = &blk[4..];
-        let mut i = 0;
-        while i < payload.len() && payload[i] < 0x20 {
-            i += 1;
-        }
-        if i < payload.len() && (1..64).contains(&payload[i]) {
-            let n = payload[i] as usize;
-            if i + 1 + n <= payload.len() {
-                let kw = latin1(&payload[i + 1..i + 1 + n])
-                    .trim_end_matches('\0')
-                    .trim()
-                    .to_string();
-                if !kw.is_empty() {
-                    candidates.push(kw);
-                    continue;
-                }
-            }
-        }
-        let text = latin1(&payload[i..])
-            .trim_end_matches('\0')
-            .trim()
-            .to_string();
-        if !text.is_empty() && !text.contains('\n') && text.len() <= 40 {
-            candidates.push(text);
-        }
+fn parse_keywords(data: &[u8], _product_id: Option<&str>) -> LocalizedText {
+    LocalizedText {
+        en: summary_text(data, 1, 12),
+        fr: summary_text(data, 2, 12),
     }
-    if candidates.is_empty() {
-        return LocalizedText::default();
-    }
-    let mut unique = Vec::new();
-    for c in candidates {
-        if !unique.contains(&c) {
-            unique.push(c);
-        }
-    }
-    if let Some(pid) = product_id {
-        for c in &unique {
-            if c == pid {
-                let others: Vec<_> = unique.iter().filter(|x| *x != c).cloned().collect();
-                if !others.is_empty() {
-                    let mut scored = others;
-                    scored.sort_by_key(|s| frscore(s));
-                    let fr = if frscore(scored.last().unwrap()) > frscore(c) {
-                        Some(scored.last().unwrap().clone())
-                    } else {
-                        None
-                    };
-                    return LocalizedText {
-                        en: Some(c.clone()),
-                        fr,
-                    };
-                }
-                return LocalizedText {
-                    en: Some(c.clone()),
-                    fr: None,
-                };
-            }
-        }
-    }
-    if unique.len() == 1 {
-        return LocalizedText {
-            en: Some(unique[0].clone()),
-            fr: None,
-        };
-    }
-    let mut scored = unique;
-    scored.sort_by_key(|s| frscore(s));
-    let en = Some(scored[0].clone());
-    let fr = if frscore(scored.last().unwrap()) > frscore(&scored[0]) {
-        Some(scored.last().unwrap().clone())
-    } else {
-        None
-    };
-    LocalizedText { en, fr }
-}
-
-fn time_dim_desc(dims: &[DimDesc]) -> Option<&DimDesc> {
-    for d in dims {
-        if d.type_code == 6 {
-            return Some(d);
-        }
-        if TIME_SERIES_NAME_RE.is_match(&d.name) {
-            return Some(d);
-        }
-    }
-    None
-}
-
-fn has_time_series_marker(data: &[u8]) -> bool {
-    has_time_series_marker_bufs(&[data])
-}
-
-fn has_time_series_marker_bufs(bufs: &[&[u8]]) -> bool {
-    for data in bufs {
-        let mut o = 0;
-        while let Some(rel) = data[o..].windows(2).position(|w| w == b"\x81\x02") {
-            let i = o + rel;
-            if i + 6 > data.len() {
-                break;
-            }
-            if &data[i + 4..i + 6] == b"\x08\x00" {
-                return true;
-            }
-            o = i + 2;
-        }
-    }
-    false
-}
-
-fn title_case_freq(s: &str) -> String {
-    let mut chars = s.chars();
-    match chars.next() {
-        None => String::new(),
-        Some(f) => f.to_uppercase().collect::<String>() + chars.as_str(),
-    }
-}
-
-fn frequency_hint_name(name: &str) -> Option<String> {
-    FREQ_NAME_RE
-        .captures(name)
-        .map(|c| title_case_freq(c.get(1).unwrap().as_str()))
-}
-
-fn month_abbr_en(raw: &str) -> &'static str {
-    let s = raw.to_ascii_lowercase();
-    match s.as_str() {
-        "january" | "jan" => "Jan",
-        "february" | "feb" => "Feb",
-        "march" | "mar" => "Mar",
-        "april" | "apr" => "Apr",
-        "may" => "May",
-        "june" | "jun" => "Jun",
-        "july" | "jul" => "Jul",
-        "august" | "aug" => "Aug",
-        "september" | "sept" | "sep" => "Sep",
-        "october" | "oct" => "Oct",
-        "november" | "nov" => "Nov",
-        "december" | "dec" => "Dec",
-        _ => "Jan",
-    }
-}
-
-fn month_index_fr(raw: &str) -> Option<u32> {
-    let s = raw.to_lowercase();
-    match s.as_str() {
-        "janvier" | "jan" => Some(1),
-        "février" | "fevrier" | "fév" | "fev" => Some(2),
-        "mars" => Some(3),
-        "avril" | "avr" => Some(4),
-        "mai" => Some(5),
-        "juin" => Some(6),
-        "juillet" | "juil" => Some(7),
-        "août" | "aout" => Some(8),
-        "septembre" | "sept" | "sep" => Some(9),
-        "octobre" | "oct" => Some(10),
-        "novembre" | "nov" => Some(11),
-        "décembre" | "decembre" | "déc" | "dec" => Some(12),
-        _ => None,
-    }
-}
-
-/// Spanish Beyond File Summary month tokens (e.g. `Ene1991`).
-fn month_index_es(raw: &str) -> Option<u32> {
-    match raw.to_lowercase().as_str() {
-        "ene" | "enero" => Some(1),
-        "feb" | "febrero" => Some(2),
-        "mar" | "marzo" => Some(3),
-        "abr" | "abril" => Some(4),
-        "may" | "mayo" => Some(5),
-        "jun" | "junio" => Some(6),
-        "jul" | "julio" => Some(7),
-        "ago" | "agosto" => Some(8),
-        "sep" | "sept" | "septiembre" => Some(9),
-        "oct" | "octubre" => Some(10),
-        "nov" | "noviembre" => Some(11),
-        "dic" | "diciembre" => Some(12),
-        _ => None,
-    }
-}
-
-fn month_index_any(raw: &str) -> Option<u32> {
-    month_index_en(raw)
-        .or_else(|| month_index_fr(raw))
-        .or_else(|| month_index_es(raw))
 }
 
 /// Normalize identity notes toward Beyond HTML (CRLF→LF, trim line tails/indents).
@@ -683,309 +386,28 @@ fn normalize_notes_text(text: &str) -> String {
     lines.join("\n").trim().to_string()
 }
 
-fn freq_pair_from_text(text: &str) -> Option<(String, String)> {
-    let lower = text.to_lowercase();
-    if lower.contains("semi-annual") || lower.contains("semiannual") || lower.contains("semi-annuel")
-    {
-        return Some(("Semi-annual".into(), "Semi-annuelle".into()));
-    }
-    if lower.contains("monthly") || lower.contains("mensuel") {
-        return Some(("Monthly".into(), "Mensuelle".into()));
-    }
-    if lower.contains("quarterly") || lower.contains("trimestriel") {
-        return Some(("Quarterly".into(), "Trimestrielle".into()));
-    }
-    if lower.contains("annual") || lower.contains("yearly") || lower.contains("annuel") {
-        return Some(("Annual".into(), "Annuelle".into()));
-    }
-    if lower.contains("weekly") || lower.contains("hebdomadaire") {
-        return Some(("Weekly".into(), "Hebdomadaire".into()));
-    }
-    if lower.contains("daily") || lower.contains("quotidien") {
-        return Some(("Daily".into(), "Quotidienne".into()));
-    }
-    None
-}
-
-fn month_index_en(raw: &str) -> Option<u32> {
-    match month_abbr_en(raw) {
-        "Jan" => Some(1),
-        "Feb" => Some(2),
-        "Mar" => Some(3),
-        "Apr" => Some(4),
-        "May" => Some(5),
-        "Jun" => Some(6),
-        "Jul" => Some(7),
-        "Aug" => Some(8),
-        "Sep" => Some(9),
-        "Oct" => Some(10),
-        "Nov" => Some(11),
-        "Dec" => Some(12),
-        _ => None,
-    }
-}
-
-fn add_months(year: u32, month: u32, add: i64) -> (u32, u32) {
-    let idx = (year as i64) * 12 + (month as i64 - 1) + add;
-    let y = (idx / 12) as u32;
-    let m = (idx % 12 + 1) as u32;
-    (y, m)
-}
-
-fn iso_ym(year: u32, month: u32) -> String {
-    format!("{:04}-{:02}-01", year, month)
-}
-
-fn period_months_for_frequency(frequency: Option<&str>) -> i64 {
-    let Some(f) = frequency else {
-        return 1;
-    };
-    let lower = f.to_lowercase();
-    if lower.contains("semi") {
-        6
-    } else if lower.contains("quarter") || lower.contains("trimestr") {
-        3
-    } else if lower.contains("annual") || lower.contains("year") || lower.contains("annuel") {
-        12
-    } else {
-        1
-    }
-}
-
-/// Year span `(1980-1992)` → Jan of start year; end from count×period when available.
-fn year_span_bounds(
-    text: &str,
-    time_count: Option<i64>,
-    period_months: i64,
-) -> (Option<(u32, u32)>, Option<(u32, u32)>) {
-    let Some(c) = TS_YEAR_SPAN_RE.captures(text) else {
-        return (None, None);
-    };
-    let (Ok(y1), Ok(y2)) = (c[1].parse::<u32>(), c[2].parse::<u32>()) else {
-        return (None, None);
-    };
-    if y2 < y1 {
-        return (None, None);
-    }
-    let start = Some((y1, 1));
-    let end = if let Some(count) = time_count {
-        if count >= 1 {
-            Some(add_months(y1, 1, (count - 1) * period_months))
-        } else {
-            Some((y2, 1))
-        }
-    } else {
-        Some(add_months(y2, 1, period_months.saturating_sub(1)))
-    };
-    (start, end)
-}
-
-/// Beyond-style compact / semester ranges → (start_ym, end_ym).
-fn beyond_display_range_bounds(text: &str) -> (Option<(u32, u32)>, Option<(u32, u32)>) {
-    if let Some(c) = TS_COMPACT_MONTH_RE.captures(text) {
-        let (Some(m1), Ok(y1), Some(m2), Ok(y2)) = (
-            month_index_any(c.get(1).unwrap().as_str()),
-            c.get(2).unwrap().as_str().parse::<u32>(),
-            month_index_any(c.get(3).unwrap().as_str()),
-            c.get(4).unwrap().as_str().parse::<u32>(),
-        ) else {
-            return (None, None);
-        };
-        return (Some((y1, m1)), Some((y2, m2)));
-    }
-    if let Some(c) = TS_SEMESTER_RE.captures(text) {
-        let (Ok(s1), Ok(y1), Ok(s2), Ok(y2)) = (
-            c[1].parse::<u32>(),
-            c[2].parse::<u32>(),
-            c[3].parse::<u32>(),
-            c[4].parse::<u32>(),
-        ) else {
-            return (None, None);
-        };
-        let month = |sem: u32| if sem == 1 { 1 } else { 7 };
-        return (Some((y1, month(s1))), Some((y2, month(s2))));
-    }
-    (None, None)
-}
-
-/// Parse a start/end year-month pair from notes or file text.
-/// When `synthesize_end` is false, only explicit two-ended ranges are returned.
-fn range_bounds_from_text(
-    text: &str,
-    time_count: Option<i64>,
-    period_months: i64,
-    synthesize_end: bool,
-) -> (Option<(u32, u32)>, Option<(u32, u32)>) {
-    let (bs, be) = beyond_display_range_bounds(text);
-    if bs.is_some() && be.is_some() {
-        return (bs, be);
-    }
-    let mut start = None;
-    let mut end = None;
-    if let Some(c) = TS_RANGE_EN_RE.captures(text) {
-        let m1 = c.get(1).unwrap().as_str();
-        let y1 = c.get(2).unwrap().as_str();
-        if let (Some(mi), Ok(year)) = (month_index_en(m1), y1.parse::<u32>()) {
-            start = Some((year, mi));
-            if let (Some(m2), Some(y2)) = (c.get(3), c.get(4)) {
-                if let (Some(emi), Ok(ey)) = (month_index_en(m2.as_str()), y2.as_str().parse::<u32>())
-                {
-                    end = Some((ey, emi));
-                }
-            } else if synthesize_end {
-                if let Some(count) = time_count {
-                    if count >= 1 {
-                        end = Some(add_months(year, mi, (count - 1) * period_months));
-                    }
-                }
-            }
-        }
-    }
-    if start.is_none() {
-        if let Some(c) = TS_RANGE_FR_RE.captures(text) {
-            let m1 = c.get(1).unwrap().as_str();
-            let y1 = c.get(2).unwrap().as_str();
-            if let (Some(mi), Ok(year)) = (month_index_fr(m1), y1.parse::<u32>()) {
-                start = Some((year, mi));
-                if let (Some(m2), Some(y2)) = (c.get(3), c.get(4)) {
-                    if let (Some(emi), Ok(ey)) =
-                        (month_index_fr(m2.as_str()), y2.as_str().parse::<u32>())
-                    {
-                        end = Some((ey, emi));
-                    }
-                } else if synthesize_end {
-                    if let Some(count) = time_count {
-                        if count >= 1 {
-                            end = Some(add_months(year, mi, (count - 1) * period_months));
-                        }
-                    }
-                }
-            }
-        }
-    }
-    (start, end)
-}
-
-fn parse_time_series(
-    marker_bufs: &[&[u8]],
-    searchable_text: &str,
-    dims: &[DimDesc],
-    notes_en: Option<&str>,
-    notes_fr: Option<&str>,
-) -> Option<TimeSeriesInfo> {
-    let dim = time_dim_desc(dims);
-    if dim.is_none() && !has_time_series_marker_bufs(marker_bufs) {
+fn parse_time_series(data: &[u8]) -> Option<TimeSeriesInfo> {
+    let decoded = crate::decode::decompress_component(master_record(data, 2)?).ok()?;
+    if decoded.get(..4) != Some(&[1, 1, 32, 0]) {
         return None;
     }
-    let mut frequency = None;
-    for text in [notes_en, notes_fr, Some(searchable_text)]
-        .into_iter()
-        .flatten()
-    {
-        if let Some((e, _)) = freq_pair_from_text(text) {
-            frequency = Some(e);
-            break;
-        }
-    }
-    if frequency.is_none() {
-        if let Some(dim) = dim {
-            if let Some(f) = frequency_hint_name(&dim.name) {
-                let pair = freq_pair_from_text(&f).unwrap_or_else(|| (f.clone(), f));
-                frequency = Some(pair.0);
-            }
-        }
-    }
-    let time_count = dim.map(|d| d.count);
-    let period_months = period_months_for_frequency(frequency.as_deref());
-    let texts = [notes_en, notes_fr, Some(searchable_text)];
-    let mut start = None;
-    let mut end = None;
-
-    // Prefer Beyond File Summary display ranges (`Jan1991-Mar1994`, `1S1980-2S1992`).
-    for text in texts.into_iter().flatten() {
-        let (s, e) = beyond_display_range_bounds(text);
-        if start.is_none() {
-            start = s;
-        }
-        if end.is_none() {
-            end = e;
-        }
-        if start.is_some() && end.is_some() {
-            break;
-        }
-    }
-
-    // Prefer year spans (e.g. OECD `(1980-1992)`) over lone publication months.
-    for text in texts.into_iter().flatten() {
-        let (s, e) = year_span_bounds(text, time_count, period_months);
-        if start.is_none() {
-            start = s;
-        }
-        if end.is_none() {
-            end = e;
-        }
-        if start.is_some() && end.is_some() {
-            break;
-        }
-    }
-
-    // Explicit two-ended month ranges (e.g. Products January 1991 … March 1994).
-    if start.is_none() || end.is_none() {
-        for text in texts.into_iter().flatten() {
-            let (s, e) = range_bounds_from_text(text, time_count, period_months, false);
-            if start.is_none() {
-                start = s;
-            }
-            if end.is_none() {
-                end = e;
-            }
-            if start.is_some() && end.is_some() {
-                break;
-            }
-        }
-    }
-
-    // "rollover … from Dec1996" → first published period is the following month.
-    // Prefer these bounds over a bare month captured earlier from the same note.
-    if start.is_none() || end.is_none() {
-        for text in texts.into_iter().flatten() {
-            if let Some(c) = TS_ROLLOVER_FROM_RE.captures(text) {
-                if let (Some(mi), Ok(year)) =
-                    (month_index_en(c.get(1).unwrap().as_str()), c[2].parse::<u32>())
-                {
-                    let (sy, sm) = add_months(year, mi, period_months);
-                    start = Some((sy, sm));
-                    if let Some(count) = time_count {
-                        if count >= 1 {
-                            end = Some(add_months(sy, sm, (count - 1) * period_months));
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    // Last resort: single month-year + count scaled by frequency.
-    if start.is_none() || end.is_none() {
-        for text in texts.into_iter().flatten() {
-            let (s, e) = range_bounds_from_text(text, time_count, period_months, true);
-            if start.is_none() {
-                start = s;
-            }
-            if end.is_none() {
-                end = e;
-            }
-            if start.is_some() && end.is_some() {
-                break;
-            }
-        }
-    }
-
+    let rate = u16(&decoded, 10);
+    let frequency = match rate {
+        0 => Some("No".into()),
+        1 => Some("Annual".into()),
+        2 => Some("Semi-annual".into()),
+        4 => Some("Quarterly".into()),
+        12 => Some("Monthly".into()),
+        _ => None,
+    };
+    let date = |offset| {
+        let serial = u32(&decoded, offset);
+        (rate != 0 && serial != 0).then(|| crate::members::iso_date(serial as i64 - 719_469))
+    };
     Some(TimeSeriesInfo {
         frequency,
-        start: start.map(|(y, m)| iso_ym(y, m)),
-        end: end.map(|(y, m)| iso_ym(y, m)),
+        start: date(12),
+        end: date(16),
     })
 }
 
@@ -999,32 +421,18 @@ fn type_label_for(d: &DimDesc) -> String {
     "Normal".into()
 }
 
-fn flag_block_read_only(blk: &[u8]) -> bool {
-    if blk.len() < 5 || &blk[..4] != *b"\x81\x01\x20\x00" {
-        return false;
-    }
-    if (blk[4] & READONLY_FLAG_BIT) != 0 {
-        return true;
-    }
-    blk.len() > 8 && (blk[8] & READONLY_FLAG_BITS_B8) != 0
-}
-
 fn read_only_flag(data: &[u8]) -> bool {
-    for (off, length) in master_dir_entries(data, 32) {
-        if length < 5 {
-            continue;
-        }
-        let blk = &data[off as usize..off as usize + length as usize];
-        if flag_block_read_only(blk) {
-            return true;
-        }
-    }
-    false
+    master_record(data, 2)
+        .and_then(|raw| crate::decode::decompress_component(raw).ok())
+        .is_some_and(|record| record.get(..4) == Some(&[1, 1, 32, 0]) && u16(&record, 6) & 1 != 0)
 }
 
 fn parse_table_identity(data: &[u8]) -> HashMap<&'static str, Option<String>> {
     let head = latin1(&data[..data.len().min(8000)]);
-    let grab = |re: &Regex| re.captures(&head).map(|m| m.get(1).unwrap().as_str().trim().to_string());
+    let grab = |re: &Regex| {
+        re.captures(&head)
+            .map(|m| m.get(1).unwrap().as_str().trim().to_string())
+    };
     let mut info: HashMap<&'static str, Option<String>> = HashMap::new();
     info.insert("product_id", grab(&PRODUCT_ID_HEAD));
     info.insert("title_en", grab(&TITLE_EN_HEAD));
@@ -1044,9 +452,7 @@ fn parse_table_identity(data: &[u8]) -> HashMap<&'static str, Option<String>> {
             if !text.is_empty() {
                 blobs.push(text);
             }
-        } else if !blk.is_empty()
-            && (blk[0] == b' ' || blk[0].is_ascii_alphabetic())
-        {
+        } else if !blk.is_empty() && (blk[0] == b' ' || blk[0].is_ascii_alphabetic()) {
             let text = latin1(blk).trim().to_string();
             if text.contains("98-") || text.contains("Title") {
                 blobs.push(text);
@@ -1101,474 +507,22 @@ fn parse_table_identity(data: &[u8]) -> HashMap<&'static str, Option<String>> {
     info
 }
 
-fn labels_plausible(labels: &[String]) -> bool {
-    if labels.is_empty() {
-        return false;
-    }
-    for lab in labels {
-        let u = lab.to_uppercase();
-        if u.contains("DEFINITION") || lab.contains("DÉFINITION") {
-            return false;
-        }
-        if lab.contains('\n') || lab.contains('\r') {
-            return false;
-        }
-    }
-    let joined = labels.iter().take(5).cloned().collect::<Vec<_>>().join(" ");
-    if joined.contains("Digit description") || joined.contains("Flag description") {
-        return false;
-    }
-    if joined.contains("Incomplete enumeration") {
-        return false;
-    }
-    let short = labels.iter().filter(|x| x.trim().len() <= 1).count();
-    if short > (1.max(labels.len() / 3)) {
-        return false;
-    }
-    // Reject dim-slot prose mistaken for Pascal member arrays (IAAH Units).
-    let longish = labels.iter().filter(|x| x.chars().count() > 48).count();
-    if longish * 3 > labels.len() {
-        return false;
-    }
-    let sentence_like = labels
-        .iter()
-        .filter(|x| x.contains('.') || x.contains(':') || x.contains('"'))
-        .count();
-    if sentence_like * 2 > labels.len() {
-        return false;
-    }
-    true
+fn dimension_record(data: &[u8], slot_index: usize, entry_index: usize) -> Option<&[u8]> {
+    let base = HDR_DIM_SLOT0.checked_add(DIM_SLOT_STRIDE.checked_mul(slot_index)?)?;
+    crate::metadata_directory::record(data, base, entry_index)
 }
 
-fn read_member_array(block: &[u8], expect: usize) -> Vec<String> {
-    if expect < 1 || block.len() < 8 {
-        return Vec::new();
-    }
-    if block[..2] != *b"\x01\x01" && block[..2] != *b"\x81\x01" {
-        return Vec::new();
-    }
-    let starts = [6usize, 7, 8, 4, 10, 12];
-    for start in starts {
-        let mut labels = Vec::new();
-        let mut p = start;
-        while p < block.len() && labels.len() < expect {
-            if block[p] == 0 && p + 1 < block.len() {
-                p += 1;
-                continue;
-            }
-            match rd_pascal(block, p, 250) {
-                Some(rec) => {
-                    labels.push(rec.text);
-                    p = rec.end;
-                }
-                None => break,
-            }
-        }
-        if labels.len() == expect && labels_plausible(&labels) {
-            return labels;
-        }
-    }
-    if block[..2] == *b"\x81\x01" {
-        let max_start = 64.min(block.len().saturating_sub(expect));
-        for start in 4..max_start {
-            let mut labels = Vec::new();
-            let mut p = start;
-            while p < block.len() && labels.len() < expect {
-                match rd_pascal(block, p, 250) {
-                    Some(rec) => {
-                        labels.push(rec.text);
-                        p = rec.end;
-                    }
-                    None => break,
-                }
-            }
-            if labels.len() == expect && labels_plausible(&labels) {
-                return labels;
-            }
-        }
-    }
-    Vec::new()
-}
-
-/// Longest plausible Pascal member run in a dim-dir block (Beyond Summary Items).
-fn read_member_array_max(block: &[u8]) -> Vec<String> {
-    if block.len() < 8 {
-        return Vec::new();
-    }
-    if block[..2] != *b"\x01\x01" && block[..2] != *b"\x81\x01" {
-        return Vec::new();
-    }
-    let mut best = Vec::new();
-    let max_start = if block[..2] == *b"\x81\x01" {
-        64.min(block.len().saturating_sub(8))
-    } else {
-        16.min(block.len().saturating_sub(8))
-    };
-    let mut starts: Vec<usize> = vec![6, 7, 8, 4, 10, 12];
-    starts.extend(4..max_start);
-    starts.sort_unstable();
-    starts.dedup();
-    for start in starts {
-        let mut labels = Vec::new();
-        let mut p = start;
-        while p < block.len() && labels.len() < 4096 {
-            if block[p] == 0 && p + 1 < block.len() {
-                p += 1;
-                continue;
-            }
-            match rd_pascal(block, p, 250) {
-                Some(rec) => {
-                    if rec.text.trim().is_empty() {
-                        break;
-                    }
-                    labels.push(rec.text);
-                    p = rec.end;
-                }
-                None => break,
-            }
-        }
-        if labels.len() > best.len() && labels_plausible(&labels) {
-            best = labels;
-        }
-    }
-    best
-}
-
-fn split_en_fr_glued(code: &str, glued: &str) -> (String, Option<String>) {
-    let cl = code.to_ascii_lowercase();
-    let gl = glued.to_ascii_lowercase();
-    if gl.starts_with(&cl) && glued.len() >= code.len() {
-        let rest = &glued[code.len()..];
-        // FR codes are typically uppercase tokens (RÉGION, TEMPS). Reject sentence
-        // tails like " being reportedUnités" from Sample.ivt.
-        let rest_ok = !rest.is_empty()
-            && !rest.starts_with(' ')
-            && rest
-                .chars()
-                .next()
-                .map(|c| !c.is_ascii_lowercase())
-                .unwrap_or(false);
-        if rest_ok {
-            let en = if glued[..code.len()]
-                .chars()
-                .any(|c| c.is_ascii_lowercase())
-            {
-                // Prefer the title-case English spelling from the glued run.
-                glued[..code.len()].to_string()
-            } else {
-                code.to_string()
-            };
-            return (en, Some(rest.to_string()));
-        }
-    }
-    // e.g. "Time PeriodTEMPS" — English phrase then an uppercase French token.
-    let bytes = glued.as_bytes();
-    for i in 1..glued.len() {
-        if bytes[i - 1].is_ascii_lowercase() && bytes[i].is_ascii_uppercase() {
-            let en = glued[..i].to_string();
-            let fr = glued[i..].to_string();
-            if !en.is_empty() && !fr.is_empty() {
-                return (en, Some(fr));
-            }
-        }
-    }
-    (glued.to_string(), None)
-}
-
-/// Bare `0x32` is also ASCII `'2'`; only treat it as a title separator when it
-/// sits between a letter (end of CODE/DESC) and a following letter (next label).
-fn is_bare_dim_title_sep(block: &[u8], at: usize) -> bool {
-    if at >= block.len() || block[at] != 0x32 {
-        return false;
-    }
-    if at == 0 || !(block[at - 1] as char).is_ascii_alphabetic() {
-        return false;
-    }
-    let next = at + 1;
-    if next >= block.len() {
-        return true;
-    }
-    let n = block[next];
-    (65..=90).contains(&n) || (97..=122).contains(&n)
-}
-
-/// Length of a language/title marker ending at `0x32`: bare, `lang 32`,
-/// `lang len 32`, or Sample-style `lang x len 32` (e.g. Region `\x01\x08\x04\x32`).
-fn dim_title_marker_len(block: &[u8], at: usize) -> Option<usize> {
-    if at >= block.len() {
+fn dimension_summary_rows(data: &[u8], slot_index: usize) -> Option<Vec<u8>> {
+    let raw = dimension_record(data, slot_index, 3)?;
+    let decoded = crate::decode::decompress_component(raw).ok()?;
+    if decoded.get(..2) != Some(&[1, 2])
+        || decoded.len() < 6
+        || u16(&decoded, 4) != 86
+        || !(1..=32).contains(&u16(&decoded, 2))
+    {
         return None;
     }
-    if at + 1 < block.len() && (1..=9).contains(&block[at]) && block[at + 1] == 0x32 {
-        return Some(2);
-    }
-    if at + 2 < block.len() && (1..=9).contains(&block[at]) && block[at + 2] == 0x32 {
-        return Some(3);
-    }
-    if at + 3 < block.len()
-        && (1..=9).contains(&block[at])
-        && block[at + 3] == 0x32
-        && (1..=64).contains(&block[at + 2])
-    {
-        return Some(4);
-    }
-    if is_bare_dim_title_sep(block, at) {
-        return Some(1);
-    }
-    None
-}
-
-fn dim_title_next_marker(block: &[u8], from: usize) -> Option<usize> {
-    let mut i = from;
-    while i < block.len() {
-        if let Some(n) = dim_title_marker_len(block, i) {
-            // Lang-prefixed markers use control bytes; bare 0x32 is printable.
-            if n >= 2 || is_bare_dim_title_sep(block, i) {
-                return Some(i);
-            }
-        }
-        if block[i] < 32 && dim_title_marker_len(block, i).is_none() {
-            return None;
-        }
-        i += 1;
-    }
-    None
-}
-
-fn trim_desc_before_next_code(desc: &str) -> String {
-    // OECD glues DESC+NEXT_CODE (`RegionRÉGION`); Sample glues `….UNIDADES`.
-    let bytes = desc.as_bytes();
-    for i in 1..desc.len() {
-        if bytes[i - 1].is_ascii_lowercase() && bytes[i].is_ascii_uppercase() {
-            return desc[..i].to_string();
-        }
-        if bytes[i - 1] == b'.' && bytes[i].is_ascii_uppercase() {
-            // Keep the sentence period; drop the following ALL-CAPS code.
-            return desc[..i].to_string();
-        }
-    }
-    desc.to_string()
-}
-
-/// Demo / OECD title block: CODE [lang [len]] 32 DESC [CODE_FR…] [lang [len]] 32 DESC_FR …
-/// Returns (name_en, name_fr, description_en, description_fr).
-fn parse_dim_title_demo(
-    block: &[u8],
-) -> (
-    Option<String>,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-) {
-    // Locate the first CODE immediately before a title marker.
-    // Prefer lang[+len]+0x32 (Products/OECD) over bare 0x32 (OECD TIME PERIOD).
-    let mut code_end = None;
-    let mut marker_len = 0usize;
-    let code_is_dim_code = |code: &str| {
-        code.chars().any(|c| c.is_ascii_uppercase())
-            && !code.chars().any(|c| c.is_ascii_lowercase())
-    };
-    for min_marker in [2usize, 1] {
-        for i in 0..block.len() {
-            let Some(n) = dim_title_marker_len(block, i) else {
-                continue;
-            };
-            if n < min_marker {
-                continue;
-            }
-            let mut start = i;
-            while start > 0 && (32..=126).contains(&block[start - 1]) {
-                start -= 1;
-            }
-            let code = latin1(&block[start..i]).trim().to_string();
-            if code.len() < 2
-                || !code
-                    .chars()
-                    .next()
-                    .map(|c| c.is_ascii_alphabetic())
-                    .unwrap_or(false)
-                || !code.chars().any(|c| c.is_ascii_uppercase())
-            {
-                continue;
-            }
-            // lang+len+0x32 with lang≠1 often marks ALL-CAPS codes (People UNITS).
-            // Mixed-case codes (Sample "Units") are valid when the description
-            // that follows starts with the same token.
-            if n == 3 && block[i] != 1 && !code_is_dim_code(&code) {
-                let after = i + n;
-                let preview = latin1(&block[after..block.len().min(after + code.len() + 8)]);
-                if !preview.to_ascii_lowercase().starts_with(&code.to_ascii_lowercase()) {
-                    continue;
-                }
-            }
-            code_end = Some((start, i, code));
-            marker_len = n;
-            break;
-        }
-        if code_end.is_some() {
-            break;
-        }
-    }
-    let Some((_start, rel, code)) = code_end else {
-        return (None, None, None, None);
-    };
-    let p = rel + marker_len;
-    let end = dim_title_next_marker(block, p).unwrap_or_else(|| {
-        let mut e = p;
-        while e < block.len() && block[e] >= 32 {
-            e += 1;
-        }
-        e
-    });
-    let glued = latin1(&block[p..end]);
-    let (desc_en_raw, code_fr) = split_en_fr_glued(&code, &glued);
-    let desc_en = if desc_en_raw.is_empty() {
-        code.clone()
-    } else {
-        // When split kept a glued FR code via case transition, desc is already clean;
-        // when it used code-prefix split, desc_en is the EN portion.
-        desc_en_raw
-    };
-
-    let mut description_fr = code_fr.clone();
-    let mut name_fr = code_fr.clone();
-    // Second language segment: DESC_FR (and possibly further glued codes).
-    if let Some(m2) = dim_title_next_marker(block, p) {
-        if let Some(n2) = dim_title_marker_len(block, m2) {
-            let p2 = m2 + n2;
-            let end2 = dim_title_next_marker(block, p2).unwrap_or_else(|| {
-                let mut e = p2;
-                while e < block.len() && block[e] >= 32 {
-                    e += 1;
-                }
-                e
-            });
-            if p2 < end2 {
-                let raw_fr = latin1(&block[p2..end2]);
-                let fr_desc = trim_desc_before_next_code(&raw_fr);
-                // Prefer second-segment text only when it looks like a label
-                // (has lowercase). Products often repeats an ALL-CAPS FR code here
-                // and may glue Spanish without a clean separator.
-                if !fr_desc.is_empty() && fr_desc.chars().any(|c| c.is_lowercase()) {
-                    description_fr = Some(fr_desc);
-                }
-            }
-        }
-    }
-
-    // Beyond File Summary Dimension name is the full title code (e.g. COOKIE TYPE).
-    let short = code.clone();
-
-    // Products REGION: glued REGIONRÉGION → desc_en=REGION, name_fr=RÉGION, second seg RÉGION.
-    // OECD REGION: glued RegionRÉGION → desc_en=Region, name_fr=RÉGION, second seg Région.
-    if name_fr.is_none() {
-        name_fr = description_fr.clone();
-    }
-
-    (Some(short), name_fr, Some(desc_en), description_fr)
-}
-
-/// Returns (name_en, name_fr, description_en, description_fr).
-fn parse_dim_title(
-    block: &[u8],
-) -> (
-    Option<String>,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-) {
-    if block.len() < 16 || block[..2] != *b"\x81\x02" {
-        return (None, None, None, None);
-    }
-    let demo = parse_dim_title_demo(block);
-    if demo.0.is_some() {
-        return demo;
-    }
-    for i in 0..block.len().saturating_sub(10) {
-        if block[i + 1..i + 3] != *b"\x02\x00" {
-            continue;
-        }
-        let p = i + 8;
-        if p >= block.len()
-            || !((65..=90).contains(&block[p]) || (97..=122).contains(&block[p]))
-        {
-            continue;
-        }
-        let end = match block[p..].iter().position(|&b| b == 0x01) {
-            Some(rel) => p + rel,
-            None => continue,
-        };
-        if !(1..=40).contains(&(end - p)) {
-            continue;
-        }
-        let short = latin1(&block[p..end]);
-        if short.is_empty() || !short.chars().all(|c| (32..127).contains(&(c as u8))) {
-            continue;
-        }
-        let mut q = end + 1;
-        while q < block.len() && block[q] != 0x32 {
-            if block[q] > 0x20 {
-                break;
-            }
-            q += 1;
-        }
-        if q >= block.len() || block[q] != 0x32 {
-            continue;
-        }
-        q += 1;
-        let mut end2 = None;
-        let mut fr_start = None;
-        let mut r = q;
-        while r < block.len() {
-            let j = match block[r..].iter().position(|&b| b == 0x02) {
-                Some(rel) => r + rel,
-                None => break,
-            };
-            let mut k = j + 1;
-            while k < block.len() && block[k] != 0x32 {
-                if block[k] > 0x20 {
-                    break;
-                }
-                k += 1;
-            }
-            if k < block.len() && block[k] == 0x32 {
-                end2 = Some(j);
-                fr_start = Some(k + 1);
-                break;
-            }
-            r = j + 1;
-        }
-        let glued = latin1(match end2 {
-            Some(e) => &block[q..e],
-            None => &block[q..],
-        });
-        let description = if glued.is_empty() {
-            short.clone()
-        } else if glued.starts_with(&short) && glued.len() > short.len() {
-            glued.clone()
-        } else {
-            glued.clone()
-        };
-        let mut description_fr = None;
-        if let Some(fs) = fr_start {
-            let raw_fr = latin1(&block[fs..]);
-            let mut out = String::new();
-            for c in raw_fr.chars() {
-                if (c as u32) < 32 {
-                    break;
-                }
-                out.push(c);
-            }
-            if !out.is_empty() {
-                description_fr = Some(out);
-            }
-        }
-        if description_fr.is_none() && glued.starts_with(&short) && glued.len() > short.len() {
-            description_fr = Some(glued[short.len()..].to_string());
-        }
-        let name_fr = description_fr.clone();
-        return (Some(short), name_fr, Some(description), description_fr);
-    }
-    (None, None, None, None)
+    Some(decoded)
 }
 
 fn dim_title(
@@ -1580,165 +534,85 @@ fn dim_title(
     Option<String>,
     Option<String>,
 ) {
-    let slots = dim_slots(data, 32);
-    if slot_index >= slots.len() {
+    let Some(decoded) = dimension_summary_rows(data, slot_index) else {
         return (None, None, None, None);
-    }
-    let slot = slots[slot_index];
-    let mut best = (None, None, None, None);
-    for (off, length) in read_block_dir(data, slot.dir_ptr, slot.n_entries) {
-        if length < 16 {
-            continue;
-        }
-        let parsed = parse_dim_title(&data[off as usize..off as usize + length as usize]);
-        if parsed.0.is_none() && parsed.2.is_none() && parsed.1.is_none() && parsed.3.is_none() {
-            continue;
-        }
-        // Prefer the richest title block (Sample Units FR lives in a later 81 02).
-        let score = |p: &(Option<String>, Option<String>, Option<String>, Option<String>)| {
-            p.0.is_some() as i32
-                + p.1.is_some() as i32
-                + p.2.is_some() as i32
-                + p.3.is_some() as i32
-        };
-        if score(&parsed) > score(&best) {
-            best = parsed;
-        }
-    }
-    best
+    };
+    let field = |raw: &[u8]| {
+        let end = raw.iter().position(|&b| b == 0).unwrap_or(raw.len());
+        Some(latin1(&raw[..end]).trim().to_string())
+    };
+    let row = &decoded[6..92];
+    let (name_en, description_en) = (field(&row[..18]), field(&row[34..]));
+    let (name_fr, description_fr) = if u16(&decoded, 2) >= 2 {
+        let row = &decoded[92..178];
+        (field(&row[..18]), field(&row[34..]))
+    } else {
+        (None, None)
+    };
+    (name_en, name_fr, description_en, description_fr)
 }
 
 fn dim_dir_labels(
     data: &[u8],
     dim: &DimDesc,
     slot_index: usize,
-    geography: bool,
+    _geography: bool,
 ) -> (Option<Vec<String>>, Option<Vec<String>>) {
-    let slots = dim_slots(data, 32);
-    if slot_index >= slots.len() {
+    let Some(rows) = dimension_summary_rows(data, slot_index) else {
+        return (None, None);
+    };
+    // Summary row +18 identifies its display member field. Do not choose a
+    // field by English/French-looking labels or by the longest text array.
+    // Time axes have native Date32 records rather than description strings.
+    if dim.type_code == 6 {
         return (None, None);
     }
-    let slot = slots[slot_index];
-    let entries = read_block_dir(data, slot.dir_ptr, slot.n_entries);
-    let mut arrays = Vec::new();
-    let cube = dim.count.max(1) as usize;
-    for (off, length) in entries {
-        if (length as i64) < dim.count + 4 {
-            continue;
-        }
-        let block = &data[off as usize..off as usize + length as usize];
-        if block.len() >= 2 && block[..2] == *b"\x81\x02" {
-            continue;
-        }
-        // Prefer the longest Pascal run (Beyond Items / map product); fall back to cube.
-        let mut labels = read_member_array_max(block);
-        if labels.len() < cube {
-            labels = read_member_array(block, cube);
-        }
-        if labels.len() < cube {
-            continue;
-        }
-        if geography {
-            let sample = labels.iter().take(3).cloned().collect::<Vec<_>>().join(" ");
-            let looks_geo = sample.contains("Canada")
-                || labels.iter().take(5).any(|x| GEO_CODE_RE.is_match(x))
-                || labels.iter().any(|x| {
-                    let t = x.trim();
-                    t.contains(' ') && t.chars().any(|c| c.is_ascii_lowercase())
-                });
-            if !looks_geo {
-                continue;
-            }
-        } else {
-            // Prefer name-like lists over ALL-CAPS code tables when both exist.
-            let name_like = labels.iter().take(8).any(|x| {
-                x.contains(' ') || x.chars().any(|c| c.is_ascii_lowercase())
-            });
-            let all_caps_codes = labels.iter().take(8).all(|x| {
-                !x.is_empty()
-                    && x.chars()
-                        .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_' || c == ' ')
-                    && !x.contains(' ')
-            });
-            if all_caps_codes && !name_like && labels.len() > cube {
-                // Keep codes only if we have nothing better yet.
-                if !arrays.is_empty() {
-                    continue;
-                }
-            }
-        }
-        arrays.push(labels);
-    }
-    if arrays.is_empty() {
+    let Ok(fields) = crate::members::read_members(data, slot_index, dim.count as usize) else {
         return (None, None);
-    }
-    // Prefer the longest EN-like array (map product over truncated cube slice).
-    arrays.sort_by_key(|a| std::cmp::Reverse(a.len()));
-    let mut en = arrays.remove(0);
-    let mut fr = arrays.into_iter().find(|a| a.len() == en.len());
-    if let Some(ref f) = fr {
-        if frscore(&f[..3.min(f.len())].join(" ")) < frscore(&en[..3.min(en.len())].join(" ")) {
-            let tmp = en;
-            en = f.clone();
-            fr = Some(tmp);
-        }
-    }
-    (Some(en), fr)
-}
-
-/// Beyond Summary Items for one dimension: max(cube count, map/member list length).
-fn summary_item_count(data: &[u8], dim: &DimDesc, slot_index: usize, is_geo: bool) -> i64 {
-    let (en, _) = dim_dir_labels(data, dim, slot_index, is_geo);
-    match en {
-        Some(labels) if (labels.len() as i64) > dim.count => labels.len() as i64,
-        _ => dim.count,
-    }
-}
-
-fn dim_slot_notes(
-    data: &[u8],
-    slot_index: usize,
-) -> (Option<String>, Option<String>) {
-    let slots = dim_slots(data, 32);
-    if slot_index >= slots.len() {
-        return (None, None);
-    }
-    let slot = slots[slot_index];
-    let mut blobs = Vec::new();
-    for (off, length) in read_block_dir(data, slot.dir_ptr, slot.n_entries) {
-        if length < 40 {
-            continue;
-        }
-        let blk = &data[off as usize..off as usize + length as usize];
-        if blk.len() < 2 || blk[..2] != *b"\x01\x01" {
-            continue;
-        }
-        let payload = &blk[4..];
-        let mut i = 0;
-        while i < payload.len() && payload[i] < 0x20 {
-            i += 1;
-        }
-        let text = normalize_notes_text(latin1(&payload[i..]).trim_end_matches('\0'));
-        if text.len() < 40 || !text.contains('\n') {
-            continue;
-        }
-        // Skip table-identity notes mirrored into a dim slot.
-        if text.to_ascii_lowercase().contains("demonstration tables") {
-            continue;
-        }
-        blobs.push(text);
-    }
-    if blobs.is_empty() {
-        return (None, None);
-    }
-    blobs.sort_by_key(|s| frscore(s));
-    let en = blobs[0].clone();
-    let fr = if blobs.len() > 1 && frscore(blobs.last().unwrap()) > frscore(&blobs[0]) {
-        Some(blobs.last().unwrap().clone())
+    };
+    let labels = |row: &[u8]| {
+        let index = u16(row, 18) as usize;
+        fields.get(index).map(|(_, values)| {
+            values
+                .iter()
+                .map(|value| value.clone().unwrap_or_default())
+                .collect()
+        })
+    };
+    let en = labels(&rows[6..92]);
+    let fr = if u16(&rows, 2) >= 2 {
+        labels(&rows[92..178])
     } else {
         None
     };
-    (Some(en), fr)
+    (en, fr)
+}
+
+fn dim_slot_notes(data: &[u8], slot_index: usize) -> (Option<String>, Option<String>) {
+    let Some(decoded) = dimension_summary_rows(data, slot_index) else {
+        return (None, None);
+    };
+    let note = |row: &[u8]| {
+        let index = u16(row, 22) as usize;
+        if index == 0 {
+            return None;
+        }
+        let raw = dimension_record(data, slot_index, index)?;
+        let decoded = crate::decode::decompress_component(raw).ok()?;
+        if decoded.get(..2) != Some(&[1, 1]) {
+            return None;
+        }
+        let raw = &decoded[4..];
+        let end = raw.iter().position(|&b| b == 0).unwrap_or(raw.len());
+        Some(normalize_notes_text(&latin1(&raw[..end])))
+    };
+    let en = note(&decoded[6..92]);
+    let fr = if u16(&decoded, 2) >= 2 {
+        note(&decoded[92..178])
+    } else {
+        None
+    };
+    (en, fr)
 }
 
 struct InlineGeo {
@@ -1808,193 +682,29 @@ fn geo_from_dir(data: &[u8], dim: &DimDesc, slot_index: usize) -> Geographies {
 }
 
 fn footnotes(data: &[u8]) -> Vec<Footnote> {
-    let start = data.len().saturating_sub(200_000);
-    let mut out = footnotes_regions(&data[..data.len().min(12000)], &data[start..]);
-    if out.is_empty() {
-        out = footnotes_from_records(data);
-    }
-    out
-}
-
-fn footnote_lang_bucket(text: &str) -> &'static str {
-    let lower = text.to_lowercase();
-    // Spanish often sorts ahead of EN/FR in IAAH dim-dir sweeps.
-    if lower.contains("incluyen")
-        || lower.contains(" cifras ")
-        || lower.starts_with("estas ")
-        || lower.contains(" los ")
-        || lower.contains(" las ")
-            && (lower.contains("estados") || lower.contains("datos"))
-    {
-        return "es";
-    }
-    if frscore(text) >= 2 {
-        return "fr";
-    }
-    "en"
-}
-
-fn ingest_footnote_record(
-    by_sym: &mut HashMap<String, (Option<String>, Option<String>, i64)>,
-    order: &mut i64,
-    blob: &[u8],
-) {
-    let Some((raw_sym, mut text)) = parse_status_legend_record(blob) else {
-        return;
-    };
-    let Some(symbol) = beyond_footnote_symbol(&raw_sym) else {
-        return;
-    };
-    // Drop ellipsis / placeholder footnote bodies.
-    if text.chars().count() < 12 || text.chars().all(|c| c == '…' || c == '.' || c == ' ') {
-        return;
-    }
-    text = text
-        .trim_end_matches(|c: char| {
-            c == '\u{201a}' || c == '\u{2018}' || c == '\u{2019}' || c == '\u{0082}' || c == '\u{0092}'
-        })
-        .to_string();
-    let entry = by_sym.entry(symbol).or_insert_with(|| {
-        *order += 1;
-        (None, None, *order)
-    });
-    match footnote_lang_bucket(&text) {
-        "fr" => {
-            if entry.1.is_none() {
-                entry.1 = Some(text);
-            }
-        }
-        "en" => {
-            if entry.0.is_none() {
-                entry.0 = Some(text);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn footnotes_from_records(data: &[u8]) -> Vec<Footnote> {
-    // symbol -> (en text, fr text, order)
-    let mut by_sym: HashMap<String, (Option<String>, Option<String>, i64)> = HashMap::new();
-    let mut order = 0i64;
-    // Prefer structured dim-directory records, then a full-file 82 01 sweep.
-    for slot in dim_slots(data, 32) {
-        for (off, length) in read_block_dir(data, slot.dir_ptr, slot.n_entries) {
-            if length < 12 {
-                continue;
-            }
-            ingest_footnote_record(
-                &mut by_sym,
-                &mut order,
-                &data[off as usize..off as usize + length as usize],
-            );
-        }
-    }
-    if by_sym.is_empty() {
-        let mut off = 0usize;
-        while off + 8 < data.len() {
-            if let Some(rel) = data[off..].windows(2).position(|w| w == b"\x82\x01") {
-                let i = off + rel;
-                let end = (i + 768).min(data.len());
-                ingest_footnote_record(&mut by_sym, &mut order, &data[i..end]);
-                off = i + 2;
-            } else {
-                break;
-            }
-        }
-    }
-    let mut rows: Vec<_> = by_sym.into_iter().collect();
-    rows.sort_by_key(|(symbol, _)| footnote_symbol_sort_key(symbol));
+    // The table annotation legend follows the missing-value legend in the
+    // fixed header. Its index specifies display order and language columns.
+    // Numbered footnotes embedded in table/dimension notes are separate data.
     let mut out = Vec::new();
-    for (symbol, (en, fr, ord)) in rows {
-        let number = symbol
-            .trim_matches(|c| c == '(' || c == ')')
-            .parse::<i64>()
-            .unwrap_or(ord);
-        if let Some(text) = en {
-            out.push(Footnote {
-                symbol: symbol.clone(),
-                language: "en".into(),
-                number,
-                text,
-                scope: None,
-                dimension: None,
-                member_id: None,
-            });
-        }
-        if let Some(text) = fr {
-            out.push(Footnote {
-                symbol: symbol.clone(),
-                language: "fr".into(),
-                number,
-                text,
-                scope: None,
-                dimension: None,
-                member_id: None,
-            });
-        }
-    }
-    out
-}
-
-fn footnotes_regions(head: &[u8], tail: &[u8]) -> Vec<Footnote> {
-    let regions: [&[u8]; 2] = [head, tail];
-    let mut out = Vec::new();
-    let mut counts = HashMap::from([("en", 0i64), ("fr", 0i64)]);
-    for region in regions {
-        let s = latin1(region);
-        let starts: Vec<_> = FOOTNOTE_START_RE.captures_iter(&s).collect();
-        for (i, m) in starts.iter().enumerate() {
-            let lang = if m.get(1).unwrap().as_str().to_lowercase().starts_with("foot") {
-                "en"
-            } else {
-                "fr"
-            };
-            let body_start = m.get(0).unwrap().end();
-            let body_end = if i + 1 < starts.len() {
-                starts[i + 1].get(0).unwrap().start()
-            } else {
-                s.len()
-            };
-            let body = WS_RE
-                .replace_all(&s[body_start..body_end], " ")
-                .trim()
-                .to_string();
-            if body.len() < 8 {
-                continue;
-            }
-            *counts.get_mut(lang).unwrap() += 1;
-            let num = *counts.get(lang).unwrap();
-            let text = if body.chars().count() > 4000 {
-                body.chars().take(4000).collect()
-            } else {
-                body
-            };
-            out.push(Footnote {
-                symbol: format!("({})", num),
-                language: lang.into(),
-                number: num,
-                text,
-                scope: None,
-                dimension: None,
-                member_id: None,
-            });
-        }
-    }
-    let mut seen = HashSet::new();
-    let mut uniq = Vec::new();
-    for f in out {
-        let key = f.text.chars().take(80).collect::<String>();
-        if seen.contains(&key) {
+    for row in legend_values(data, HDR_STATUS_LEGEND + DIM_SLOT_STRIDE, false) {
+        let Some(symbol) = beyond_footnote_symbol(&row.symbol) else {
             continue;
-        }
-        seen.insert(key);
-        uniq.push(f);
-        if uniq.len() >= 200 {
-            break;
+        };
+        for (language, text) in [("en", row.label.en), ("fr", row.label.fr)] {
+            if let Some(text) = text {
+                out.push(Footnote {
+                    symbol: symbol.clone(),
+                    language: language.into(),
+                    number: row.code.unwrap_or(0),
+                    text,
+                    scope: None,
+                    dimension: None,
+                    member_id: None,
+                });
+            }
         }
     }
-    uniq
+    out
 }
 
 fn symbol_chars_ok(symbol: &str) -> bool {
@@ -2007,75 +717,34 @@ fn symbol_chars_ok(symbol: &str) -> bool {
 }
 
 fn parse_status_legend_record(blob: &[u8]) -> Option<(String, String)> {
-    if blob.len() < 8 || (blob[..2] != *b"\x82\x01" && blob[..2] != *b"\x02\x01") {
+    if blob.len() < 4 || !matches!(blob[0], 2 | 0x82) || blob[1] != 1 {
         return None;
     }
-    let body = &blob[4..];
-    // Footnote symbols (e.g. §) often sit past the first 16 body bytes.
-    for i in 0..256.min(body.len().saturating_sub(4)) {
-        let n = body[i] as usize;
-        if !(1..=8).contains(&n) || i + 1 + n + 2 > body.len() {
-            continue;
-        }
-        let sym = &body[i + 1..i + 1 + n];
-        if *sym.last().unwrap() != 0 {
-            continue;
-        }
-        let symbol = latin1(&sym[..sym.len() - 1]);
-        if !symbol_chars_ok(&symbol) {
-            continue;
-        }
-        let text_len = u16(body, i + 1 + n) as usize;
-        let start = i + 1 + n + 2;
-        let take = text_len.min(body.len().saturating_sub(start));
-        if take < 1 {
-            continue;
-        }
-        let raw = &body[start..start + take];
-        let mut out = Vec::new();
-        for &b in raw {
-            if b == 0 || b < 9 || b == 127 {
-                break;
-            }
-            out.push(b);
-        }
-        let text = latin1(&out)
-            .trim_matches(|c: char| {
-                c <= ' '
-                    || c == '\u{201a}' // cp1252 0x82
-                    || c == '\u{2018}' // cp1252 0x91
-                    || c == '\u{2019}' // cp1252 0x92
-                    || c == '\u{0082}'
-                    || c == '\u{0092}'
-            })
-            .to_string();
-        if text.len() < 3 {
-            continue;
-        }
-        return Some((symbol, text));
+    let decoded = crate::decode::decompress_component(blob).ok()?;
+    let body = decoded.get(4..)?;
+    // Reserved byte, symbol byte length, symbol (including NUL), then a
+    // little-endian word length and description (including NUL).
+    let n = *body.get(1)? as usize;
+    if n < 1 {
+        return None;
     }
-    None
-}
-
-fn footnote_symbol_sort_key(symbol: &str) -> i32 {
-    let inner = symbol.trim_matches(|c| c == '(' || c == ')');
-    if let Ok(n) = inner.parse::<i32>() {
-        return n * 10;
+    let symbol = body.get(2..2 + n)?;
+    if symbol.last() != Some(&0) || body.len() < 4 + n {
+        return None;
     }
-    // Beyond File Summary lists § between (2) and (3).
-    if inner == "§" || inner == "\u{00a7}" {
-        return 25;
+    let text_len = u16(body, 2 + n) as usize;
+    let text = body.get(4 + n..4 + n + text_len)?;
+    let symbol = latin1(&symbol[..n - 1]);
+    if !symbol_chars_ok(&symbol) {
+        return None;
     }
-    10_000
+    let end = text.iter().position(|&b| b == 0).unwrap_or(text.len());
+    Some((symbol, latin1(&text[..end]).trim().to_string()))
 }
 
 fn beyond_footnote_symbol(raw: &str) -> Option<String> {
     let s = raw.trim();
     if s.is_empty() {
-        return None;
-    }
-    // Missing-value legend symbols are not footnotes.
-    if matches!(s, "-" | "..." | "." | ".." ) || s.chars().all(|c| c == '-' || c == ' ') {
         return None;
     }
     if s.starts_with('(') && s.ends_with(')') {
@@ -2084,17 +753,18 @@ fn beyond_footnote_symbol(raw: &str) -> Option<String> {
     Some(format!("({})", s))
 }
 
-fn status_legend_dir(data: &[u8], ptr: u32, n_entries: u32) -> Vec<(u32, u16)> {
+fn status_legend_dir(data: &[u8], slot: usize) -> Vec<(u32, u16)> {
     let mut entries = Vec::new();
-    let mut o = ptr as usize;
-    for _ in 0..n_entries {
-        if o + 8 > data.len() {
+    let Ok(directory) = crate::metadata_directory::MetadataDirectory::new(data, slot) else {
+        return entries;
+    };
+    for index in 0..directory.count {
+        let Ok(raw) = directory.entry(data, index) else {
             break;
-        }
-        let off = u32(data, o);
-        let s1 = u16(data, o + 4);
-        let s2 = u16(data, o + 6);
-        o += 8;
+        };
+        let off = u32(raw, 0);
+        let s1 = u16(raw, 4);
+        let s2 = u16(raw, 6);
         if off == 0 && s1 == 0 {
             entries.push((0, 0));
             continue;
@@ -2109,15 +779,19 @@ fn status_legend_dir(data: &[u8], ptr: u32, n_entries: u32) -> Vec<(u32, u16)> {
 }
 
 fn missing_values(data: &[u8]) -> Vec<MissingValue> {
-    if data.len() < HDR_STATUS_LEGEND + 14 {
+    legend_values(data, HDR_STATUS_LEGEND, true)
+}
+
+fn legend_values(data: &[u8], slot: usize, trim_short_period: bool) -> Vec<MissingValue> {
+    if data.len() < slot + 14 {
         return Vec::new();
     }
-    let dir_ptr = u32(data, HDR_STATUS_LEGEND);
-    let n_entries = u32(data, HDR_STATUS_LEGEND + 8);
+    let dir_ptr = u32(data, slot);
+    let n_entries = u32(data, slot + 8);
     if dir_ptr == 0 || n_entries < 1 {
         return Vec::new();
     }
-    let entries = status_legend_dir(data, dir_ptr, n_entries);
+    let entries = status_legend_dir(data, slot);
     if entries.is_empty() {
         return Vec::new();
     }
@@ -2158,9 +832,7 @@ fn missing_values(data: &[u8]) -> Vec<MissingValue> {
                 labels.push(None);
                 continue;
             }
-            match parse_status_legend_record(
-                &data[off as usize..off as usize + length as usize],
-            ) {
+            match parse_status_legend_record(&data[off as usize..off as usize + length as usize]) {
                 Some((sym, text)) => {
                     if symbol.is_none() {
                         symbol = Some(sym);
@@ -2181,7 +853,11 @@ fn missing_values(data: &[u8]) -> Vec<MissingValue> {
         };
         // Beyond short EN legend labels omit a trailing period; longer prose keeps it.
         let en = en.map(|mut t| {
-            if t.ends_with('.') && !t.ends_with("...") && t.chars().count() < 40 {
+            if trim_short_period
+                && t.ends_with('.')
+                && !t.ends_with("...")
+                && t.chars().count() < 40
+            {
                 t.pop();
             }
             t
@@ -2205,10 +881,7 @@ pub fn build_dimensions(data: &[u8], desc: &Descriptor) -> Vec<Dimension> {
     for (i, d) in desc.dims.iter().enumerate() {
         let is_geo = (i + 1) == gd;
         let (members_en, members_fr) = dim_dir_labels(data, d, i, is_geo);
-        let items = match &members_en {
-            Some(labels) if (labels.len() as i64) > d.count => labels.len() as i64,
-            _ => summary_item_count(data, d, i, is_geo),
-        };
+        let items = d.count;
         let (short, title_name_fr, description_en, description_fr) = dim_title(data, i);
         // Prefer dim-title code (COOKIE TYPE) over descriptor name when present.
         let name_en = short
@@ -2239,16 +912,14 @@ pub fn build_dimensions(data: &[u8], desc: &Descriptor) -> Vec<Dimension> {
     dims
 }
 
-/// Beyond File Summary datapoints = product of Summary Items (not cube-only counts).
-fn summary_datapoints(data: &[u8], desc: &Descriptor) -> i64 {
+/// File Summary datapoints are the product of the declared axis item counts.
+fn summary_datapoints(desc: &Descriptor) -> i64 {
     if desc.dims.is_empty() {
         return 0;
     }
-    let gd = geo_dim_index(&desc.dims);
-    desc.dims.iter().enumerate().fold(1i64, |acc, (i, d)| {
-        let is_geo = (i + 1) == gd;
-        acc.saturating_mul(summary_item_count(data, d, i, is_geo))
-    })
+    desc.dims
+        .iter()
+        .fold(1i64, |acc, d| acc.saturating_mul(d.count))
 }
 
 /// Oracle / bytes path: build metadata from a complete in-memory IVT.
@@ -2264,22 +935,6 @@ pub fn build_metadata(
 /// Path-based entry: open a file without reading it entirely for summary metadata.
 pub fn open_metadata_path(path: &Path) -> Result<IvtMetadata, IvtError> {
     let source = IvtSource::open_file(path)?;
-    // Small files: one full read matches the legacy oracle and is cheaper than
-    // many tiny range requests. Large files use selective range I/O.
-    const SMALL_FILE: u64 = 2 * 1024 * 1024;
-    if source.len()? <= SMALL_FILE {
-        let data = source.read_all()?;
-        let mut metrics = source.metrics();
-        // Attribute the full-file load for benchmarks (one logical read).
-        if metrics.read_ops == 0 {
-            metrics.record(data.len());
-        }
-        return build_metadata_from_source(
-            IvtSource::from_bytes_with_metrics(data, metrics),
-            None,
-            None,
-        );
-    }
     build_metadata_from_source(source, None, None)
 }
 
@@ -2316,17 +971,10 @@ fn build_metadata_memory(
     let (notes_en, notes_fr, notes_pid) = parse_identity_notes(data);
     let product_id = info.get("product_id").cloned().flatten().or(notes_pid);
     let keywords = parse_keywords(data, product_id.as_deref());
-    let number_of_datapoints = summary_datapoints(data, &desc);
-    let searchable = latin1(data);
-    let (frequency, start_date, end_date) = parse_time_series(
-        &[data],
-        &searchable,
-        &desc.dims,
-        notes_en.as_deref(),
-        notes_fr.as_deref(),
-    )
-    .map(TimeSeriesInfo::into_fields)
-    .unwrap_or((None, None, None));
+    let number_of_datapoints = summary_datapoints(&desc);
+    let (frequency, start_date, end_date) = parse_time_series(data)
+        .map(TimeSeriesInfo::into_fields)
+        .unwrap_or((None, None, None));
     Ok(IvtMetadata {
         product_id,
         title: LocalizedText {
@@ -2357,11 +1005,98 @@ fn build_metadata_memory(
         source,
         desc,
         master_entries,
+        metadata_image: None,
         dimensions: None,
         geographies: None,
         footnotes: None,
         missing_values: None,
     })
+}
+
+/// Materialize only metadata directories and their declared records. Relocating
+/// their offsets keeps the bytes and path parsers identical without allocating
+/// a buffer as large as the source file or touching the cube's value pages.
+fn metadata_catalog(
+    source: &IvtSource,
+    master: bool,
+    dimensions: bool,
+    legends: &[usize],
+    descriptor: bool,
+) -> Result<Vec<u8>, IvtError> {
+    let file_len = source.len()? as usize;
+    let header_len = (HDR_DIM_SLOT0 + DIM_SLOT_STRIDE * 32).min(file_len);
+    let mut catalog = source.read_prefix(header_len)?;
+    if catalog.len() < 576 {
+        return Err(IvtError::Parse(
+            "IVT file too small to contain a header".into(),
+        ));
+    }
+    let header = catalog.clone();
+    let mut copied = HashMap::<(u32, u16), u32>::new();
+    let mut slots = Vec::new();
+    if master {
+        slots.push((HDR_MASTER_PTR, u32(&header, HDR_MASTER_PTR + 8) as usize));
+    }
+    if dimensions {
+        for slot in dim_slots(&header, 32) {
+            slots.push((
+                HDR_DIM_SLOT0 + slot.index * DIM_SLOT_STRIDE,
+                slot.n_entries as usize,
+            ));
+        }
+    }
+    for &slot in legends {
+        if slot + 14 <= header.len() {
+            slots.push((slot, u32(&header, slot + 8) as usize));
+        }
+    }
+    for (slot, count) in slots {
+        let ptr = u32(&header, slot) as usize;
+        if ptr == 0 || count == 0 {
+            continue;
+        }
+        let mut directory =
+            crate::metadata_directory::MetadataDirectory::new(&header, slot)?.read(source)?;
+        for i in (0..directory.len().saturating_sub(7)).step_by(8) {
+            let off = u32(&directory, i);
+            let length = u16(&directory, i + 4);
+            if off == 0 || length == 0 {
+                continue;
+            }
+            if off as usize + length as usize > file_len {
+                return Err(IvtError::InvalidDirectory("metadata record range"));
+            }
+            let relocated = if let Some(&at) = copied.get(&(off, length)) {
+                at
+            } else {
+                let at = u32::try_from(catalog.len())
+                    .map_err(|_| IvtError::InvalidDirectory("metadata catalog size"))?;
+                catalog.extend_from_slice(&source.read_range(off as u64, length as usize)?);
+                copied.insert((off, length), at);
+                at
+            };
+            directory[i..i + 4].copy_from_slice(&relocated.to_le_bytes());
+        }
+        let at = u32::try_from(catalog.len())
+            .map_err(|_| IvtError::InvalidDirectory("metadata catalog size"))?;
+        catalog.extend_from_slice(&directory);
+        // Old directory readers allow up to eight trailing blank entries.
+        catalog.resize(catalog.len() + 64, 0);
+        catalog[slot..slot + 4].copy_from_slice(&at.to_le_bytes());
+        // The relocated catalog stores a flat directory, even when the source
+        // uses a page-pointer table. Preserve unrelated native flag bits.
+        let flags = u16(&header, slot + 12) & !1;
+        catalog[slot + 12..slot + 14].copy_from_slice(&flags.to_le_bytes());
+    }
+    if descriptor {
+        if crate::descriptor::structured_descriptor(&catalog).is_none() {
+            return Err(IvtError::DescriptorNotFound);
+        }
+        catalog[HDR_DESCRIPTOR_PTR..HDR_DESCRIPTOR_PTR + 4].fill(0);
+    }
+    // Value-directory offsets do not apply to this relocated metadata image.
+    catalog[crate::header::HDR_DIR_PTR..crate::header::HDR_DIR_PTR + 4].fill(0);
+    Ok(catalog)
 }
 
 fn build_metadata_selective(
@@ -2369,703 +1104,38 @@ fn build_metadata_selective(
     desc: Option<Descriptor>,
     hdr: Option<HeaderLayout>,
 ) -> Result<IvtMetadata, IvtError> {
-    let file_len = source.len()?;
-    let prefix_len = (HDR_DIM_SLOT0 + DIM_SLOT_STRIDE * 32).max(2048);
-    let prefix = source.read_prefix(prefix_len.min(file_len as usize))?;
+    let catalog = metadata_catalog(
+        &source,
+        true,
+        true,
+        &[HDR_STATUS_LEGEND, HDR_STATUS_LEGEND + 14],
+        true,
+    )?;
+    // Header identity uses the actual file length even though the parser sees
+    // only the selected metadata records.
     let hdr = match hdr {
-        Some(h) => h,
-        None => read_header_ex(&prefix, file_len as usize).map_err(IvtError::Parse)?,
+        Some(hdr) => hdr,
+        None => read_header_ex(&catalog, source.len()? as usize).map_err(IvtError::Parse)?,
     };
-    if hdr.signature != [0x04, 0x00, 0x20, 0x00] && hdr.signature != [0x02, 0x00, 0x20, 0x00] {
-        return Err(IvtError::InvalidSignature(hdr.signature));
-    }
-
-    let master = u32(&prefix, HDR_MASTER_PTR) as u64;
-    let mut ranges = vec![
-        ByteRange::new(0, prefix.len()),
-        ByteRange::new(master, 256),
-    ];
-    let d_off = u32(&prefix, HDR_DESCRIPTOR_PTR) as u64;
-    if d_off > 0 && d_off < file_len {
-        let wlen = 4000u64.min(file_len - d_off) as usize;
-        ranges.push(ByteRange::new(d_off, wlen));
-    }
-    if hdr.title_en != 0 && (hdr.title_en as u64) < file_len {
-        let len = 512usize.min((file_len - hdr.title_en as u64) as usize);
-        ranges.push(ByteRange::new(hdr.title_en as u64, len));
-    }
-    if hdr.title_fr != 0 && (hdr.title_fr as u64) < file_len {
-        let len = 512usize.min((file_len - hdr.title_fr as u64) as usize);
-        ranges.push(ByteRange::new(hdr.title_fr as u64, len));
-    }
-
-    // Peek master directory to plan block reads.
-    let master_dir = source.read_range(master, 256.min((file_len - master) as usize))?;
-    let master_entries = master_dir_entries_from_buf(&prefix, &master_dir, master, file_len as usize);
-    for &(off, len) in &master_entries {
-        ranges.push(ByteRange::new(off as u64, len as usize));
-    }
-
-    let loaded = source.load_ranges(&ranges, DEFAULT_MERGE_GAP)?;
-    let head = slice_or_read(&source, &loaded, 0, prefix.len().min(8000))?;
-    let block_bufs: Vec<&[u8]> = master_entries
-        .iter()
-        .filter_map(|&(off, len)| find_loaded(&loaded, off as u64, len as usize))
-        .collect();
-
-    let desc = match desc {
-        Some(d) => d,
-        None => match parse_descriptor_selective(&source, &prefix, &loaded, d_off, &block_bufs)
-        {
-            Ok(d) => d,
-            Err(_) => {
-                // Demo tables sometimes need a full-file marker scan for the dim chain.
-                source.set_fallback_used();
-                let all = source.read_all()?;
-                parse_descriptor(&all).ok_or(IvtError::DescriptorNotFound)?
-            }
-        },
-    };
-
-    let mut facet = parse_facet_summary_bufs(&block_bufs);
-    let mut info = parse_table_identity_selective(&head, &block_bufs, &facet);
-    let (notes_en, notes_fr, notes_pid) = parse_identity_notes_bufs(&block_bufs);
-    let mut product_id = info.get("product_id").cloned().flatten().or(notes_pid);
-    let keywords = parse_keywords_bufs(&block_bufs, product_id.as_deref());
-
-    // Fallback: full-file FACET/identity only when summary fields are missing.
-    let need_fallback = info.get("title_en").and_then(|t| t.as_ref()).is_none()
-        && info.get("title_fr").and_then(|t| t.as_ref()).is_none()
-        && facet.get("title_en").and_then(|t| t.as_ref()).is_none()
-        && facet.get("title_fr").and_then(|t| t.as_ref()).is_none();
-    let (searchable, marker_owned): (String, Option<Vec<u8>>) = if need_fallback {
-        source.set_fallback_used();
-        let all = source.read_all()?;
-        facet = parse_facet_summary(&all);
-        info = parse_table_identity(&all);
-        product_id = info
-            .get("product_id")
-            .cloned()
-            .flatten()
-            .or(product_id);
-        (latin1(&all), Some(all))
-    } else {
-        let mut parts = Vec::new();
-        parts.push(latin1(&head));
-        for b in &block_bufs {
-            parts.push(latin1(b));
-        }
-        if let (Some(ne), Some(nf)) = (notes_en.as_ref(), notes_fr.as_ref()) {
-            parts.push(ne.clone());
-            parts.push(nf.clone());
-        } else if let Some(ne) = notes_en.as_ref() {
-            parts.push(ne.clone());
-        } else if let Some(nf) = notes_fr.as_ref() {
-            parts.push(nf.clone());
-        }
-        (parts.join("\n"), None)
-    };
-
-    let marker_refs: Vec<&[u8]> = if let Some(ref all) = marker_owned {
-        vec![all.as_slice()]
-    } else {
-        block_bufs.clone()
-    };
-
-    // Prefer Beyond Summary Items product when the whole file is available;
-    // otherwise fall back to descriptor cube counts (decode grid).
-    let number_of_datapoints = if desc.dims.is_empty() {
-        0
-    } else if file_len <= 4 * 1024 * 1024 {
-        match source.read_all() {
-            Ok(all) => summary_datapoints(&all, &desc),
-            Err(_) => desc.dims.iter().fold(1i64, |a, d| a.saturating_mul(d.count)),
-        }
-    } else {
-        desc.dims.iter().fold(1i64, |a, d| a.saturating_mul(d.count))
-    };
-    let mut time_series = parse_time_series(
-        &marker_refs,
-        &searchable,
-        &desc.dims,
-        notes_en.as_deref(),
-        notes_fr.as_deref(),
-    );
-    // Frequency/range strings may live outside master blocks. Full-text fallback
-    // is only used when the file is still modest; large network files keep the
-    // bounded searchable text to avoid a complete transfer.
-    const TS_FALLBACK_MAX: u64 = 2 * 1024 * 1024;
-    if let Some(ts) = &time_series {
-        if (ts.start.is_none() || ts.end.is_none() || ts.frequency.is_none())
-            && file_len <= TS_FALLBACK_MAX
-        {
-            source.set_fallback_used();
-            let all = if let Some(ref owned) = marker_owned {
-                owned.clone()
-            } else {
-                source.read_all()?
-            };
-            let full_text = latin1(&all);
-            time_series = parse_time_series(
-                &[&all],
-                &full_text,
-                &desc.dims,
-                notes_en.as_deref(),
-                notes_fr.as_deref(),
-            );
-        }
-    }
-    let (frequency, start_date, end_date) = time_series
-        .map(TimeSeriesInfo::into_fields)
-        .unwrap_or((None, None, None));
-    let read_only = read_only_flag_bufs(&block_bufs);
-
-    // Prefer FACET titles/authors when present (same as parse_table_identity).
-    let title_en = facet
-        .get("title_en")
-        .cloned()
-        .flatten()
-        .or_else(|| info.get("title_en").cloned().flatten());
-    let title_fr = facet
-        .get("title_fr")
-        .cloned()
-        .flatten()
-        .or_else(|| info.get("title_fr").cloned().flatten());
-
-    Ok(IvtMetadata {
-        product_id,
-        title: LocalizedText {
-            en: title_en,
-            fr: title_fr,
-        },
-        universe: info.get("universe").cloned().flatten(),
-        notes: LocalizedText {
-            en: notes_en,
-            fr: notes_fr,
-        },
-        version: hdr.version,
-        signature: signature_hex(&hdr.signature),
-        author: LocalizedText {
-            en: facet
-                .get("author_en")
-                .cloned()
-                .flatten()
-                .or_else(|| info.get("author_en").cloned().flatten()),
-            fr: facet
-                .get("author_fr")
-                .cloned()
-                .flatten()
-                .or_else(|| info.get("author_fr").cloned().flatten()),
-        },
-        category: LocalizedText {
-            en: facet
-                .get("category_en")
-                .cloned()
-                .flatten()
-                .or_else(|| info.get("category_en").cloned().flatten()),
-            fr: facet
-                .get("category_fr")
-                .cloned()
-                .flatten()
-                .or_else(|| info.get("category_fr").cloned().flatten()),
-        },
-        keywords,
-        number_of_datapoints: Some(number_of_datapoints),
-        frequency,
-        start_date,
-        end_date,
-        read_only: Some(read_only),
-        source,
-        desc,
-        master_entries,
-        dimensions: None,
-        geographies: None,
-        footnotes: None,
-        missing_values: None,
-    })
-}
-
-fn find_loaded<'a>(loaded: &'a [LoadedRange], offset: u64, length: usize) -> Option<&'a [u8]> {
-    for lr in loaded {
-        if let Some(s) = lr.slice_at(offset, length) {
-            return Some(s);
-        }
-    }
-    None
-}
-
-fn slice_or_read(
-    source: &IvtSource,
-    loaded: &[LoadedRange],
-    offset: u64,
-    length: usize,
-) -> Result<Vec<u8>, IvtError> {
-    if let Some(s) = find_loaded(loaded, offset, length) {
-        return Ok(s.to_vec());
-    }
-    source.read_range(offset, length)
-}
-
-fn master_dir_entries_from_buf(
-    prefix: &[u8],
-    master_dir: &[u8],
-    master_off: u64,
-    file_len: usize,
-) -> Vec<(u32, u16)> {
-    let _ = (prefix, master_off);
-    let mut out = Vec::new();
-    let mut o = 0usize;
-    for _ in 0..32 {
-        if o + 8 > master_dir.len() {
-            break;
-        }
-        let off = u32(master_dir, o);
-        let s1 = u16(master_dir, o + 4);
-        o += 8;
-        if off == 0 && s1 == 0 {
-            continue;
-        }
-        if s1 == 0 || (off as usize) + (s1 as usize) > file_len {
-            continue;
-        }
-        out.push((off, s1));
-    }
-    out
-}
-
-fn parse_descriptor_selective(
-    source: &IvtSource,
-    prefix: &[u8],
-    loaded: &[LoadedRange],
-    d_off: u64,
-    block_bufs: &[&[u8]],
-) -> Result<Descriptor, IvtError> {
-    if !prefix.is_empty() && prefix[0] == 0x02 {
-        return Err(IvtError::DescriptorNotFound);
-    }
-    let file_len = source.len()?;
-    // Contiguous prefix covering the descriptor window matches oracle `walk_at`
-    // (including FACET04 / dir-anchor truncation) without reading value pages.
-    // Small files: full-buffer descriptor parse (includes marker-window fallback).
-    // Large files: walk the header pointer window; marker scan uses master blocks
-    // then a measured full-file fallback if needed.
-    const SMALL_FILE: u64 = 2 * 1024 * 1024;
-    if file_len <= SMALL_FILE {
-        let all = source.read_all()?;
-        return parse_descriptor(&all).ok_or(IvtError::DescriptorNotFound);
-    }
-
-    const MAX_PREFIX: u64 = 8 * 1024 * 1024;
-    let need = (d_off.saturating_add(4000)).min(file_len);
-    let mut best: Option<(u32, Vec<DimDesc>, i64)> = None;
-    let consider = |best: &mut Option<(u32, Vec<DimDesc>, i64)>, off: u32, dims: Vec<DimDesc>| {
-        let score = if dims.len() < 2 || dims.len() > 16 {
-            -1
-        } else {
-            let prod = dims.iter().fold(1i64, |a, d| a.saturating_mul(d.count));
-            (dims.len() as i64) * 1_000_000 + prod.min(999_999)
-        };
-        if score < 0 {
-            return;
-        }
-        if best.as_ref().map(|(_, _, s)| *s).unwrap_or(-1) < score {
-            *best = Some((off, dims, score));
-        }
-    };
-
-    if need > d_off && need <= MAX_PREFIX {
-        let buf = slice_or_read(source, loaded, 0, need as usize)?;
-        let d_off_usize = d_off as usize;
-        if d_off_usize + 18 <= buf.len() {
-            let anchor = crate::header::dir_anchor_header(&buf);
-            if let Some(dims) =
-                walk_at_window(&buf[d_off_usize..], d_off_usize, anchor, 16)
-            {
-                consider(&mut best, d_off as u32, dims);
-            }
-        }
-    }
-    if let Some((off, dims)) = scan_dim_marker_in_buffers(block_bufs) {
-        consider(&mut best, off as u32, dims);
-    }
-    if let Some((offset, dims, _)) = best {
-        return Ok(Descriptor { offset, dims });
-    }
-    Err(IvtError::DescriptorNotFound)
-}
-
-fn parse_table_identity_selective(
-    head: &[u8],
-    block_bufs: &[&[u8]],
-    facet: &HashMap<&'static str, Option<String>>,
-) -> HashMap<&'static str, Option<String>> {
-    let head_text = latin1(head);
-    let grab = |re: &Regex| {
-        re.captures(&head_text)
-            .map(|m| m.get(1).unwrap().as_str().trim().to_string())
-    };
-    let mut info: HashMap<&'static str, Option<String>> = HashMap::new();
-    info.insert("product_id", grab(&PRODUCT_ID_HEAD));
-    info.insert("title_en", grab(&TITLE_EN_HEAD));
-    info.insert("title_fr", grab(&TITLE_FR_HEAD));
-    info.insert("universe", grab(&UNIVERSE_HEAD));
-
-    let mut blobs = Vec::new();
-    for blk in block_bufs {
-        if blk.len() >= 2 && &blk[..2] == b"\x01\x01" && blk.len() > 8 {
-            let payload = &blk[4..];
-            let mut i = 0;
-            while i < payload.len() && payload[i] < 0x20 {
-                i += 1;
-            }
-            let text = latin1(&payload[i..]).trim().to_string();
-            if !text.is_empty() {
-                blobs.push(text);
-            }
-        } else if !blk.is_empty() && (blk[0] == b' ' || blk[0].is_ascii_alphabetic()) {
-            let text = latin1(blk).trim().to_string();
-            if text.contains("98-") || text.contains("Title") {
-                blobs.push(text);
-            }
-        }
-    }
-
-    let mut pid = info.get("product_id").cloned().flatten();
-    let mut title_en = info.get("title_en").cloned().flatten();
-    let mut title_fr = info.get("title_fr").cloned().flatten();
-
-    for blob in &blobs {
-        let (p, t) = identity_from_blob(blob);
-        if let Some(ref p) = p {
-            if (pid.is_none() || p.len() > pid.as_ref().map(|x| x.len()).unwrap_or(0))
-                && PID_FULL.is_match(p)
-            {
-                pid = Some(p.clone());
-            }
-        }
-        if let Some(t) = t {
-            if title_en.is_none() && title_fr.is_none() {
-                if frscore(&t) >= 2 {
-                    title_fr = Some(t);
-                } else {
-                    title_en = Some(t);
-                }
-            }
-        }
-    }
-
-    if let Some(t) = facet.get("title_en").cloned().flatten() {
-        title_en = Some(t);
-    }
-    if let Some(t) = facet.get("title_fr").cloned().flatten() {
-        title_fr = Some(t);
-    }
-    if pid.is_none() {
-        if let Some(m) = PID_FALLBACK.captures(&head_text) {
-            pid = Some(m.get(1).unwrap().as_str().to_string());
-        }
-    }
-
-    info.insert("product_id", pid);
-    info.insert("title_en", title_en);
-    info.insert("title_fr", title_fr);
-    info.insert("author_en", facet.get("author_en").cloned().flatten());
-    info.insert("author_fr", facet.get("author_fr").cloned().flatten());
-    info.insert("category_en", facet.get("category_en").cloned().flatten());
-    info.insert("category_fr", facet.get("category_fr").cloned().flatten());
-    info
-}
-
-fn parse_identity_notes_bufs(
-    block_bufs: &[&[u8]],
-) -> (Option<String>, Option<String>, Option<String>) {
-    let mut notes_en = None;
-    let mut notes_fr = None;
-    let mut product_id = None;
-    let mut long_blobs = Vec::new();
-    for blk in block_bufs {
-        if blk.len() < 2 || &blk[..2] != b"\x01\x01" || blk.len() < 40 {
-            continue;
-        }
-        let payload = &blk[4..];
-        let mut i = 0;
-        while i < payload.len() && payload[i] < 0x20 {
-            i += 1;
-        }
-        let text = normalize_notes_text(latin1(&payload[i..]).trim_end_matches('\0'));
-        if text.is_empty() || !text.contains('\n') {
-            continue;
-        }
-        long_blobs.push(text.clone());
-        let (pid, _) = identity_from_blob(&text);
-        if let Some(p) = pid {
-            if PID_FULL.is_match(&p) {
-                product_id = product_id.or(Some(p));
-            }
-        }
-    }
-    long_blobs.sort_by_key(|s| frscore(s));
-    if !long_blobs.is_empty() {
-        let en = long_blobs[0].clone();
-        let mut fr = None;
-        if long_blobs.len() > 1
-            && frscore(long_blobs.last().unwrap()) > frscore(&long_blobs[0])
-        {
-            fr = Some(long_blobs.last().unwrap().clone());
-        }
-        notes_en = Some(en.clone());
-        notes_fr = fr;
-        if notes_fr.is_none() && frscore(&en) >= 2 {
-            notes_fr = Some(en);
-            notes_en = None;
-        }
-    }
-    (notes_en, notes_fr, product_id)
-}
-
-fn parse_keywords_bufs(block_bufs: &[&[u8]], product_id: Option<&str>) -> LocalizedText {
-    let mut candidates = Vec::new();
-    for blk in block_bufs {
-        let length = blk.len() as u16;
-        if !(8..=40).contains(&length) {
-            continue;
-        }
-        if blk.len() < 2 || &blk[..2] != b"\x01\x01" {
-            continue;
-        }
-        let payload = &blk[4..];
-        let mut i = 0;
-        while i < payload.len() && payload[i] < 0x20 {
-            i += 1;
-        }
-        if i < payload.len() && (1..64).contains(&payload[i]) {
-            let n = payload[i] as usize;
-            if i + 1 + n <= payload.len() {
-                let kw = latin1(&payload[i + 1..i + 1 + n])
-                    .trim_end_matches('\0')
-                    .trim()
-                    .to_string();
-                if !kw.is_empty() {
-                    candidates.push(kw);
-                    continue;
-                }
-            }
-        }
-        let text = latin1(&payload[i..])
-            .trim_end_matches('\0')
-            .trim()
-            .to_string();
-        if !text.is_empty() && !text.contains('\n') && text.len() <= 40 {
-            candidates.push(text);
-        }
-    }
-    if candidates.is_empty() {
-        return LocalizedText::default();
-    }
-    // Reuse keyword assembly via a temporary in-memory parse path.
-    let mut unique = Vec::new();
-    for c in candidates {
-        if !unique.contains(&c) {
-            unique.push(c);
-        }
-    }
-    if let Some(pid) = product_id {
-        for c in &unique {
-            if c == pid {
-                let others: Vec<_> = unique.iter().filter(|x| *x != c).cloned().collect();
-                if !others.is_empty() {
-                    let mut scored = others;
-                    scored.sort_by_key(|s| frscore(s));
-                    let fr = if frscore(scored.last().unwrap()) > frscore(c) {
-                        Some(scored.last().unwrap().clone())
-                    } else {
-                        None
-                    };
-                    return LocalizedText {
-                        en: Some(c.clone()),
-                        fr,
-                    };
-                }
-                return LocalizedText {
-                    en: Some(c.clone()),
-                    fr: None,
-                };
-            }
-        }
-    }
-    if unique.len() == 1 {
-        return LocalizedText {
-            en: Some(unique[0].clone()),
-            fr: None,
-        };
-    }
-    let mut scored = unique;
-    scored.sort_by_key(|s| frscore(s));
-    let en = Some(scored[0].clone());
-    let fr = if frscore(scored.last().unwrap()) > frscore(&scored[0]) {
-        Some(scored.last().unwrap().clone())
-    } else {
-        None
-    };
-    LocalizedText { en, fr }
-}
-
-fn read_only_flag_bufs(block_bufs: &[&[u8]]) -> bool {
-    for blk in block_bufs {
-        if flag_block_read_only(blk) {
-            return true;
-        }
-    }
-    false
+    let mut metadata = build_metadata_memory(&catalog, source, desc, Some(hdr))?;
+    metadata.metadata_image = Some(catalog);
+    Ok(metadata)
 }
 
 fn footnotes_from_source(source: &IvtSource) -> Result<Vec<Footnote>, IvtError> {
     if let Some(data) = source.as_memory_slice() {
         return Ok(footnotes(data));
     }
-    let file_len = source.len()? as usize;
-    // Match legacy region selection: for files ≤ 200 KiB the "tail" is the whole file.
-    let tail_start = file_len.saturating_sub(200_000);
-    if tail_start == 0 {
-        let data = source.read_range(0, file_len)?;
-        return Ok(footnotes(&data));
-    }
-    let head_len = file_len.min(12_000);
-    let ranges = [
-        ByteRange::new(0, head_len),
-        ByteRange::new(tail_start as u64, file_len - tail_start),
-    ];
-    let loaded = source.load_ranges_default(&ranges)?;
-    let head = find_loaded(&loaded, 0, head_len)
-        .map(|s| s.to_vec())
-        .unwrap_or_default();
-    let tail = find_loaded(&loaded, tail_start as u64, file_len - tail_start)
-        .map(|s| s.to_vec())
-        .unwrap_or_default();
-    Ok(footnotes_regions(&head, &tail))
+    let catalog = metadata_catalog(source, false, false, &[HDR_STATUS_LEGEND + 14], false)?;
+    Ok(footnotes(&catalog))
 }
 
 fn missing_values_from_source(source: &IvtSource) -> Result<Vec<MissingValue>, IvtError> {
     if let Some(data) = source.as_memory_slice() {
         return Ok(missing_values(data));
     }
-    let file_len = source.len()? as usize;
-    if file_len < HDR_STATUS_LEGEND + 14 {
-        return Ok(Vec::new());
-    }
-    let hdr = source.read_range(HDR_STATUS_LEGEND as u64, 14)?;
-    let dir_ptr = u32(&hdr, 0);
-    let n_entries = u32(&hdr, 8);
-    if dir_ptr == 0 || n_entries < 1 {
-        return Ok(Vec::new());
-    }
-    let dir_bytes = source.read_range(
-        dir_ptr as u64,
-        (n_entries as usize).saturating_mul(8).saturating_add(64),
-    )?;
-    let entries = status_legend_dir_bytes(&dir_bytes, n_entries, file_len);
-    if entries.is_empty() {
-        return Ok(Vec::new());
-    }
-    let (idx_off, idx_len) = entries[0];
-    if idx_off == 0 || idx_len < 6 {
-        return Ok(Vec::new());
-    }
-    let mut ranges = vec![ByteRange::new(idx_off as u64, idx_len as usize)];
-    for &(off, len) in entries.iter().skip(1) {
-        if off != 0 && len > 0 {
-            ranges.push(ByteRange::new(off as u64, len as usize));
-        }
-    }
-    let loaded = source.load_ranges_default(&ranges)?;
-    let index = find_loaded(&loaded, idx_off as u64, idx_len as usize)
-        .ok_or(IvtError::InvalidDirectory("status legend index"))?;
-    if index[..2] != *b"\x04\x02" {
-        return Ok(Vec::new());
-    }
-    let n_codes = u16(index, 2) as usize;
-    let per_code = u16(index, 4) as usize;
-    if n_codes < 1 || per_code < 1 {
-        return Ok(Vec::new());
-    }
-    let need = 6 + n_codes * per_code * 4;
-    if index.len() < need {
-        return Ok(Vec::new());
-    }
-    let mut out = Vec::new();
-    let mut pos = 6;
-    for code in 1..=n_codes {
-        let mut eidxs = Vec::new();
-        for j in 0..per_code {
-            eidxs.push(u32(index, pos + 4 * j) as usize);
-        }
-        pos += 4 * per_code;
-        let mut labels: Vec<Option<String>> = Vec::new();
-        let mut symbol = None;
-        for ei in eidxs {
-            if ei >= entries.len() {
-                labels.push(None);
-                continue;
-            }
-            let (off, length) = entries[ei];
-            if off == 0 || length < 1 {
-                labels.push(None);
-                continue;
-            }
-            let Some(blob) = find_loaded(&loaded, off as u64, length as usize) else {
-                labels.push(None);
-                continue;
-            };
-            match parse_status_legend_record(blob) {
-                Some((sym, text)) => {
-                    if symbol.is_none() {
-                        symbol = Some(sym);
-                    }
-                    labels.push(Some(text));
-                }
-                None => labels.push(None),
-            }
-        }
-        if symbol.is_none() || !labels.iter().any(|l| l.is_some()) {
-            continue;
-        }
-        let en = labels.first().cloned().flatten();
-        let fr = if labels.len() > 1 {
-            labels[1].clone()
-        } else {
-            None
-        };
-        out.push(MissingValue {
-            symbol: symbol.unwrap(),
-            label: LocalizedText { en, fr },
-            code: Some(code as i64),
-        });
-    }
-    Ok(out)
-}
-
-fn status_legend_dir_bytes(dir: &[u8], n_entries: u32, file_len: usize) -> Vec<(u32, u16)> {
-    let mut entries = Vec::new();
-    let mut o = 0usize;
-    for _ in 0..n_entries {
-        if o + 8 > dir.len() {
-            break;
-        }
-        let off = u32(dir, o);
-        let s1 = u16(dir, o + 4);
-        let s2 = u16(dir, o + 6);
-        o += 8;
-        if off == 0 && s1 == 0 {
-            entries.push((0, 0));
-            continue;
-        }
-        let ok = s1 == s2 || s2 == 4 * ((s1 + 3) / 4) || s2 >= s1;
-        if !ok || s1 == 0 || (off as usize) + (s1 as usize) > file_len {
-            break;
-        }
-        entries.push((off, s1));
-    }
-    entries
+    let catalog = metadata_catalog(source, false, false, &[HDR_STATUS_LEGEND], false)?;
+    Ok(missing_values(&catalog))
 }
 
 fn build_dimensions_from_source(
@@ -3075,9 +1145,8 @@ fn build_dimensions_from_source(
     if let Some(data) = source.as_memory_slice() {
         return Ok(build_dimensions(data, desc));
     }
-    // Dim-dir member/map scans need random access across the file; load once.
-    let data = source.read_all()?;
-    Ok(build_dimensions(&data, desc))
+    let catalog = metadata_catalog(source, false, true, &[], false)?;
+    Ok(build_dimensions(&catalog, desc))
 }
 
 fn geo_from_source(
@@ -3088,170 +1157,6 @@ fn geo_from_source(
     if let Some(data) = source.as_memory_slice() {
         return Ok(geo_from_dir(data, dim, slot_index));
     }
-    let (en, fr) = dim_dir_labels_src(source, dim, slot_index, true)?;
-    let n = dim.count as usize;
-    let mut geo = Geographies {
-        member_id: (1..=dim.count).collect(),
-        ..Default::default()
-    };
-    if let Some(mut en) = en {
-        if en.len() >= n {
-            en.truncate(n);
-            let parsed: Vec<_> = en.iter().map(|x| parse_inline_geo(x)).collect();
-            geo.geo_label = Some(en);
-            geo.geo_name = Some(parsed.iter().map(|p| p.geo_name.clone()).collect());
-            geo.geo_uid = Some(parsed.iter().map(|p| p.geo_uid.clone()).collect());
-            if parsed.iter().any(|p| p.dqf_code.is_some()) {
-                geo.dqf_code = Some(parsed.iter().map(|p| p.dqf_code.clone()).collect());
-            }
-            if parsed.iter().any(|p| p.tnr_short_form.is_some()) {
-                geo.tnr_short_form =
-                    Some(parsed.iter().map(|p| p.tnr_short_form.clone()).collect());
-            }
-        }
-    }
-    if let Some(mut fr) = fr {
-        if fr.len() >= n {
-            fr.truncate(n);
-            geo.geo_label_fr = Some(fr);
-        }
-    }
-    Ok(geo)
-}
-
-fn dim_slot_from_source(source: &IvtSource, slot_index: usize) -> Result<Option<crate::header::DimSlot>, IvtError> {
-    let base = HDR_DIM_SLOT0 + DIM_SLOT_STRIDE * slot_index;
-    let file_len = source.len()? as usize;
-    if base + DIM_SLOT_STRIDE > file_len {
-        return Ok(None);
-    }
-    let bytes = source.read_range(base as u64, DIM_SLOT_STRIDE)?;
-    let dir_ptr = u32(&bytes, 0);
-    let alloc = u32(&bytes, 4);
-    let n_entries = u32(&bytes, 8);
-    let flag = u16(&bytes, 12);
-    if dir_ptr == 0 && alloc == 0 && n_entries == 0 {
-        return Ok(None);
-    }
-    Ok(Some(crate::header::DimSlot {
-        index: slot_index,
-        dir_ptr,
-        alloc,
-        n_entries,
-        flag,
-    }))
-}
-
-fn dim_title_src(
-    source: &IvtSource,
-    slot_index: usize,
-) -> Result<
-    (
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-    ),
-    IvtError,
-> {
-    if let Some(data) = source.as_memory_slice() {
-        return Ok(dim_title(data, slot_index));
-    }
-    let Some(slot) = dim_slot_from_source(source, slot_index)? else {
-        return Ok((None, None, None, None));
-    };
-    let file_len = source.len()? as usize;
-    let dir_bytes = source.read_range(
-        slot.dir_ptr as u64,
-        (slot.n_entries as usize + 8).saturating_mul(8),
-    )?;
-    let entries = read_block_dir_bytes(&dir_bytes, slot.n_entries, file_len);
-    let mut ranges = Vec::new();
-    for &(off, length) in &entries {
-        if length >= 16 {
-            ranges.push(ByteRange::new(off as u64, length as usize));
-        }
-    }
-    let loaded = source.load_ranges_default(&ranges)?;
-    for &(off, length) in &entries {
-        if length < 16 {
-            continue;
-        }
-        if let Some(block) = find_loaded(&loaded, off as u64, length as usize) {
-            let parsed = parse_dim_title(block);
-            if parsed.0.is_some() || parsed.2.is_some() {
-                return Ok(parsed);
-            }
-        }
-    }
-    Ok((None, None, None, None))
-}
-
-fn dim_dir_labels_src(
-    source: &IvtSource,
-    dim: &DimDesc,
-    slot_index: usize,
-    geography: bool,
-) -> Result<(Option<Vec<String>>, Option<Vec<String>>), IvtError> {
-    if let Some(data) = source.as_memory_slice() {
-        return Ok(dim_dir_labels(data, dim, slot_index, geography));
-    }
-    let Some(slot) = dim_slot_from_source(source, slot_index)? else {
-        return Ok((None, None));
-    };
-    let file_len = source.len()? as usize;
-    let dir_bytes = source.read_range(
-        slot.dir_ptr as u64,
-        (slot.n_entries as usize + 8).saturating_mul(8),
-    )?;
-    let entries = read_block_dir_bytes(&dir_bytes, slot.n_entries, file_len);
-    let mut ranges = Vec::new();
-    for &(off, length) in &entries {
-        if (length as i64) >= dim.count + 4 {
-            ranges.push(ByteRange::new(off as u64, length as usize));
-        }
-    }
-    let loaded = source.load_ranges_default(&ranges)?;
-    let mut arrays = Vec::new();
-    for &(off, length) in &entries {
-        if (length as i64) < dim.count + 4 {
-            continue;
-        }
-        let Some(block) = find_loaded(&loaded, off as u64, length as usize) else {
-            continue;
-        };
-        if block.len() >= 2 && block[..2] == *b"\x81\x02" {
-            continue;
-        }
-        let labels = read_member_array(block, dim.count as usize);
-        if labels.len() != dim.count as usize {
-            continue;
-        }
-        if geography {
-            let sample = labels.iter().take(3).cloned().collect::<Vec<_>>().join(" ");
-            if !sample.contains("Canada")
-                && !labels.iter().take(5).any(|x| GEO_CODE_RE.is_match(x))
-            {
-                continue;
-            }
-        }
-        arrays.push(labels);
-    }
-    if arrays.is_empty() {
-        return Ok((None, None));
-    }
-    let mut en = arrays.remove(0);
-    let mut fr = if arrays.is_empty() {
-        None
-    } else {
-        Some(arrays.remove(0))
-    };
-    if let Some(ref f) = fr {
-        if frscore(&f[..3.min(f.len())].join(" ")) < frscore(&en[..3.min(en.len())].join(" ")) {
-            let tmp = en;
-            en = f.clone();
-            fr = Some(tmp);
-        }
-    }
-    Ok((Some(en), fr))
+    let catalog = metadata_catalog(source, false, true, &[], false)?;
+    Ok(geo_from_dir(&catalog, dim, slot_index))
 }

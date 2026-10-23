@@ -6,6 +6,7 @@
 
 use crate::bytes::{latin1, u16, u32};
 use crate::header::{DIM_SLOT_STRIDE, HDR_DIM_SLOT0};
+use crate::metadata_directory::MetadataDirectory;
 
 pub use crate::decode::decompress_component as decompress_record;
 
@@ -64,7 +65,7 @@ impl MemberValues {
 
 struct Directory<'a> {
     data: &'a [u8],
-    offset: usize,
+    directory: MetadataDirectory,
     entries: usize,
 }
 
@@ -77,18 +78,17 @@ impl<'a> Directory<'a> {
         if slot + DIM_SLOT_STRIDE > data.len() {
             return Err(format!("missing directory for dimension {dimension}"));
         }
-        let offset = u32(data, slot) as usize;
-        let entries = u32(data, slot + 8) as usize;
-        let end = entries
-            .checked_mul(8)
-            .and_then(|n| offset.checked_add(n))
-            .ok_or("dimension directory size overflow")?;
-        if offset == 0 || entries == 0 || end > data.len() {
+        let directory = MetadataDirectory::new(data, slot).map_err(|e| e.to_string())?;
+        let entries = directory.count;
+        if entries == 0 {
             return Err(format!("invalid directory for dimension {dimension}"));
         }
+        directory
+            .entry(data, entries - 1)
+            .map_err(|e| e.to_string())?;
         Ok(Self {
             data,
-            offset,
+            directory,
             entries,
         })
     }
@@ -100,9 +100,12 @@ impl<'a> Directory<'a> {
                 self.entries
             ));
         }
-        let entry = self.offset + index * 8;
-        let offset = u32(self.data, entry) as usize;
-        let length = u16(self.data, entry + 4) as usize;
+        let entry = self
+            .directory
+            .entry(self.data, index)
+            .map_err(|e| e.to_string())?;
+        let offset = u32(entry, 0) as usize;
+        let length = u16(entry, 4) as usize;
         if offset == 0 && length == 0 {
             return Ok(None);
         }
@@ -259,7 +262,7 @@ fn time_members(record: &[u8]) -> Result<MemberValues, String> {
 }
 
 /// Gregorian civil date from days since 1970-01-01 (400-year cycle arithmetic).
-fn iso_date(days: i64) -> String {
+pub(crate) fn iso_date(days: i64) -> String {
     let z = days + 719_468;
     let era = z.div_euclid(146_097);
     let doe = z - era * 146_097;
@@ -435,6 +438,7 @@ mod tests {
             ("5678", 307, 13),
             ("625f", 14, 11),
             ("9992", 307, 6),
+            ("cf698", 63404, 5),
             ("d614", 352, 7),
             ("e506", 174, 13),
             ("f203", 90, 7),
@@ -462,7 +466,7 @@ mod tests {
                     .1
                     .iter()
                     .all(Option::is_some));
-                if axis == 0 {
+                if axis == 0 && prefix != "cf698" {
                     let uids = &fields.iter().find(|(k, _)| k == "DGUID_EN").unwrap().1;
                     assert!(uids.iter().all(Option::is_some));
                     if prefix == "0d9e" {

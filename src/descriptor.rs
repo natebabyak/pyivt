@@ -455,6 +455,11 @@ pub fn parse_descriptor(data: &[u8]) -> Option<Descriptor> {
     if !data.is_empty() && data[0] == 0x02 {
         return None;
     }
+    // Master entry 1 is the authoritative axis matrix. The printable names in
+    // its compressed representation are not self-delimiting records.
+    if let Some(descriptor) = structured_descriptor(data) {
+        return Some(descriptor);
+    }
     let d_off = u32(data, HDR_DESCRIPTOR_PTR) as usize;
     if let Some(dims) = data.get(d_off..).and_then(dimension_chain) {
         return Some(Descriptor {
@@ -483,6 +488,45 @@ pub fn parse_descriptor(data: &[u8]) -> Option<Descriptor> {
         offset: offset as u32,
         dims,
     })
+}
+
+pub fn structured_descriptor(data: &[u8]) -> Option<Descriptor> {
+    use crate::header::HDR_MASTER_PTR;
+    if data.len() < HDR_MASTER_PTR + 12 || u32(data, HDR_MASTER_PTR + 8) < 2 {
+        return None;
+    }
+    let directory = crate::metadata_directory::MetadataDirectory::new(data, HDR_MASTER_PTR).ok()?;
+    let offset = u32(directory.entry(data, 1).ok()?, 0);
+    let raw = crate::metadata_directory::record(data, HDR_MASTER_PTR, 1)?;
+    let decoded = crate::decode::decompress_component(raw).ok()?;
+    if decoded.get(..2) != Some(&[1, 2]) || decoded.len() < 6 || u16(&decoded, 4) != 82 {
+        return None;
+    }
+    let count = u16(&decoded, 2) as usize;
+    if !(1..=32).contains(&count) {
+        return None;
+    }
+    let mut dims = Vec::with_capacity(count);
+    for row in decoded[6..].chunks_exact(82) {
+        let items = u32(row, 0);
+        let kind = u16(row, 6);
+        let end = row[12..30].iter().position(|&b| b == 0).unwrap_or(18);
+        let name = latin1(&row[12..12 + end]);
+        if items == 0 || name.is_empty() || kind > 2 {
+            return None;
+        }
+        dims.push(DimDesc {
+            name,
+            count: items as i64,
+            type_code: match kind {
+                1 => 0x12,
+                2 => 6,
+                _ => 0,
+            },
+            double01: kind == 1,
+        });
+    }
+    Some(Descriptor { offset, dims })
 }
 
 /// Walk a descriptor window loaded separately from the file prefix.

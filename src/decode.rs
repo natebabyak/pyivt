@@ -1,6 +1,6 @@
 //! Unified page-directory layout and cell decode.
 
-use crate::bytes::{nextpow2, u16, u32};
+use crate::bytes::{nextpow2, u16};
 use crate::descriptor::{dim_slugs, geo_dim_index, DimDesc};
 use crate::header::{dir_anchor_header, dir_entry, HDR_MASTER_PTR, MARKER_WIDTHS};
 use std::collections::HashSet;
@@ -289,21 +289,8 @@ pub fn decompress_component(data: &[u8]) -> Result<Vec<u8>, String> {
 }
 
 fn missing_mode(data: &[u8]) -> Result<u16, String> {
-    if data.len() < HDR_MASTER_PTR + 4 {
-        return Err("truncated master directory pointer".into());
-    }
-    let directory = u32(data, HDR_MASTER_PTR) as usize;
-    let entry = directory
-        .checked_add(16)
-        .ok_or("master directory overflow")?;
-    if entry + 8 > data.len() {
-        return Err("truncated table settings directory".into());
-    }
-    let off = u32(data, entry) as usize;
-    let size = u16(data, entry + 4) as usize;
-    let raw = data
-        .get(off..off.checked_add(size).ok_or("settings size overflow")?)
-        .ok_or("truncated table settings")?;
+    let raw = crate::metadata_directory::record(data, HDR_MASTER_PTR, 2)
+        .ok_or("missing or truncated table settings")?;
     let decoded = decompress_component(raw)?;
     if decoded.len() < 8 || decoded[..4] != [1, 1, 32, 0] {
         return Err("unsupported table settings component".into());
@@ -347,7 +334,9 @@ fn decode_page(
             _ => unreachable!(),
         }
     };
-    let mut codes = vec![0u8; PRES_BITS as usize];
+    // Legacy masks record missingness without a legend reason (-1). Positive
+    // codes are reserved for explicit reasons in extended page records.
+    let mut codes = vec![0i16; PRES_BITS as usize];
     let mut notes = vec![Vec::new(); PRES_BITS as usize];
     let trailer = page.get(4 + PRES_BITS as usize * width..).unwrap_or(&[]);
     if page[0] & 0x20 != 0 {
@@ -376,7 +365,8 @@ fn decode_page(
                     }
                     for (cell, code) in codes.iter_mut().enumerate() {
                         let shift = 8 - bits - (cell * bits % 8);
-                        *code = (record[2 + cell * bits / 8] >> shift) & ((1u16 << bits) - 1) as u8;
+                        *code = ((record[2 + cell * bits / 8] >> shift)
+                            & ((1u16 << bits) - 1) as u8) as i16;
                     }
                 }
                 2 => {
@@ -404,13 +394,17 @@ fn decode_page(
         if !trailer.is_empty() && trailer.len() < 256 {
             return Err("truncated legacy missing-value bitmap".into());
         }
-        for (cell, code) in codes.iter_mut().enumerate() {
-            let bit = !trailer.is_empty() && trailer[cell / 8] & (0x80 >> (cell % 8)) != 0;
-            *code = if mode == 3 {
-                u8::from(scalar(cell) == 0.0 && !bit)
-            } else {
-                u8::from(bit)
-            };
+        // Without a mask every stored value is published, including zero.
+        if !trailer.is_empty() {
+            for (cell, code) in codes.iter_mut().enumerate() {
+                let bit = trailer[cell / 8] & (0x80 >> (cell % 8)) != 0;
+                let missing = if mode == 3 {
+                    scalar(cell) == 0.0 && !bit
+                } else {
+                    bit
+                };
+                *code = if missing { -1 } else { 0 };
+            }
         }
     }
     let mut vals = Vec::with_capacity(lay.bit.len());
@@ -761,9 +755,18 @@ mod tests {
         page[..4].copy_from_slice(&[2, 1, 0x80, 8]);
         page[4100] = 0x80;
         let cells = decode_page(&page, 0, &layout, page.len(), 3).unwrap();
-        assert_eq!(cells.statuses[..2], [0.0, 1.0]);
+        assert_eq!(cells.statuses[..2], [0.0, -1.0]);
         let cells = decode_page(&page, 0, &layout, page.len(), 1).unwrap();
-        assert_eq!(cells.statuses[..2], [1.0, 0.0]);
+        assert_eq!(cells.statuses[..2], [-1.0, 0.0]);
+        // A page without a mask publishes zeros regardless of the table's
+        // default policy. This also covers the zero-length short encoding.
+        page.truncate(4100);
+        page[2..4].copy_from_slice(&(PRES_BITS as u16).to_le_bytes());
+        let cells = decode_page(&page, 0, &layout, page.len(), 3).unwrap();
+        assert_eq!(cells.vals[..2], [0.0, 0.0]);
+        assert_eq!(cells.statuses[..2], [0.0, 0.0]);
+        let cells = decode_page(&[2, 1, 0, 0], 0, &layout, 4, 3).unwrap();
+        assert_eq!(cells.statuses[..2], [0.0, 0.0]);
     }
 
     #[test]
