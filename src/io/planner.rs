@@ -50,19 +50,21 @@ impl LoadedRange {
 }
 
 /// Sort, merge overlapping ranges, and merge gaps below `merge_gap`.
-pub fn coalesce_ranges(ranges: &[ByteRange], merge_gap: u64, file_len: u64) -> Result<Vec<ByteRange>, IvtError> {
+pub fn coalesce_ranges(
+    ranges: &[ByteRange],
+    merge_gap: u64,
+    file_len: u64,
+) -> Result<Vec<ByteRange>, IvtError> {
     let mut sorted: Vec<ByteRange> = Vec::new();
     for r in ranges {
         if r.length == 0 {
             continue;
         }
-        let end = r
-            .end()
-            .ok_or(IvtError::InvalidPointer {
-                offset: r.offset,
-                length: r.length,
-                file_len,
-            })?;
+        let end = r.end().ok_or(IvtError::InvalidPointer {
+            offset: r.offset,
+            length: r.length,
+            file_len,
+        })?;
         if end > file_len {
             return Err(IvtError::InvalidPointer {
                 offset: r.offset,

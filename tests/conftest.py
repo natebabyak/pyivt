@@ -31,7 +31,9 @@ def demo_ivt(request) -> SimpleNamespace:
     """One hashed demo IVT paired with its Beyond summary golden."""
     case = request.param
     if not case.path.is_file():
-        pytest.skip(f"missing {case.path.name}; run: python scripts/copy_test_inputs.py")
+        pytest.skip(
+            f"missing {case.path.name}; run: python scripts/copy_test_inputs.py"
+        )
     if not case.expect_path.is_file():
         pytest.skip(
             f"missing golden {case.expect_path.name}; "

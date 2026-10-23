@@ -170,17 +170,8 @@ def test_open_bytes_defers_decode(demo_ivt):
 
 def test_to_arrow_row_count(demo_ivt):
     ivt = open_ivt(demo_ivt.path)
-    # Decode grid uses descriptor cube counts (may be smaller than Summary Items).
-    n_decode = prod(ivt.layout.counts)
-    assert n_decode > 0
-    n_summary = ivt.metadata.number_of_datapoints
-    assert n_summary is not None and n_summary >= n_decode
-    if n_decode > 5_000_000:
-        # Keep CI / local runs bounded for very large published grids.
-        table = ivt.to_arrow(complete=False, labels=False)
-        assert table.num_rows > 0
-        assert "value" in table.column_names
-        return
-    table = ivt.to_arrow(complete=True, labels=True)
-    assert table.num_rows == n_decode
+    expected = _load_expect(demo_ivt)
+    table = ivt.to_arrow()
+    assert table.num_rows == expected["number_of_datapoints"]
+    assert table.num_rows == prod(ivt.layout.counts)
     assert "value" in table.column_names

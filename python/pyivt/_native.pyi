@@ -101,14 +101,7 @@ class Ivt:
     def metadata(self) -> IvtMetadata: ...
     @property
     def layout(self) -> Layout: ...
-    def to_arrow(
-        self,
-        *,
-        complete: bool = True,
-        max_cells: int = 100_000_000,
-        labels: bool = True,
-        language: str = "en",
-    ) -> pa.Table: ...
+    def to_arrow(self) -> pa.Table: ...
 
 def open(
     source: str | PathLike[str] | bytes | bytearray | memoryview | BinaryIO,

@@ -2,6 +2,6 @@
   "recommendations": [
     "charliermarsh.ruff",
     "esbenp.prettier-vscode",
-    "tombi-toml.tombi"
-  ]
+    "tombi-toml.tombi",
+  ],
 }

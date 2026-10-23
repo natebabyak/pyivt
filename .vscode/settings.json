@@ -1,21 +1,21 @@
 {
   "editor.formatOnSave": true,
   "[json]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
   },
   "[jsonc]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
   },
   "[markdown]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
   },
   "[python]": {
     "editor.codeActionsOnSave": {
-      "source.fixAll.ruff": "explicit"
+      "source.fixAll.ruff": "explicit",
     },
-    "editor.defaultFormatter": "charliermarsh.ruff"
+    "editor.defaultFormatter": "charliermarsh.ruff",
   },
   "[toml]": {
-    "editor.defaultFormatter": "tombi-toml.tombi"
-  }
+    "editor.defaultFormatter": "tombi-toml.tombi",
+  },
 }

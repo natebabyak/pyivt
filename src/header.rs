@@ -122,8 +122,14 @@ pub fn dir_first_entry(data: &[u8], off: usize) -> Option<usize> {
 }
 
 pub fn dir_anchor_header(data: &[u8]) -> Option<usize> {
-    if data.len() < HDR_DIR_PTR + 2 {
+    if data.len() < HDR_DIR_PTR + 4 {
         return None;
+    }
+    // The header declares the full directory pointer. It remains valid when
+    // every page is blank, and leading blanks must not shift page coordinates.
+    let declared = u32(data, HDR_DIR_PTR) as usize;
+    if declared >= 576 && declared.checked_add(8).is_some_and(|end| end <= data.len()) {
+        return Some(declared);
     }
     let lo = u16(data, HDR_DIR_PTR) as usize;
     if lo == 0 {
@@ -143,10 +149,6 @@ pub fn dir_anchor_header(data: &[u8]) -> Option<usize> {
         }
     }
     None
-}
-
-pub fn idx0(data: &[u8]) -> usize {
-    dir_anchor_header(data).unwrap_or(37167)
 }
 
 pub fn read_header(data: &[u8]) -> Result<HeaderLayout, String> {
@@ -257,4 +259,18 @@ pub fn read_block_dir(data: &[u8], ptr: u32, n_entries: u32) -> Vec<(u32, u16)> 
         }
     }
     entries
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn declared_directory_keeps_blank_pages_and_high_pointer_bits() {
+        let mut data = vec![0; 80_016];
+        data[HDR_DIR_PTR..HDR_DIR_PTR + 4].copy_from_slice(&80_000u32.to_le_bytes());
+        assert_eq!(dir_anchor_header(&data), Some(80_000));
+        data[HDR_DIR_PTR..HDR_DIR_PTR + 4].fill(0);
+        assert_eq!(dir_anchor_header(&data), None);
+    }
 }

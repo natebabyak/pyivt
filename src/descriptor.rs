@@ -2,9 +2,9 @@
 
 use once_cell::sync::Lazy;
 use regex::Regex;
-use std::collections::HashMap;
+use std::collections::HashSet;
 
-use crate::bytes::{u16, u32};
+use crate::bytes::{latin1, u16, u32};
 use crate::header::{dir_anchor_header, HDR_DESCRIPTOR_PTR};
 
 const GEOTYPES: [u8; 7] = [0x10, 0x0D, 0x0A, 0x0C, 0x09, 0x0F, 0x0B];
@@ -53,6 +53,11 @@ fn descriptor_name(run: &[u8], first_record: bool) -> Option<String> {
                 return Some(s[..half].to_string());
             }
         }
+    }
+    if n % 2 == 0 && s[..n / 2].eq_ignore_ascii_case(&s[n / 2..]) {
+        // Short name and description may differ only in letter case, such
+        // as the stored code "TIME PERIOD" and description "Time Period".
+        return Some(s[..n / 2].to_string());
     }
     for first_len in (4..=n.min(40)).rev() {
         let first = &s[..first_len];
@@ -105,6 +110,94 @@ fn descriptor_name(run: &[u8], first_record: bool) -> Option<String> {
     }
 }
 
+/// Decode the dimension chain carried by a descriptor's `81 01 20 00`
+/// record. The per-axis integer following the item count is the number of
+/// bits needed for an item *index*, not an axis type. In particular, an
+/// index width of 9 does not make the preceding count a geographic ID.
+///
+/// Unlike the compatibility scanner below, this reader stays inside the
+/// declared chain and cannot collect plausible-looking strings from notes.
+fn dimension_chain(v: &[u8]) -> Option<Vec<DimDesc>> {
+    if v.len() < 18 || !v.starts_with(b"\x81\x01\x20\x00") {
+        return None;
+    }
+    let ndim = u16(v, 16) as usize;
+    if !(1..=32).contains(&ndim) {
+        return None;
+    }
+    let mut pos = 22usize.checked_add(ndim.checked_mul(10)?)?;
+    let mut dims = Vec::with_capacity(ndim);
+    for _ in 0..ndim {
+        let (count, index_bits, name_start) = chain_prefix(v, pos)?;
+        let printable_end = v[name_start..]
+            .iter()
+            .position(|&b| b < 32 || b == 127)
+            .map(|n| name_start + n)
+            .unwrap_or(v.len());
+        // The descriptor carries both a short name and its description. A
+        // repeated name is self-delimiting even if the next count starts with
+        // a printable byte (for example, a count of 90 starts with 'Z').
+        let remaining = &v[name_start..printable_end];
+        let mut record = None;
+        for half in 1..=remaining.len() / 2 {
+            if remaining[..half] != remaining[half..2 * half] {
+                continue;
+            }
+            let end = name_start + 2 * half;
+            let boundary = if dims.len() + 1 == ndim {
+                v.get(end..end + 2) == Some(&b"\x81\x01"[..])
+            } else {
+                chain_prefix(v, end).is_some()
+            };
+            if boundary {
+                let name = latin1(&remaining[..half]);
+                if !name.trim().is_empty() {
+                    record = Some((name, end));
+                    break;
+                }
+            }
+        }
+        let (name, end) = record?;
+        dims.push(DimDesc {
+            name,
+            count,
+            type_code: index_bits as i64,
+            double01: false,
+        });
+        pos = end;
+    }
+    Some(dims)
+}
+
+fn chain_prefix(v: &[u8], pos: usize) -> Option<(i64, u8, usize)> {
+    // A singleton has no index bits and omits that zero-width integer.
+    if v.get(pos..pos + 2) == Some(&b"\x01\x01"[..])
+        && v.get(pos + 2).is_some_and(|&b| b > 32 && b != 127)
+    {
+        return Some((1, 0, pos + 2));
+    }
+    for width in 1..=4 {
+        let bytes = v.get(pos..pos + width)?;
+        let index_bits = *v.get(pos + width)?;
+        if v.get(pos + width + 1) != Some(&1)
+            || !v.get(pos + width + 2).is_some_and(|&b| b > 32 && b != 127)
+        {
+            continue;
+        }
+        let count = bytes
+            .iter()
+            .enumerate()
+            .fold(0u32, |n, (i, &b)| n | ((b as u32) << (8 * i)));
+        if count > 1
+            && index_bits == (32 - (count - 1).leading_zeros()) as u8
+            && (width == 1 || bytes[width - 1] != 0)
+        {
+            return Some((count as i64, index_bits, pos + width + 2));
+        }
+    }
+    None
+}
+
 fn walk_records(v: &[u8], lend: usize, cap: usize, lenient: bool) -> Vec<DimDesc> {
     let mut dims = Vec::new();
     let mut k = 3usize;
@@ -113,10 +206,8 @@ fn walk_records(v: &[u8], lend: usize, cap: usize, lenient: bool) -> Vec<DimDesc
         let namestart = (65..=90).contains(&c1)
             || (48..=57).contains(&c1)
             || (lenient && (97..=122).contains(&c1));
-        let bare02 = v[k] == 0x02
-            && v[k - 1] != 0x01
-            && (1..=0x10).contains(&v[k - 1])
-            && v[k - 2] >= 1;
+        let bare02 =
+            v[k] == 0x02 && v[k - 1] != 0x01 && (1..=0x10).contains(&v[k - 1]) && v[k - 2] >= 1;
         let anchor_a = (v[k] == 0x01
             || (v[k] == 0x02 && v[k - 1] == 0x01 && (1..0x20).contains(&v[k - 2]))
             || bare02)
@@ -143,30 +234,18 @@ fn walk_records(v: &[u8], lend: usize, cap: usize, lenient: bool) -> Vec<DimDesc
                 //   [count][type] … 02 NAME           bare02 (Oecd ITEM/TIME)
                 //   [count][type] 01 NAME             normal
                 let geo_double01 = anchor_a && v[k] == 0x01 && v[k - 1] == 0x01;
-                let triple010102 = anchor_a
-                    && v[k] == 0x02
-                    && v[k - 1] == 0x01
-                    && k >= 4
-                    && v[k - 2] == 0x01;
-                let lead_01_02 = anchor_a
-                    && v[k] == 0x02
-                    && v[k - 1] == 0x01
-                    && k >= 3
-                    && v[k - 2] != 0x01;
+                let triple010102 =
+                    anchor_a && v[k] == 0x02 && v[k - 1] == 0x01 && k >= 4 && v[k - 2] == 0x01;
+                let lead_01_02 =
+                    anchor_a && v[k] == 0x02 && v[k - 1] == 0x01 && k >= 3 && v[k - 2] != 0x01;
                 let (typ, count, is_geo_flag) = if anchor_b {
                     (v[k] as i64, count_b, false)
                 } else if triple010102 {
                     (v[k - 3] as i64, v[k - 4] as i64, true)
                 } else if geo_double01 {
-                    // People REGION uses [type=0x12][count]; Products REGION uses
-                    // [count][type] with a normal type byte before the 01 01.
-                    let a = v[k - 3] as i64;
-                    let b = v[k - 2] as i64;
-                    if a == 0x12 {
-                        (a, b, true)
-                    } else {
-                        (b, a, true)
-                    }
+                    // The count still precedes its index width. A count of
+                    // eighteen (0x12) is not a geographic type discriminator.
+                    (v[k - 2] as i64, v[k - 3] as i64, true)
                 } else if lead_01_02 {
                     (v[k - 3] as i64, v[k - 2] as i64, false)
                 } else if bare02 && k >= 3 {
@@ -288,6 +367,9 @@ fn walk_at(data: &[u8], d_off: usize, cap_hint: usize) -> Option<Vec<DimDesc>> {
     }
     let win = (d_off + 4000).min(n);
     let v = &data[d_off..win];
+    if let Some(dims) = dimension_chain(v) {
+        return Some(dims);
+    }
     let text: String = v
         .iter()
         .map(|&b| {
@@ -300,13 +382,9 @@ fn walk_at(data: &[u8], d_off: usize, cap_hint: usize) -> Option<Vec<DimDesc>> {
         .collect();
     // FACET04 usually ends the dim block, but an earlier FACET (title summary)
     // can sit before the name chain in pre-marker windows — ignore those.
-    let facet_lend = text.find("FACET04").and_then(|facet| {
-        if facet >= 200 {
-            Some(facet)
-        } else {
-            None
-        }
-    });
+    let facet_lend = text
+        .find("FACET04")
+        .and_then(|facet| if facet >= 200 { Some(facet) } else { None });
     let lend = if let Some(facet) = facet_lend {
         facet
     } else if let Some(anchor) = dir_anchor_header(data) {
@@ -378,16 +456,23 @@ pub fn parse_descriptor(data: &[u8]) -> Option<Descriptor> {
         return None;
     }
     let d_off = u32(data, HDR_DESCRIPTOR_PTR) as usize;
+    if let Some(dims) = data.get(d_off..).and_then(dimension_chain) {
+        return Some(Descriptor {
+            offset: d_off as u32,
+            dims,
+        });
+    }
     let mut best: Option<(usize, Vec<DimDesc>, i64)> = None;
-    let consider = |best: &mut Option<(usize, Vec<DimDesc>, i64)>, off: usize, dims: Vec<DimDesc>| {
-        let score = dims_quality_score(&dims);
-        if score < 0 {
-            return;
-        }
-        if best.as_ref().map(|(_, _, s)| *s).unwrap_or(-1) < score {
-            *best = Some((off, dims, score));
-        }
-    };
+    let consider =
+        |best: &mut Option<(usize, Vec<DimDesc>, i64)>, off: usize, dims: Vec<DimDesc>| {
+            let score = dims_quality_score(&dims);
+            if score < 0 {
+                return;
+            }
+            if best.as_ref().map(|(_, _, s)| *s).unwrap_or(-1) < score {
+                *best = Some((off, dims, score));
+            }
+        };
     if let Some(dims) = walk_at(data, d_off, 16) {
         consider(&mut best, d_off, dims);
     }
@@ -412,6 +497,9 @@ pub fn walk_at_window(
         return None;
     }
     let v = window;
+    if let Some(dims) = dimension_chain(v) {
+        return Some(dims);
+    }
     let text: String = v
         .iter()
         .map(|&b| {
@@ -422,13 +510,9 @@ pub fn walk_at_window(
             }
         })
         .collect();
-    let facet_lend = text.find("FACET04").and_then(|facet| {
-        if facet >= 200 {
-            Some(facet)
-        } else {
-            None
-        }
-    });
+    let facet_lend = text
+        .find("FACET04")
+        .and_then(|facet| if facet >= 200 { Some(facet) } else { None });
     let lend = if let Some(facet) = facet_lend {
         facet
     } else if let Some(anchor) = dir_anchor {
@@ -525,7 +609,7 @@ pub fn geo_dim_index(dims: &[DimDesc]) -> usize {
 }
 
 pub fn dim_slugs(names: &[String]) -> Vec<String> {
-    let mut used: HashMap<String, i32> = HashMap::new();
+    let mut used: HashSet<String> = HashSet::new();
     let mut out = Vec::new();
     for name in names {
         let mut base = SLUG_RE
@@ -538,14 +622,144 @@ pub fn dim_slugs(names: &[String]) -> Vec<String> {
         if base.is_empty() {
             base = "dim".into();
         }
-        let slug = if let Some(c) = used.get_mut(&base) {
-            *c += 1;
-            format!("{base}_{c}")
-        } else {
-            used.insert(base.clone(), 1);
-            base
-        };
+        let mut slug = base.clone();
+        let mut suffix = 2usize;
+        while !used.insert(slug.clone()) {
+            slug = format!("{base}_{suffix}");
+            suffix += 1;
+        }
         out.push(slug);
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn chain(records: &[(&str, u32)]) -> Vec<u8> {
+        let mut data = vec![0; 22 + records.len() * 10];
+        data[..4].copy_from_slice(b"\x81\x01\x20\x00");
+        data[16..18].copy_from_slice(&(records.len() as u16).to_le_bytes());
+        for &(name, count) in records {
+            if count == 1 {
+                data.extend_from_slice(&[1, 1]);
+            } else {
+                let bytes = count.to_le_bytes();
+                let width = ((32 - count.leading_zeros()) as usize + 7) / 8;
+                data.extend_from_slice(&bytes[..width]);
+                data.extend_from_slice(&[(32 - (count - 1).leading_zeros()) as u8, 1]);
+            }
+            data.extend_from_slice(name.as_bytes());
+            data.extend_from_slice(name.as_bytes());
+        }
+        data.extend_from_slice(b"\x81\x01\x04\x03");
+        data
+    }
+
+    #[test]
+    fn declared_chain_includes_singletons_and_printable_counts() {
+        let bytes = chain(&[
+            ("One", 1),
+            ("Places", 90),
+            ("Years", 256),
+            ("Values", 70_000),
+        ]);
+        let dims = dimension_chain(&bytes).unwrap();
+        assert_eq!(
+            dims.iter().map(|d| d.count).collect::<Vec<_>>(),
+            [1, 90, 256, 70_000]
+        );
+        assert_eq!(
+            dims.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(),
+            ["One", "Places", "Years", "Values"]
+        );
+        assert!(dims.iter().all(|d| !d.double01));
+    }
+
+    #[test]
+    fn invalid_chain_is_not_partially_accepted() {
+        let mut bytes = chain(&[("First", 174), ("Second", 13)]);
+        bytes[22 + 20 + 1] = 7; // 174 needs eight index bits.
+        assert!(dimension_chain(&bytes).is_none());
+    }
+
+    #[test]
+    fn legacy_geographic_count_is_not_a_type_discriminator() {
+        let bytes = b"\x00\x04\x12\x05\x01\x01REGIONREGION\x04";
+        let dims = walk_records(bytes, bytes.len(), 1, false);
+        assert_eq!(dims.len(), 1);
+        assert_eq!(dims[0].count, 18);
+        assert!(dims[0].double01);
+    }
+
+    #[test]
+    fn legacy_short_name_preserves_stored_case() {
+        assert_eq!(
+            descriptor_name(b"TIME PERIODTime Period", false).as_deref(),
+            Some("TIME PERIOD")
+        );
+        assert_eq!(
+            descriptor_name(b"REGIONRegion", false).as_deref(),
+            Some("REGION")
+        );
+    }
+
+    #[test]
+    fn dimension_slugs_are_unique_including_existing_suffixes() {
+        let names = ["A", "A", "A_2", "A", "東京", "東京", "年月日"]
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        let slugs = dim_slugs(&names);
+        assert_eq!(&slugs[..4], ["a", "a_2", "a_2_2", "a_3"]);
+        assert!(slugs.iter().all(|slug| !slug.is_empty()));
+        assert_eq!(slugs.iter().collect::<HashSet<_>>().len(), slugs.len());
+    }
+
+    #[test]
+    fn supplied_ivt_dimensions_match_beyond_summary() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let items = Regex::new(r#""name_en":\s*"([^"]+)"[\s\S]*?"items":\s*(\d+)"#).unwrap();
+        let mut checked = 0;
+        let Ok(entries) = std::fs::read_dir(root.join("data")) else {
+            return;
+        };
+        for entry in entries {
+            let path = entry.unwrap().path();
+            if path.extension().is_none_or(|ext| ext != "ivt") {
+                continue;
+            }
+            let expected = root
+                .join("tests/expected")
+                .join(path.file_stem().unwrap())
+                .with_extension("json");
+            if !expected.exists() {
+                continue;
+            }
+            let json = std::fs::read_to_string(expected).unwrap();
+            let dimension_json = json
+                .split("\"dimensions\":")
+                .nth(1)
+                .unwrap()
+                .split("\"footnotes\":")
+                .next()
+                .unwrap();
+            let expected = items
+                .captures_iter(dimension_json)
+                .map(|c| (c[1].to_string(), c[2].parse::<i64>().unwrap()))
+                .collect::<Vec<_>>();
+            let data = std::fs::read(&path).unwrap();
+            let dims = parse_descriptor(&data).unwrap().dims;
+            let actual = dims
+                .into_iter()
+                .map(|d| (d.name, d.count))
+                .collect::<Vec<_>>();
+            assert_eq!(actual, expected, "{}", path.display());
+            checked += 1;
+        }
+        if checked == 0 {
+            eprintln!("No local IVT fixtures were available for descriptor verification");
+        }
+    }
 }

@@ -12,9 +12,8 @@ use crate::descriptor::parse_descriptor;
 use crate::error::IvtError;
 use crate::header::read_header;
 use crate::metadata::{
-    self, Dimension as CoreDimension, Footnote as CoreFootnote,
-    Geographies as CoreGeographies, IvtMetadata as CoreMeta, LocalizedText as CoreLocalized,
-    MissingValue as CoreMissing,
+    self, Dimension as CoreDimension, Footnote as CoreFootnote, Geographies as CoreGeographies,
+    IvtMetadata as CoreMeta, LocalizedText as CoreLocalized, MissingValue as CoreMissing,
 };
 use crate::tidy::{tidy_arrays, Column};
 
@@ -296,7 +295,11 @@ impl IvtMetadata {
     #[getter]
     fn geographies(&self) -> PyResult<Geographies> {
         let mut guard = self.inner.lock().unwrap();
-        Ok(guard.geographies().map_err(PyValueError::new_err)?.clone().into())
+        Ok(guard
+            .geographies()
+            .map_err(PyValueError::new_err)?
+            .clone()
+            .into())
     }
 
     #[getter]
@@ -355,7 +358,6 @@ impl From<&Layout> for PyLayout {
 }
 
 struct DecodeCache {
-    complete: bool,
     cols: Vec<(String, Column)>,
 }
 
@@ -382,21 +384,12 @@ impl Ivt {
         self.py_layout.clone()
     }
 
-    #[pyo3(signature = (*, complete=true, max_cells=100_000_000, labels=true, language="en"))]
-    fn to_arrow<'py>(
-        &self,
-        py: Python<'py>,
-        complete: bool,
-        max_cells: i64,
-        labels: bool,
-        language: &str,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    /// Export every member combination with typed data and file-defined labels.
+    fn to_arrow<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         {
             let cache = self.cache.lock().unwrap();
             if let Some(c) = cache.as_ref() {
-                if c.complete == complete {
-                    return columns_to_pyarrow(py, &c.cols);
-                }
+                return columns_to_pyarrow(py, &c.cols);
             }
         }
 
@@ -410,32 +403,25 @@ impl Ivt {
 
         let cells = py
             .allow_threads(|| -> Result<Vec<(String, Vec<f64>)>, String> {
+                layout
+                    .counts
+                    .iter()
+                    .try_fold(1usize, |n, &count| {
+                        usize::try_from(count).ok().and_then(|c| n.checked_mul(c))
+                    })
+                    .ok_or("dimension product exceeds addressable memory")?;
                 let store = decode_store(&data, &dims, &layout)?;
-                if complete {
-                    let n = layout.counts.iter().fold(1i64, |a, &c| a.saturating_mul(c));
-                    if n > max_cells {
-                        return Err(format!(
-                            "published grid has {n} cells; raise max_cells or use complete=False"
-                        ));
-                    }
-                    Ok(complete_grid(&store, &layout))
-                } else {
-                    Ok(store)
-                }
+                Ok(complete_grid(&store, &layout))
             })
             .map_err(PyValueError::new_err)?;
 
         let tidy = {
             let meta = self.metadata.borrow(py);
             let mut inner = meta.inner.lock().unwrap();
-            tidy_arrays(&cells, &mut inner, &self.layout, labels, language)
-                .map_err(PyValueError::new_err)?
+            tidy_arrays(&data, &cells, &mut inner, &self.layout).map_err(PyValueError::new_err)?
         };
 
-        *self.cache.lock().unwrap() = Some(DecodeCache {
-            complete,
-            cols: tidy.clone(),
-        });
+        *self.cache.lock().unwrap() = Some(DecodeCache { cols: tidy.clone() });
 
         columns_to_pyarrow(py, &tidy)
     }

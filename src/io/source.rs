@@ -136,11 +136,13 @@ impl IvtSource {
         match self {
             Self::Memory { data, metrics } => {
                 let file_len = data.len() as u64;
-                let end = offset.checked_add(length as u64).ok_or(IvtError::InvalidPointer {
-                    offset,
-                    length,
-                    file_len,
-                })?;
+                let end = offset
+                    .checked_add(length as u64)
+                    .ok_or(IvtError::InvalidPointer {
+                        offset,
+                        length,
+                        file_len,
+                    })?;
                 if end > file_len {
                     return Err(IvtError::InvalidPointer {
                         offset,
@@ -247,7 +249,9 @@ impl IvtSource {
     pub fn read_all(&self) -> Result<Vec<u8>, IvtError> {
         let len = self.len()?;
         if len > usize::MAX as u64 {
-            return Err(IvtError::Parse("IVT file too large to load into memory".into()));
+            return Err(IvtError::Parse(
+                "IVT file too large to load into memory".into(),
+            ));
         }
         self.read_range(0, len as usize)
     }

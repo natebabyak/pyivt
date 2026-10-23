@@ -1,9 +1,9 @@
 //! Build Arrow arrays / tables and hand off to pyarrow via C Data Interface.
 
 use arrow::array::{
-    ArrayRef, Float64Array, Int64Array, StringArray,
+    Array, ArrayRef, Date32Array, Float64Array, Int64Array, ListArray, StringArray,
 };
-use arrow::datatypes::{DataType, Field, Schema};
+use arrow::datatypes::{DataType, Field, Schema, UInt16Type};
 use arrow::ffi::to_ffi;
 use arrow::record_batch::RecordBatch;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
@@ -25,9 +25,24 @@ pub fn columns_to_record_batch(cols: &[(String, Column)]) -> Result<RecordBatch,
                 fields.push(Field::new(name, DataType::Int64, true));
                 arrays.push(Arc::new(Int64Array::from(v.clone())) as ArrayRef);
             }
+            Column::NullableI64(v) => {
+                fields.push(Field::new(name, DataType::Int64, true));
+                arrays.push(Arc::new(Int64Array::from(v.clone())) as ArrayRef);
+            }
             Column::F64(v) => {
                 fields.push(Field::new(name, DataType::Float64, true));
                 arrays.push(Arc::new(Float64Array::from(v.clone())) as ArrayRef);
+            }
+            Column::Date32(v) => {
+                fields.push(Field::new(name, DataType::Date32, true));
+                arrays.push(Arc::new(Date32Array::from(v.clone())) as ArrayRef);
+            }
+            Column::U16List(v) => {
+                let array = ListArray::from_iter_primitive::<UInt16Type, _, _>(
+                    v.iter().map(|row| Some(row.iter().copied().map(Some))),
+                );
+                fields.push(Field::new(name, array.data_type().clone(), false));
+                arrays.push(Arc::new(array) as ArrayRef);
             }
             Column::Utf8(v) => {
                 fields.push(Field::new(name, DataType::Utf8, true));
@@ -55,9 +70,12 @@ pub fn record_batch_to_pyarrow<'py>(
         let (ffi_array, ffi_schema) =
             to_ffi(&array.to_data()).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
-        // Leak boxed FFI structs; pyarrow takes ownership via _import_from_c
-        let array_ptr = Box::into_raw(Box::new(ffi_array)) as usize;
-        let schema_ptr = Box::into_raw(Box::new(ffi_schema)) as usize;
+        // PyArrow moves the contents and clears their release callbacks. Keep
+        // ownership of the outer structs so successful and failed imports free them.
+        let mut ffi_array = Box::new(ffi_array);
+        let mut ffi_schema = Box::new(ffi_schema);
+        let array_ptr = (&mut *ffi_array) as *mut _ as usize;
+        let schema_ptr = (&mut *ffi_schema) as *mut _ as usize;
 
         let py_array = pa
             .getattr("Array")?
@@ -74,7 +92,6 @@ pub fn columns_to_pyarrow<'py>(
     py: Python<'py>,
     cols: &[(String, Column)],
 ) -> PyResult<Bound<'py, PyAny>> {
-    let batch = columns_to_record_batch(cols)
-        .map_err(PyValueError::new_err)?;
+    let batch = columns_to_record_batch(cols).map_err(PyValueError::new_err)?;
     record_batch_to_pyarrow(py, &batch)
 }

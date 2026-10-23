@@ -6,6 +6,7 @@ mod error;
 mod header;
 mod io;
 mod metadata;
+mod members;
 mod py;
 mod tidy;
 
