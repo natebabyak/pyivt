@@ -11,7 +11,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from pyivt import IvtMetadata
+from pyivt import IvtMetadata, LocalizedLabels, LocalizedText
 from pyivt import open as open_ivt
 
 # All top-level Beyond File Summary keys. Dimension notes/members are exposed on
@@ -110,7 +110,7 @@ def _missing_values_beyond(meta: IvtMetadata) -> list[dict]:
 def snapshot_comparable(meta: IvtMetadata, path: Path) -> dict:
     """Build Beyond-shaped fields for every COMPARED_KEYS entry.
 
-    Dimension ``notes_*`` / ``members_*`` are available on ``meta.dimensions``
+    Dimension ``notes`` / ``members`` are available on ``meta.dimensions``
     but are not included in the golden snapshot.
     """
     stats = path.stat()
@@ -137,12 +137,12 @@ def snapshot_comparable(meta: IvtMetadata, path: Path) -> dict:
         "read_only": meta.read_only,
         "dimensions": [
             {
-                "name_en": dimension.name_en,
-                "name_fr": dimension.name_fr,
+                "name_en": dimension.name.en,
+                "name_fr": dimension.name.fr,
                 "items": dimension.count,
                 "type": dimension.type_label,
-                "description_en": dimension.description_en,
-                "description_fr": dimension.description_fr,
+                "description_en": dimension.description.en,
+                "description_fr": dimension.description.fr,
             }
             for dimension in meta.dimensions
         ],
@@ -211,10 +211,73 @@ def test_metadata_path_and_bytes_match(demo_ivt):
     for path_dim, bytes_dim in zip(
         by_path.dimensions, by_bytes.dimensions, strict=True
     ):
-        assert path_dim.members_en == bytes_dim.members_en
-        assert path_dim.members_fr == bytes_dim.members_fr
-        assert path_dim.notes_en == bytes_dim.notes_en
-        assert path_dim.notes_fr == bytes_dim.notes_fr
+        assert path_dim.members.en == bytes_dim.members.en
+        assert path_dim.members.fr == bytes_dim.members.fr
+        assert path_dim.notes.en == bytes_dim.notes.en
+        assert path_dim.notes.fr == bytes_dim.notes.fr
+
+
+@pytest.mark.parametrize(
+    "localized",
+    [
+        LocalizedText(en="English", fr="Français"),
+        LocalizedText(en="English"),
+        LocalizedText(fr="Français"),
+        LocalizedText(),
+        LocalizedLabels(en=["English"], fr=["Français"]),
+        LocalizedLabels(en=["English"]),
+        LocalizedLabels(fr=["Français"]),
+        LocalizedLabels(en=[], fr=[]),
+        LocalizedLabels(),
+    ],
+)
+def test_localized_access(localized):
+    for language in ("en", "fr"):
+        assert localized[language] == getattr(localized, language)
+        with pytest.raises(AttributeError):
+            setattr(localized, language, None)
+    for language in ("de", "EN", "", "en_US"):
+        with pytest.raises(KeyError) as exc:
+            _ = localized[language]
+        assert exc.value.args == (language,)
+    with pytest.raises(TypeError):
+        _ = localized[0]
+
+
+def test_localized_labels_are_copies():
+    localized = LocalizedLabels(en=["English"])
+    localized.en.append("changed")
+    localized["en"].clear()
+    assert localized.en == ["English"]
+
+
+def test_metadata_localized_access(demo_ivt):
+    meta = open_ivt(demo_ivt.path).metadata
+    fields = [meta.title, meta.author, meta.category, meta.keywords, meta.notes]
+    for dimension in meta.dimensions:
+        fields.extend(
+            [dimension.name, dimension.description, dimension.members, dimension.notes]
+        )
+        assert dimension.name.en is not None
+        for old_name in (
+            "name_en",
+            "name_fr",
+            "description_en",
+            "description_fr",
+            "members_en",
+            "members_fr",
+            "notes_en",
+            "notes_fr",
+        ):
+            assert not hasattr(dimension, old_name)
+    fields.append(meta.geographies.geo_label)
+    assert not hasattr(meta.geographies, "geo_label_fr")
+    fields.extend(missing.label for missing in meta.missing_values)
+    for localized in fields:
+        for language in ("en", "fr"):
+            assert localized[language] == getattr(localized, language)
+        with pytest.raises(KeyError):
+            _ = localized["de"]
 
 
 @pytest.mark.parametrize("slot", [544, 698, 712, 824])

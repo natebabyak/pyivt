@@ -77,10 +77,25 @@ ivt = pyivt.open(res.content)
 | Number of Datapoints | `number_of_datapoints`                                                       |
 | Time Series          | `frequency`, `start_date`, `end_date` (each `None` if absent)                |
 | Read-Only            | `read_only`                                                                  |
-| Dimensions           | `dimensions` (`name_en` / `name_fr`, `description_en` / `description_fr`, …) |
+| Dimensions           | `dimensions` (`name.en` / `name.fr`, `description.en` / `description.fr`, …) |
 | Geographies          | `geographies`                                                                |
 | Footnotes            | `footnotes`                                                                  |
 | Missing Values       | `missing_values`                                                             |
+
+Localized fields support both attribute and language-key access:
+
+```python
+meta = ivt.metadata
+print(meta.title.en, meta.title["fr"])
+for dimension in meta.dimensions:
+    print(dimension.name.en, dimension.description["fr"])
+    print(dimension.members.en, dimension.notes["fr"])
+print(meta.geographies.geo_label.en, meta.geographies.geo_label["fr"])
+```
+
+Each translation is `None` when unavailable. Unsupported language keys raise
+`KeyError`. Dimension `name`, `description`, `members`, and `notes` replace the
+previous `_en` / `_fr` fields; `geographies.geo_label` now holds both languages.
 
 ### Exporting Data
 
@@ -173,6 +188,16 @@ tests still run without these references.
    ```bash
    pytest
    ```
+
+To clear all files and subdirectories in `data` and `tests/expected`, including
+the committed JSON references, run:
+
+```bash
+uv run --no-project scripts/cleanup.py
+```
+
+The folders themselves are preserved. Committed references can be restored with
+`git restore tests/expected`.
 
 ## License
 

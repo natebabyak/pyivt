@@ -1,6 +1,6 @@
 //! PyO3 wrappers for the public Python API.
 
-use pyo3::exceptions::{PyOSError, PyTypeError, PyValueError};
+use pyo3::exceptions::{PyKeyError, PyOSError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes, PyString};
 use std::path::PathBuf;
@@ -24,11 +24,34 @@ fn map_ivt_err(e: IvtError) -> PyErr {
     }
 }
 
+/// English and French versions of a metadata text field.
+///
+/// Parameters
+/// ----------
+/// en : str or None, optional
+///     English text. Defaults to None.
+/// fr : str or None, optional
+///     French text. Defaults to None.
+///
+/// Notes
+/// -----
+/// Attributes are read-only. A missing translation is None; accessing one
+/// language does not fall back to the other language.
+/// Translations support both attribute access (.en, .fr) and indexing
+/// (["en"], ["fr"]). Other keys raise KeyError.
+///
+/// Examples
+/// --------
+/// >>> text = LocalizedText(en="Population", fr="Population")
+/// >>> text.en
+/// 'Population'
 #[pyclass(name = "LocalizedText", module = "pyivt")]
 #[derive(Clone)]
 pub struct LocalizedText {
+    /// English text, or None when unavailable. No automatic translation fallback.
     #[pyo3(get)]
     pub en: Option<String>,
+    /// French text, or None when unavailable. No automatic translation fallback.
     #[pyo3(get)]
     pub fr: Option<String>,
 }
@@ -47,36 +70,89 @@ impl LocalizedText {
         Self { en, fr }
     }
 
+    fn __getitem__(&self, language: &str) -> PyResult<Option<String>> {
+        match language {
+            "en" => Ok(self.en.clone()),
+            "fr" => Ok(self.fr.clone()),
+            _ => Err(PyKeyError::new_err(language.to_owned())),
+        }
+    }
+
     fn __repr__(&self) -> String {
         format!("LocalizedText(en={:?}, fr={:?})", self.en, self.fr)
     }
 }
 
+/// English and French metadata label lists in member ID order.
+///
+/// Read-only translations support .en / .fr and ["en"] / ["fr"]. Missing
+/// translations are None, and unsupported keys raise KeyError. Returned lists
+/// are copies; changing them does not update the metadata.
+#[pyclass(name = "LocalizedLabels", module = "pyivt")]
+#[derive(Clone)]
+pub struct LocalizedLabels {
+    /// English labels, or None when unavailable.
+    #[pyo3(get)]
+    pub en: Option<Vec<String>>,
+    /// French labels, or None when unavailable.
+    #[pyo3(get)]
+    pub fr: Option<Vec<String>>,
+}
+
+#[pymethods]
+impl LocalizedLabels {
+    #[new]
+    #[pyo3(signature = (en=None, fr=None))]
+    fn new(en: Option<Vec<String>>, fr: Option<Vec<String>>) -> Self {
+        Self { en, fr }
+    }
+
+    fn __getitem__(&self, language: &str) -> PyResult<Option<Vec<String>>> {
+        match language {
+            "en" => Ok(self.en.clone()),
+            "fr" => Ok(self.fr.clone()),
+            _ => Err(PyKeyError::new_err(language.to_owned())),
+        }
+    }
+
+    fn __repr__(&self) -> String {
+        format!("LocalizedLabels(en={:?}, fr={:?})", self.en, self.fr)
+    }
+}
+
+/// One table axis, obtained from IvtMetadata.dimensions in file order.
+///
+/// All attributes are read-only. Member label lists, when available, follow
+/// member ID order: position 0 describes member ID 1. Labels may retain leading
+/// spaces used by Beyond 20/20 to express hierarchy. None means unavailable.
+/// Use Ivt.layout.slugs for the corresponding Arrow column names; display names
+/// in this object need not match those column names. Instances come from the
+/// reader and cannot be constructed directly.
 #[pyclass(name = "Dimension", module = "pyivt")]
 #[derive(Clone)]
 pub struct Dimension {
+    /// Localized short name; English falls back to the descriptor name.
     #[pyo3(get)]
-    pub name_en: String,
-    #[pyo3(get)]
-    pub name_fr: Option<String>,
+    pub name: LocalizedText,
+    /// Declared number of members on this axis; member IDs run from 1 to count.
     #[pyo3(get)]
     pub count: i64,
+    /// Raw IVT dimension type code. See type_label for a readable classification.
     #[pyo3(get, name = "type")]
     pub type_code: i64,
+    /// Localized description; English falls back to name.en when unavailable.
     #[pyo3(get)]
-    pub description_en: Option<String>,
-    #[pyo3(get)]
-    pub description_fr: Option<String>,
+    pub description: LocalizedText,
+    /// Readable classification: 'Normal', 'Geographic', or 'Time Series'.
     #[pyo3(get)]
     pub type_label: String,
+    /// Localized member labels in member ID order.
     #[pyo3(get)]
-    pub members_en: Option<Vec<String>>,
+    pub members: LocalizedLabels,
+    /// Localized dimension notes with normalized whitespace.
     #[pyo3(get)]
-    pub members_fr: Option<Vec<String>>,
-    #[pyo3(get)]
-    pub notes_en: Option<String>,
-    #[pyo3(get)]
-    pub notes_fr: Option<String>,
+    pub notes: LocalizedText,
+    /// Optional member ordering information. Currently always None.
     #[pyo3(get)]
     pub ordinal: Option<Vec<i64>>,
 }
@@ -84,17 +160,25 @@ pub struct Dimension {
 impl From<CoreDimension> for Dimension {
     fn from(d: CoreDimension) -> Self {
         Self {
-            name_en: d.name_en,
-            name_fr: d.name_fr,
+            name: LocalizedText {
+                en: Some(d.name_en),
+                fr: d.name_fr,
+            },
             count: d.count,
             type_code: d.type_code,
-            description_en: d.description_en,
-            description_fr: d.description_fr,
+            description: LocalizedText {
+                en: d.description_en,
+                fr: d.description_fr,
+            },
             type_label: d.type_label,
-            members_en: d.members_en,
-            members_fr: d.members_fr,
-            notes_en: d.notes_en,
-            notes_fr: d.notes_fr,
+            members: LocalizedLabels {
+                en: d.members_en,
+                fr: d.members_fr,
+            },
+            notes: LocalizedText {
+                en: d.notes_en,
+                fr: d.notes_fr,
+            },
             ordinal: d.ordinal,
         }
     }
@@ -103,28 +187,38 @@ impl From<CoreDimension> for Dimension {
 #[pymethods]
 impl Dimension {
     fn __repr__(&self) -> String {
-        format!(
-            "Dimension(name_en={:?}, count={})",
-            self.name_en, self.count
-        )
+        format!("Dimension(name={:?}, count={})", self.name.en, self.count)
     }
 }
 
+/// One language of an entry in the table's annotation legend.
+///
+/// Obtain entries from IvtMetadata.footnotes. English and French descriptions
+/// are separate objects sharing a symbol. Numbered notes embedded in table or
+/// dimension notes are not extracted into this legend. Attributes are read-only;
+/// instances cannot be constructed directly.
 #[pyclass(name = "Footnote", module = "pyivt")]
 #[derive(Clone)]
 pub struct Footnote {
+    /// Display symbol identifying this annotation in the table legend.
     #[pyo3(get)]
     pub symbol: String,
+    /// Description language: 'en' or 'fr'.
     #[pyo3(get)]
     pub language: String,
+    /// Numeric legend entry code, or 0 if the code is unavailable.
     #[pyo3(get)]
     pub number: i64,
+    /// Annotation description in the language given by language.
     #[pyo3(get)]
     pub text: String,
+    /// Optional scope of the annotation. Currently always None.
     #[pyo3(get)]
     pub scope: Option<String>,
+    /// Optional dimension association. Currently always None.
     #[pyo3(get)]
     pub dimension: Option<String>,
+    /// Optional member association. Currently always None.
     #[pyo3(get)]
     pub member_id: Option<i64>,
 }
@@ -143,13 +237,21 @@ impl From<CoreFootnote> for Footnote {
     }
 }
 
+/// A missing-value or status legend entry from IvtMetadata.missing_values.
+///
+/// The optional numeric code links this entry to Arrow's status_code column.
+/// The symbol and localized label explain the file-defined status. Attributes
+/// are read-only; instances cannot be constructed directly.
 #[pyclass(name = "MissingValue", module = "pyivt")]
 #[derive(Clone)]
 pub struct MissingValue {
+    /// File-defined display symbol for this status.
     #[pyo3(get)]
     pub symbol: String,
+    /// English and French descriptions; either translation may be None.
     #[pyo3(get)]
     pub label: LocalizedText,
+    /// Numeric status code used by Arrow output, or None when unavailable.
     #[pyo3(get)]
     pub code: Option<i64>,
 }
@@ -164,21 +266,32 @@ impl From<CoreMissing> for MissingValue {
     }
 }
 
+/// Parallel geography member lists from IvtMetadata.geographies.
+///
+/// Position i in each available list describes member_id[i]. A list may be None
+/// when the field is unavailable; optional entries within a list may also be
+/// None. Names, UIDs and quality fields are parsed from English member labels,
+/// rather than looked up in an external geography database. Attributes are
+/// read-only; instances cannot be constructed directly.
 #[pyclass(name = "Geographies", module = "pyivt")]
 #[derive(Clone)]
 pub struct Geographies {
+    /// One-based geography member IDs in file order.
     #[pyo3(get)]
     pub member_id: Vec<i64>,
+    /// Original geography labels in English and French.
     #[pyo3(get)]
-    pub geo_label: Option<Vec<String>>,
+    pub geo_label: LocalizedLabels,
+    /// Names parsed from English labels, or None when labels are unavailable.
     #[pyo3(get)]
     pub geo_name: Option<Vec<Option<String>>>,
+    /// Geographic identifiers parsed from labels; strings preserve leading zeros.
     #[pyo3(get)]
     pub geo_uid: Option<Vec<Option<String>>>,
-    #[pyo3(get)]
-    pub geo_label_fr: Option<Vec<String>>,
+    /// Data quality flag codes parsed from labels; unavailable fields are None.
     #[pyo3(get)]
     pub dqf_code: Option<Vec<Option<String>>>,
+    /// Short-form total non-response rates as strings with decimal points, or None.
     #[pyo3(get)]
     pub tnr_short_form: Option<Vec<Option<String>>>,
 }
@@ -187,10 +300,12 @@ impl From<CoreGeographies> for Geographies {
     fn from(g: CoreGeographies) -> Self {
         Self {
             member_id: g.member_id,
-            geo_label: g.geo_label,
+            geo_label: LocalizedLabels {
+                en: g.geo_label,
+                fr: g.geo_label_fr,
+            },
             geo_name: g.geo_name,
             geo_uid: g.geo_uid,
-            geo_label_fr: g.geo_label_fr,
             dqf_code: g.dqf_code,
             tnr_short_form: g.tnr_short_form,
         }
@@ -203,11 +318,25 @@ impl Geographies {
         format!(
             "Geographies(member_id_len={}, geo_label={})",
             self.member_id.len(),
-            self.geo_label.is_some()
+            self.geo_label.en.is_some()
         )
     }
 }
 
+/// Read-only table metadata, obtained from Ivt.metadata.
+///
+/// Summary properties are available after open(). Dimensions, geographies,
+/// footnotes and missing_values are loaded on first access and cached. Accessing
+/// these lazy properties may raise ValueError if metadata cannot be read or
+/// parsed. Returned lists and nested objects are snapshots; modifying a Python
+/// list does not update the reader or source file. Optional fields use None
+/// when unavailable. Instances cannot be constructed directly.
+///
+/// Examples
+/// --------
+/// >>> meta = open("table.ivt").metadata
+/// >>> title = meta.title.en or meta.title.fr
+/// >>> axes = [(dim.name.en, dim.count) for dim in meta.dimensions]
 #[pyclass(name = "IvtMetadata", module = "pyivt")]
 pub struct IvtMetadata {
     inner: Mutex<CoreMeta>,
@@ -215,77 +344,101 @@ pub struct IvtMetadata {
 
 #[pymethods]
 impl IvtMetadata {
+    /// Product identifier extracted from table identity or notes, or None.
     #[getter]
     fn product_id(&self) -> Option<String> {
         self.inner.lock().unwrap().product_id.clone()
     }
 
     #[getter]
+    /// Table title in English and French; either translation may be None.
     fn title(&self) -> LocalizedText {
         self.inner.lock().unwrap().title.clone().into()
     }
 
     #[getter]
+    /// Population or universe described by the table, or None when unavailable.
     fn universe(&self) -> Option<String> {
         self.inner.lock().unwrap().universe.clone()
     }
 
     #[getter]
+    /// Table notes in both languages, with line endings and whitespace normalized.
     fn notes(&self) -> LocalizedText {
         self.inner.lock().unwrap().notes.clone().into()
     }
 
     #[getter]
+    /// IVT format version from the file header, not the pyivt package version.
     fn version(&self) -> String {
         self.inner.lock().unwrap().version.clone()
     }
 
     #[getter]
+    /// Four-byte file signature as eight lowercase hexadecimal digits.
     fn signature(&self) -> String {
         self.inner.lock().unwrap().signature.clone()
     }
 
     #[getter]
+    /// Author or producing organization in each available language.
     fn author(&self) -> LocalizedText {
         self.inner.lock().unwrap().author.clone().into()
     }
 
     #[getter]
+    /// File-defined category text in each available language.
     fn category(&self) -> LocalizedText {
         self.inner.lock().unwrap().category.clone().into()
     }
 
     #[getter]
+    /// Keyword text in each language, returned as strings rather than split lists.
     fn keywords(&self) -> LocalizedText {
         self.inner.lock().unwrap().keywords.clone().into()
     }
 
     #[getter]
+    /// Product of declared dimension counts, or None when unavailable.
+    ///
+    /// Includes all member combinations, rather than counting only numeric or
+    /// non-missing observations. The summary product saturates at 2**63 - 1.
     fn number_of_datapoints(&self) -> Option<i64> {
         self.inner.lock().unwrap().number_of_datapoints
     }
 
     #[getter]
+    /// 'No', 'Annual', 'Semi-annual', 'Quarterly', or 'Monthly'; None if unknown.
+    ///
+    /// 'No' is the file's explicit non-time-series frequency, distinct from None.
     fn frequency(&self) -> Option<String> {
         self.inner.lock().unwrap().frequency.clone()
     }
 
     #[getter]
+    /// Time-series start date as an ISO date string, or None when unavailable.
     fn start_date(&self) -> Option<String> {
         self.inner.lock().unwrap().start_date.clone()
     }
 
     #[getter]
+    /// Time-series end date as an ISO date string, or None when unavailable.
     fn end_date(&self) -> Option<String> {
         self.inner.lock().unwrap().end_date.clone()
     }
 
     #[getter]
+    /// File's stored read-only flag, or None; does not report filesystem permissions.
     fn read_only(&self) -> Option<bool> {
         self.inner.lock().unwrap().read_only
     }
 
     #[getter]
+    /// Dimensions in file order, loaded on first access and cached.
+    ///
+    /// Returns a list of Dimension snapshots with member labels and notes.
+    /// Raises ValueError if the required metadata cannot be loaded or parsed.
+    /// Position i corresponds to Ivt.layout.counts[i] and Ivt.layout.slugs[i].
     fn dimensions(&self) -> PyResult<Vec<Dimension>> {
         let mut guard = self.inner.lock().unwrap();
         let dims = guard.dimensions().map_err(PyValueError::new_err)?;
@@ -293,6 +446,10 @@ impl IvtMetadata {
     }
 
     #[getter]
+    /// Geography member lists, loaded on first access and cached.
+    ///
+    /// Returns Geographies for the axis selected by Ivt.layout.geo_dim.
+    /// Unavailable fields are None. Raises ValueError on metadata loading errors.
     fn geographies(&self) -> PyResult<Geographies> {
         let mut guard = self.inner.lock().unwrap();
         Ok(guard
@@ -303,6 +460,10 @@ impl IvtMetadata {
     }
 
     #[getter]
+    /// Annotation legend entries, loaded on first access and cached.
+    ///
+    /// Returns separate Footnote entries for each available language, or an
+    /// empty list when no entries are found. Raises ValueError on loading errors.
     fn footnotes(&self) -> PyResult<Vec<Footnote>> {
         let mut guard = self.inner.lock().unwrap();
         let notes = guard.footnotes().map_err(PyValueError::new_err)?;
@@ -310,12 +471,18 @@ impl IvtMetadata {
     }
 
     #[getter]
+    /// Status legend entries, loaded on first access and cached.
+    ///
+    /// Returns MissingValue entries linking numeric codes to symbols and
+    /// localized descriptions, or an empty list if none are found. Raises
+    /// ValueError on loading errors. See Ivt.to_arrow for status column behavior.
     fn missing_values(&self) -> PyResult<Vec<MissingValue>> {
         let mut guard = self.inner.lock().unwrap();
         let vals = guard.missing_values().map_err(PyValueError::new_err)?;
         Ok(vals.iter().cloned().map(MissingValue::from).collect())
     }
 
+    /// Internal diagnostic: whether a named lazy metadata field is cached.
     fn _loaded(&self, name: &str) -> bool {
         self.inner.lock().unwrap().loaded(name)
     }
@@ -327,19 +494,31 @@ impl IvtMetadata {
     }
 }
 
+/// Read-only decoding layout, obtained from Ivt.layout.
+///
+/// counts and slugs follow file dimension order and describe the exported grid.
+/// geo_dim and straddle are one-based dimension indices; subtract 1 before
+/// indexing a Python list. Paging fields describe IVT storage, not Arrow record
+/// batches. List attributes are copies. Instances cannot be constructed directly.
 #[pyclass(name = "Layout", module = "pyivt")]
 #[derive(Clone)]
 pub struct PyLayout {
+    /// Member counts in file dimension order; their product is the Arrow row count.
     #[pyo3(get)]
     pub counts: Vec<i64>,
+    /// Unique Arrow member-ID column names; the selected geography axis is 'geo'.
     #[pyo3(get)]
     pub slugs: Vec<String>,
+    /// Number of dimensions; equals len(counts) and len(slugs).
     #[pyo3(get)]
     pub n_dim: usize,
+    /// One-based index of the selected geography axis; may be a fallback axis.
     #[pyo3(get)]
     pub geo_dim: usize,
+    /// One-based index of the axis split across IVT page windows.
     #[pyo3(get)]
     pub straddle: usize,
+    /// Number of page windows covering the straddle axis, not the total page count.
     #[pyo3(get)]
     pub window_count: i64,
 }
@@ -361,6 +540,20 @@ struct DecodeCache {
     cols: Vec<(String, Column)>,
 }
 
+/// An opened Beyond 20/20 table with metadata and deferred cell decoding.
+///
+/// Obtain an instance with pyivt.open(source); direct construction is not
+/// supported. Inspect metadata and layout without exporting the cell grid.
+/// to_arrow() reads and decodes the complete table on first use, then caches
+/// decoded columns for subsequent exports. No context manager or close() call
+/// is required. This reader does not modify the source file.
+///
+/// Examples
+/// --------
+/// >>> import pyivt
+/// >>> ivt = pyivt.open("table.ivt")
+/// >>> title = ivt.metadata.title.en
+/// >>> table = ivt.to_arrow()
 #[pyclass(name = "Ivt", module = "pyivt")]
 pub struct Ivt {
     metadata: Py<IvtMetadata>,
@@ -374,17 +567,63 @@ pub struct Ivt {
 
 #[pymethods]
 impl Ivt {
+    /// Shared metadata object; detailed member and legend fields load on demand.
     #[getter]
     fn metadata(&self, py: Python<'_>) -> Py<IvtMetadata> {
         self.metadata.clone_ref(py)
     }
 
     #[getter]
+    /// Snapshot of dimension counts, Arrow column slugs and IVT paging details.
     fn layout(&self) -> PyLayout {
         self.py_layout.clone()
     }
 
-    /// Export every member combination with typed data and file-defined labels.
+    /// Export the complete table as a pyarrow.Table in long form.
+    ///
+    /// Returns
+    /// -------
+    /// pyarrow.Table
+    ///     One row per combination of dimension members, including combinations
+    ///     absent from storage. Row count is math.prod(self.layout.counts).
+    ///     Rows follow file dimension order, with the last dimension varying
+    ///     fastest. Each dimension has an int64 column named by layout.slugs
+    ///     containing one-based member IDs. File-defined member fields use
+    ///     '<slug>_<field>' names with collision suffixes where needed; types
+    ///     are string, int64, float64 or date32 according to the file.
+    ///     Additional columns are:
+    ///
+    /// * value (float64): numeric value when status_code is 0, otherwise null.
+    /// * status_code (int64): decoded status; 0 denotes a numeric cell.
+    /// * symbol (string): matching status legend symbol, or null.
+    /// * status (string): legend description, preferring English then French,
+    ///   or null if no description is available.
+    /// * footnote_raw (list<uint16>): raw cell annotation markers; an empty
+    ///   list means no markers. These are not resolved footnote texts.
+    ///
+    /// Raises
+    /// ------
+    /// OSError
+    ///     The path cannot be read when the full file is first needed.
+    /// ValueError
+    ///     Decoding, member metadata or dimension size validation fails.
+    /// ImportError
+    ///     pyarrow is unavailable.
+    ///
+    /// Notes
+    /// -----
+    /// This materializes the entire grid in memory; there is no streaming or
+    /// filtering option. Combinations absent from storage have value 0 and
+    /// status_code 0. Nonzero statuses produce null values even if a numeric
+    /// payload exists. Source precision and label indentation are preserved.
+    /// First export caches the file bytes and decoded columns. Later calls
+    /// construct another Arrow table from cached columns without re-decoding.
+    ///
+    /// Examples
+    /// --------
+    /// >>> import pyarrow.parquet as pq
+    /// >>> table = open("table.ivt").to_arrow()
+    /// >>> pq.write_table(table, "table.parquet")
     fn to_arrow<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         {
             let cache = self.cache.lock().unwrap();
@@ -491,6 +730,51 @@ impl Ivt {
     }
 }
 
+/// Open a Beyond 20/20 IVT source without decoding its cell values.
+///
+/// Parameters
+/// ----------
+/// source : str, os.PathLike[str], bytes, bytearray, memoryview or binary file object
+///     A local file path, complete IVT contents, or an object with read().
+///     Bytes are interpreted as file contents, never as a path. Path-like
+///     objects must return str from __fspath__(). File objects are read once
+///     with read() from their current position; they are not rewound or closed.
+///     The result of read() must be bytes or support conversion via __bytes__().
+///     Other objects implementing __bytes__() are also accepted.
+///
+/// Returns
+/// -------
+/// Ivt
+///     Reader exposing metadata, layout and to_arrow(). Summary metadata and
+///     layout are parsed immediately; cell decoding waits until to_arrow().
+///
+/// Raises
+/// ------
+/// TypeError
+///     The source type, path representation or read() result is unsupported.
+/// OSError
+///     The source path cannot be opened or read.
+/// ValueError
+///     The IVT header, descriptor or layout is invalid or unsupported.
+///
+/// Notes
+/// -----
+/// Paths use selective metadata reads. Keep the file available and unchanged:
+/// the first to_arrow() reads its full contents, and lazy metadata properties
+/// may read additional ranges. In-memory sources are copied when opened, so
+/// later changes to a bytearray do not affect the reader. This function does
+/// not fetch URLs or decompress archives. Exceptions raised by a supplied
+/// read(), __fspath__() or __bytes__() method may also propagate.
+///
+/// Examples
+/// --------
+/// >>> from pathlib import Path
+/// >>> import pyivt
+/// >>> ivt = pyivt.open(Path("table.ivt"))
+/// >>> title = ivt.metadata.title.en or ivt.metadata.title.fr
+/// >>> table = ivt.to_arrow()
+/// >>> from io import BytesIO
+/// >>> in_memory = pyivt.open(BytesIO(Path("table.ivt").read_bytes()))
 #[pyfunction]
 #[pyo3(name = "open")]
 pub fn open_ivt(py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<Ivt> {
