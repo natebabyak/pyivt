@@ -146,17 +146,34 @@ Apache Arrow is ready to use with your current data stack.
 
 ## Benchmarks
 
-| Metadata | `pywinauto` | `canivt` | `pyivt` |
-| -------- | ----------: | -------: | ------: |
-| Time     |             |          |         |
-| Memory   |             |          |         |
-| Accuracy |    **100%** |          |         |
+Compared with `canivt` across 20 IVT files, `pyivt` achieved a median per-file speedup of **69.2× for metadata extraction** and **29.1× for Arrow conversion**.
 
-| Data     | `pywinauto` | `canivt` | `pyivt` |
-| -------- | ----------: | -------: | ------: |
-| Time     |             |          |         |
-| Memory   |             |          |         |
-| Accuracy |    **100%** |          |         |
+| Operation        | Library | Wall time (ms) | CPU time (ms) | Peak memory (MiB) | Memory growth (MiB) |
+| ---------------- | ------- | -------------: | ------------: | ----------------: | ------------------: |
+| Metadata         | canivt  |          810.0 |         800.0 |             179.5 |               107.8 |
+| Metadata         | pyivt   |            9.1 |          15.6 |              22.7 |                 2.7 |
+| Arrow conversion | canivt  |          565.0 |         565.0 |             223.6 |               120.0 |
+| Arrow conversion | pyivt   |           24.5 |          23.4 |              38.0 |                 7.6 |
+
+Table values are medians across the 20 files, using each file’s median trial result. Speedups are calculated per file before taking the median.
+
+`pyivt` was faster on all 20 metadata cases and 19 of 20 Arrow cases. Peak memory was lower on all metadata cases and 17 of 20 Arrow cases. In the remaining Arrow case, `pyivt` took 710 ms versus 360 ms for `canivt`.
+
+### Methodology
+
+Each case runs three times in fresh worker processes. Timings exclude runtime startup and imports, but include the first operation’s initialization costs. Metadata extraction loads all lazy metadata fields; Arrow conversion materializes the complete grid, including missing cells, without writing to disk. The libraries produce different schemas: `pyivt` preserves additional member fields and raw annotations.
+
+Memory is sampled resident memory (RSS), including native allocations. Peak memory includes the runtime; growth measures the increase above the baseline after imports. Sampling can miss brief allocation peaks. CPU time includes user and system time across threads; Windows timer resolution limits accuracy for short operations.
+
+### Running the benchmarks
+
+Tests automatically discover IVT files under `data`, including subdirectories.
+
+````bash
+uv sync --group benchmark
+uv run maturin develop --release --skip-install
+uv run --group benchmark pytest benchmarks --ivt-report .cache/benchmarks/results.json
+
 
 ## Tests
 
@@ -171,7 +188,7 @@ tests still run without these references.
 
    ```bash
    uv run --no-project scripts/copy_test_inputs.py
-   ```
+````
 
 2. Generate expected test outputs
 
