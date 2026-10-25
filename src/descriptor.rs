@@ -54,7 +54,7 @@ fn descriptor_name(run: &[u8], first_record: bool) -> Option<String> {
             }
         }
     }
-    if n % 2 == 0 && s[..n / 2].eq_ignore_ascii_case(&s[n / 2..]) {
+    if n.is_multiple_of(2) && s[..n / 2].eq_ignore_ascii_case(&s[n / 2..]) {
         // Short name and description may differ only in letter case, such
         // as the stored code "TIME PERIOD" and description "Time Period".
         return Some(s[..n / 2].to_string());
@@ -280,7 +280,7 @@ fn walk_records(v: &[u8], lend: usize, cap: usize, lenient: bool) -> Vec<DimDesc
                     }
                 }
                 if let Some(name) = nm {
-                    if count >= 1 && count <= 2_000_000 && dims_name_ok(&name) {
+                    if (1..=2_000_000).contains(&count) && dims_name_ok(&name) {
                         dims.push(DimDesc {
                             name,
                             count,
@@ -382,9 +382,7 @@ fn walk_at(data: &[u8], d_off: usize, cap_hint: usize) -> Option<Vec<DimDesc>> {
         .collect();
     // FACET04 usually ends the dim block, but an earlier FACET (title summary)
     // can sit before the name chain in pre-marker windows — ignore those.
-    let facet_lend = text
-        .find("FACET04")
-        .and_then(|facet| if facet >= 200 { Some(facet) } else { None });
+    let facet_lend = text.find("FACET04").filter(|&facet| facet >= 200);
     let lend = if let Some(facet) = facet_lend {
         facet
     } else if let Some(anchor) = dir_anchor_header(data) {
@@ -507,7 +505,7 @@ pub fn structured_descriptor(data: &[u8]) -> Option<Descriptor> {
         return None;
     }
     let mut dims = Vec::with_capacity(count);
-    for row in decoded[6..].chunks_exact(82) {
+    for row in decoded[6..].as_chunks::<82>().0 {
         let items = u32(row, 0);
         let kind = u16(row, 6);
         let end = row[12..30].iter().position(|&b| b == 0).unwrap_or(18);
@@ -527,104 +525,6 @@ pub fn structured_descriptor(data: &[u8]) -> Option<Descriptor> {
         });
     }
     Some(Descriptor { offset, dims })
-}
-
-/// Walk a descriptor window loaded separately from the file prefix.
-/// `dir_anchor` is an optional absolute offset of the value-block directory.
-pub fn walk_at_window(
-    window: &[u8],
-    d_off: usize,
-    dir_anchor: Option<usize>,
-    cap_hint: usize,
-) -> Option<Vec<DimDesc>> {
-    if window.len() < 18 {
-        return None;
-    }
-    let v = window;
-    if let Some(dims) = dimension_chain(v) {
-        return Some(dims);
-    }
-    let text: String = v
-        .iter()
-        .map(|&b| {
-            if (32..=126).contains(&b) {
-                b as char
-            } else {
-                '.'
-            }
-        })
-        .collect();
-    let facet_lend = text
-        .find("FACET04")
-        .and_then(|facet| if facet >= 200 { Some(facet) } else { None });
-    let lend = if let Some(facet) = facet_lend {
-        facet
-    } else if let Some(anchor) = dir_anchor {
-        // Value-block start relative to descriptor, when known.
-        if anchor > d_off + 32 {
-            (anchor - d_off).min(v.len())
-        } else {
-            v.len()
-        }
-    } else {
-        v.len()
-    };
-    let ndim_field = u16(v, 16);
-    let cap = if (1..=32).contains(&ndim_field) {
-        ndim_field as usize
-    } else if (2..=16).contains(&cap_hint) {
-        cap_hint
-    } else {
-        16
-    };
-    let try_walk = |end: usize| -> Option<Vec<DimDesc>> {
-        let mut dims = walk_records(v, end, cap, false);
-        if !dims_quality_ok(&dims) {
-            dims = walk_records(v, end, cap, true);
-        }
-        if dims_quality_ok(&dims) {
-            Some(dims)
-        } else {
-            None
-        }
-    };
-    if let Some(dims) = try_walk(lend) {
-        return Some(dims);
-    }
-    if lend < v.len() {
-        try_walk(v.len())
-    } else {
-        None
-    }
-}
-
-/// Scan isolated buffers (e.g. master blocks) for dim-name chains near `81 01 20 00`.
-pub fn scan_dim_marker_in_buffers(buffers: &[&[u8]]) -> Option<(usize, Vec<DimDesc>)> {
-    let needle = b"\x81\x01\x20\x00";
-    let mut best: Option<(usize, Vec<DimDesc>, i64)> = None;
-    for data in buffers {
-        let mut start = 0usize;
-        while let Some(rel) = data[start..]
-            .windows(needle.len())
-            .position(|w| w == needle)
-        {
-            let marker = start + rel;
-            for off in [marker.saturating_sub(256), marker] {
-                if off + 18 > data.len() {
-                    continue;
-                }
-                if let Some(dims) = walk_at_window(&data[off..], off, None, 16) {
-                    let score = dims_quality_score(&dims);
-                    if score >= 0 && best.as_ref().map(|(_, _, s)| *s).unwrap_or(-1) < score {
-                        // Absolute offset unknown for detached buffers; store relative off.
-                        best = Some((off, dims, score));
-                    }
-                }
-            }
-            start = marker + needle.len();
-        }
-    }
-    best.map(|(o, d, _)| (o, d))
 }
 
 fn is_geographic_dim(d: &DimDesc) -> bool {
@@ -690,7 +590,7 @@ mod tests {
                 data.extend_from_slice(&[1, 1]);
             } else {
                 let bytes = count.to_le_bytes();
-                let width = ((32 - count.leading_zeros()) as usize + 7) / 8;
+                let width = ((32 - count.leading_zeros()) as usize).div_ceil(8);
                 data.extend_from_slice(&bytes[..width]);
                 data.extend_from_slice(&[(32 - (count - 1).leading_zeros()) as u8, 1]);
             }

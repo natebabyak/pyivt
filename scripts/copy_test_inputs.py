@@ -31,10 +31,11 @@ def main(argv: list[str] | None = None) -> int:
 
                 source = Path(root) / file
 
-                digest = hashlib.file_digest(
-                    source.open("rb"),
-                    "sha256",
-                ).hexdigest()
+                hasher = hashlib.sha256()
+                with source.open("rb") as stream:
+                    for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                        hasher.update(chunk)
+                digest = hasher.hexdigest()
 
                 destination = DATA_DIR / f"{digest}.ivt"
 

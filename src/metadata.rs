@@ -210,10 +210,6 @@ impl IvtMetadata {
         &self.desc
     }
 
-    pub fn source(&self) -> &IvtSource {
-        &self.source
-    }
-
     pub fn io_metrics(&self) -> crate::io::IoMetrics {
         self.source.metrics()
     }
@@ -261,7 +257,7 @@ fn summary_language_record(data: &[u8], language: u32, column: usize) -> Option<
         if decoded.get(..2) != Some(&[1, 2]) || decoded.len() < 6 || u16(&decoded, 4) != 32 {
             return None;
         }
-        for row in decoded[6..].chunks_exact(32) {
+        for row in decoded[6..].as_chunks::<32>().0 {
             if u32(row, 0) == language {
                 let index = u32(row, column) as usize;
                 // Zero is the default FACET record, but means absent for notes/keywords.
@@ -769,7 +765,7 @@ fn status_legend_dir(data: &[u8], slot: usize) -> Vec<(u32, u16)> {
             entries.push((0, 0));
             continue;
         }
-        let ok = s1 == s2 || s2 == 4 * ((s1 + 3) / 4) || s2 >= s1;
+        let ok = s1 == s2 || s2 == 4 * s1.div_ceil(4) || s2 >= s1;
         if !ok || s1 == 0 || (off as usize) + (s1 as usize) > data.len() {
             break;
         }

@@ -26,7 +26,8 @@ pub struct Layout {
     pub geo_in_page: bool,
 }
 
-pub fn value_trailer(b0: u8, b2: u8, b3: u8) -> Result<usize, String> {
+#[cfg(test)]
+fn value_trailer(b0: u8, b2: u8, b3: u8) -> Result<usize, String> {
     let w = b0 & 0x0F;
     let hi = b0 & 0xF0;
     if !MARKER_WIDTHS.contains(&w) || (hi != 0x80 && hi != 0xA0) || !(0x08..0x0F).contains(&b3) {
@@ -51,9 +52,7 @@ pub fn bit_layout(counts: &[i64]) -> (Vec<i64>, usize) {
     }
     let mut stride = vec![0i64; k];
     stride[k - 1] = 1;
-    for i in 0..k - 1 {
-        stride[i] = block[i + 1];
-    }
+    stride[..k - 1].copy_from_slice(&block[1..k]);
     (stride, (block[0] / 8) as usize)
 }
 
@@ -447,6 +446,8 @@ pub fn decode_store(
     let mut statuses = Vec::new();
     let mut footnotes = Vec::new();
 
+    // Recursive traversal carries the shared output buffers through each level.
+    #[allow(clippy::too_many_arguments)]
     fn walk(
         level: usize,
         coord: &mut Vec<i64>,
@@ -485,7 +486,7 @@ pub fn decode_store(
                     let mut mid = pg.tuples[row][col_i];
                     if dim_i == lay.straddle {
                         let win_i = coord[0];
-                        mid = (win_i * lay.ipc[0]) as i32 + mid;
+                        mid += (win_i * lay.ipc[0]) as i32;
                         if mid as i64 > lay.counts[dim_i - 1] {
                             skip = true;
                             break;

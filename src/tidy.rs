@@ -36,9 +36,7 @@ pub fn label_parent(labels: &[String], unit: usize) -> Vec<Option<i64>> {
             }
         }
         if last_at.len() > di + 1 {
-            for j in (di + 1)..last_at.len() {
-                last_at[j] = None;
-            }
+            last_at[di + 1..].fill(None);
         }
         while last_at.len() <= di {
             last_at.push(None);

@@ -47,10 +47,13 @@ dev = [
   "pytest>=9.0",
   "pywinauto>=0.6",
   "ruff>=0.17",
+  "ty>=0.0.1",
+  "typing-extensions>=4.0",
 ]
 
 benchmark = [
   "psutil>=5.9",
+  "rpy2>=3.6,<4",
 ]
 
 [build-system]

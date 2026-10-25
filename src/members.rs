@@ -50,7 +50,7 @@ impl MemberValues {
         }
     }
 
-    fn as_strings(self) -> Vec<Option<String>> {
+    fn into_strings(self) -> Vec<Option<String>> {
         match self {
             Self::Utf8(v) => v,
             Self::Int64(v) => v.into_iter().map(|v| v.map(|x| x.to_string())).collect(),
@@ -134,7 +134,9 @@ impl<'a> Directory<'a> {
             ));
         }
         Ok(record[4..]
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .map(|v| u32(v, 0) as usize)
             .collect())
     }
@@ -223,7 +225,9 @@ fn referenced_strings(dir: &Directory<'_>, record: &[u8]) -> Result<Vec<Option<S
         return Err("member text references are not an integer vector".into());
     }
     record[4..]
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|scalar| {
             let index = u32(scalar, 0) as usize;
             if index == 0 {
@@ -246,7 +250,9 @@ fn time_members(record: &[u8]) -> Result<MemberValues, String> {
         return Err("time-series members are not eight-byte records".into());
     }
     let dates = record[6..]
-        .chunks_exact(8)
+        .as_chunks::<8>()
+        .0
+        .iter()
         .map(|row| {
             let serial = u32(row, 0);
             if serial == 0 {
@@ -276,6 +282,8 @@ pub(crate) fn iso_date(days: i64) -> String {
     format!("{year:04}-{month:02}-{day:02}")
 }
 
+pub type MemberField = (String, Vec<Option<String>>);
+
 /// Read every declared field for an axis, in native member ordinal order.
 ///
 /// Field names are the names recorded in the IVT, without label-based guessing.
@@ -286,10 +294,10 @@ pub fn read_members(
     data: &[u8],
     dimension: usize,
     count: usize,
-) -> Result<Vec<(String, Vec<Option<String>>)>, String> {
+) -> Result<Vec<MemberField>, String> {
     Ok(read_typed_members(data, dimension, count)?
         .into_iter()
-        .map(|(name, values)| (name, values.as_strings()))
+        .map(|(name, values)| (name, values.into_strings()))
         .collect())
 }
 
@@ -307,7 +315,7 @@ pub fn read_typed_members(
         return Err("unsupported member field definition layout".into());
     }
     let mut fields = Vec::new();
-    for field in definitions[6..].chunks_exact(34) {
+    for field in definitions[6..].as_chunks::<34>().0 {
         let name_len = field[0] as usize;
         if name_len > 17 {
             return Err("member field name exceeds its definition".into());
@@ -338,7 +346,7 @@ pub fn read_typed_members(
             }
             .map_err(|e| format!("dimension {dimension}, field {name}: {e}"))?;
             if kind == 0x0180 {
-                for row in record[6..].chunks_exact(8) {
+                for row in record[6..].as_chunks::<8>().0 {
                     time_serials.push(Some(u32(row, 0) as i64));
                     time_aux.push(Some(u32(row, 4) as i64));
                 }

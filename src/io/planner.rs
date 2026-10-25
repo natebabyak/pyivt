@@ -1,17 +1,18 @@
 //! Range planning and coalescing for selective IVT reads.
 
+#[cfg(test)]
 use crate::error::IvtError;
+#[cfg(test)]
 use crate::io::read_at::ReadAt;
 
-/// Default gap (bytes) below which adjacent ranges are merged.
-pub const DEFAULT_MERGE_GAP: u64 = 64 * 1024;
-
+#[cfg(test)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ByteRange {
     pub offset: u64,
     pub length: usize,
 }
 
+#[cfg(test)]
 impl ByteRange {
     pub fn new(offset: u64, length: usize) -> Self {
         Self { offset, length }
@@ -50,6 +51,7 @@ impl LoadedRange {
 }
 
 /// Sort, merge overlapping ranges, and merge gaps below `merge_gap`.
+#[cfg(test)]
 pub fn coalesce_ranges(
     ranges: &[ByteRange],
     merge_gap: u64,
@@ -98,6 +100,7 @@ pub fn coalesce_ranges(
 }
 
 /// Execute coalesced reads and return loaded buffers.
+#[cfg(test)]
 pub fn load_ranges<R: ReadAt + ?Sized>(
     reader: &R,
     ranges: &[ByteRange],
@@ -117,11 +120,8 @@ pub fn load_ranges<R: ReadAt + ?Sized>(
 }
 
 /// Look up `length` bytes at `file_offset` across loaded ranges.
-pub fn slice_loaded<'a>(
-    loaded: &'a [LoadedRange],
-    file_offset: u64,
-    length: usize,
-) -> Option<&'a [u8]> {
+#[cfg(test)]
+pub fn slice_loaded(loaded: &[LoadedRange], file_offset: u64, length: usize) -> Option<&[u8]> {
     for lr in loaded {
         if let Some(s) = lr.slice_at(file_offset, length) {
             return Some(s);

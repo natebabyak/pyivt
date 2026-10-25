@@ -1,17 +1,16 @@
 //! File- or memory-backed IVT byte source with a small range cache.
 
-use std::fs::File;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use crate::error::IvtError;
-use crate::io::planner::{coalesce_ranges, ByteRange, LoadedRange, DEFAULT_MERGE_GAP};
-use crate::io::read_at::{FileReadAt, IoMetrics, MemoryReadAt, ReadAt};
+use crate::io::planner::LoadedRange;
+use crate::io::read_at::{FileReadAt, IoMetrics, ReadAt};
 
 const CACHE_CAP: usize = 32;
 
 #[derive(Debug)]
-struct RangeCache {
+pub(crate) struct RangeCache {
     entries: Vec<LoadedRange>,
 }
 
@@ -49,7 +48,6 @@ pub enum IvtSource {
         metrics: Mutex<IoMetrics>,
     },
     File {
-        path: PathBuf,
         reader: FileReadAt,
         cache: Mutex<RangeCache>,
         metrics: Mutex<IoMetrics>,
@@ -68,29 +66,14 @@ impl IvtSource {
         }
     }
 
-    pub fn from_arc(data: Arc<[u8]>) -> Self {
-        Self::Memory {
-            data,
-            metrics: Mutex::new(IoMetrics::default()),
-        }
-    }
-
     pub fn open_file(path: impl AsRef<Path>) -> Result<Self, IvtError> {
         let path = path.as_ref().to_path_buf();
         let reader = FileReadAt::open(&path)?;
         Ok(Self::File {
-            path,
             reader,
             cache: Mutex::new(RangeCache::new()),
             metrics: Mutex::new(IoMetrics::default()),
         })
-    }
-
-    pub fn path(&self) -> Option<&Path> {
-        match self {
-            Self::Memory { .. } => None,
-            Self::File { path, .. } => Some(path.as_path()),
-        }
     }
 
     pub fn len(&self) -> Result<u64, IvtError> {
@@ -104,14 +87,6 @@ impl IvtSource {
         match self {
             Self::Memory { metrics, .. } | Self::File { metrics, .. } => {
                 metrics.lock().unwrap().clone()
-            }
-        }
-    }
-
-    pub fn set_fallback_used(&self) {
-        match self {
-            Self::Memory { metrics, .. } | Self::File { metrics, .. } => {
-                metrics.lock().unwrap().fallback_used = true;
             }
         }
     }
@@ -185,77 +160,6 @@ impl IvtSource {
         Ok(buf)
     }
 
-    /// Plan, coalesce, and load ranges into the cache; return copies.
-    pub fn load_ranges(
-        &self,
-        ranges: &[ByteRange],
-        merge_gap: u64,
-    ) -> Result<Vec<LoadedRange>, IvtError> {
-        let file_len = self.len()?;
-        let merged = coalesce_ranges(ranges, merge_gap, file_len)?;
-        let mut out = Vec::with_capacity(merged.len());
-        for r in merged {
-            // Serve from cache when fully covered.
-            if let Self::File { cache, .. } = self {
-                let cache = cache.lock().unwrap();
-                if let Some(s) = cache.find(r.offset, r.length) {
-                    out.push(LoadedRange {
-                        offset: r.offset,
-                        data: s.to_vec(),
-                    });
-                    continue;
-                }
-            }
-            if let Self::Memory { data, metrics } = self {
-                let end = r.offset as usize + r.length;
-                let slice = &data[r.offset as usize..end];
-                metrics.lock().unwrap().record(r.length);
-                out.push(LoadedRange {
-                    offset: r.offset,
-                    data: slice.to_vec(),
-                });
-                continue;
-            }
-            let data = match self {
-                Self::File {
-                    reader,
-                    cache,
-                    metrics,
-                    ..
-                } => {
-                    let data = reader.read_range(r.offset, r.length)?;
-                    metrics.lock().unwrap().record(r.length);
-                    cache.lock().unwrap().insert(LoadedRange {
-                        offset: r.offset,
-                        data: data.clone(),
-                    });
-                    data
-                }
-                Self::Memory { .. } => unreachable!(),
-            };
-            out.push(LoadedRange {
-                offset: r.offset,
-                data,
-            });
-        }
-        Ok(out)
-    }
-
-    pub fn load_ranges_default(&self, ranges: &[ByteRange]) -> Result<Vec<LoadedRange>, IvtError> {
-        self.load_ranges(ranges, DEFAULT_MERGE_GAP)
-    }
-
-    /// Read the entire file (Arrow decode / compatibility fallback).
-    pub fn read_all(&self) -> Result<Vec<u8>, IvtError> {
-        let len = self.len()?;
-        if len > usize::MAX as u64 {
-            return Err(IvtError::Parse(
-                "IVT file too large to load into memory".into(),
-            ));
-        }
-        self.read_range(0, len as usize)
-    }
-
     /// Ensure a contiguous prefix of the file is available as a Vec (header region).
     pub fn read_prefix(&self, nbytes: usize) -> Result<Vec<u8>, IvtError> {
         let len = self.len()? as usize;
@@ -263,19 +167,3 @@ impl IvtSource {
         self.read_range(0, n)
     }
 }
-
-/// Convenience: open a path for positional reads without wrapping in IvtSource.
-#[allow(dead_code)]
-pub fn open_file_reader(path: impl AsRef<Path>) -> Result<FileReadAt, IvtError> {
-    FileReadAt::open(path)
-}
-
-/// Convenience for tests.
-#[allow(dead_code)]
-pub fn memory_reader(data: Vec<u8>) -> MemoryReadAt {
-    MemoryReadAt::new(data)
-}
-
-// Keep File in scope for Windows FileExt path documentation / future use.
-#[allow(dead_code)]
-fn _file_type_anchor(_: &File) {}

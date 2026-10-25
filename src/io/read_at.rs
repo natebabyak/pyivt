@@ -1,7 +1,7 @@
 //! Positional readers with optional I/O metrics.
 
 use std::fs::File;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Mutex;
 
 #[cfg(not(windows))]
@@ -30,10 +30,7 @@ pub trait ReadAt {
     fn len(&self) -> Result<u64, IvtError>;
     fn read_exact_at(&self, offset: u64, buffer: &mut [u8]) -> Result<(), IvtError>;
 
-    fn is_empty(&self) -> Result<bool, IvtError> {
-        Ok(self.len()? == 0)
-    }
-
+    #[cfg(test)]
     fn read_range(&self, offset: u64, length: usize) -> Result<Vec<u8>, IvtError> {
         let mut buf = vec![0u8; length];
         self.read_exact_at(offset, &mut buf)?;
@@ -60,20 +57,19 @@ fn check_bounds(offset: u64, length: usize, file_len: u64) -> Result<(), IvtErro
 }
 
 /// In-memory byte source (tests and bytes-based open).
+#[cfg(test)]
 pub struct MemoryReadAt {
     data: Vec<u8>,
 }
 
+#[cfg(test)]
 impl MemoryReadAt {
     pub fn new(data: Vec<u8>) -> Self {
         Self { data }
     }
-
-    pub fn as_slice(&self) -> &[u8] {
-        &self.data
-    }
 }
 
+#[cfg(test)]
 impl ReadAt for MemoryReadAt {
     fn len(&self) -> Result<u64, IvtError> {
         Ok(self.data.len() as u64)
@@ -91,7 +87,6 @@ impl ReadAt for MemoryReadAt {
 
 /// File-backed positional reader.
 pub struct FileReadAt {
-    path: PathBuf,
     file: Mutex<File>,
     len: u64,
 }
@@ -102,14 +97,9 @@ impl FileReadAt {
         let file = File::open(&path)?;
         let len = file.metadata()?.len();
         Ok(Self {
-            path,
             file: Mutex::new(file),
             len,
         })
-    }
-
-    pub fn path(&self) -> &Path {
-        &self.path
     }
 }
 
@@ -162,11 +152,13 @@ impl ReadAt for FileReadAt {
 }
 
 /// Wraps a [`ReadAt`] and accumulates [`IoMetrics`].
+#[cfg(test)]
 pub struct InstrumentedReadAt<R: ReadAt> {
     inner: R,
     metrics: Mutex<IoMetrics>,
 }
 
+#[cfg(test)]
 impl<R: ReadAt> InstrumentedReadAt<R> {
     pub fn new(inner: R) -> Self {
         Self {
@@ -178,19 +170,9 @@ impl<R: ReadAt> InstrumentedReadAt<R> {
     pub fn metrics(&self) -> IoMetrics {
         self.metrics.lock().unwrap().clone()
     }
-
-    pub fn metrics_mut<F, T>(&self, f: F) -> T
-    where
-        F: FnOnce(&mut IoMetrics) -> T,
-    {
-        f(&mut self.metrics.lock().unwrap())
-    }
-
-    pub fn inner(&self) -> &R {
-        &self.inner
-    }
 }
 
+#[cfg(test)]
 impl<R: ReadAt> ReadAt for InstrumentedReadAt<R> {
     fn len(&self) -> Result<u64, IvtError> {
         self.inner.len()

@@ -50,7 +50,6 @@ pub struct DirEntry {
 pub struct DimSlot {
     #[allow(dead_code)]
     pub index: usize,
-    pub dir_ptr: u32,
     #[allow(dead_code)]
     pub alloc: u32,
     pub n_entries: u32,
@@ -182,34 +181,6 @@ pub fn read_header_ex(data: &[u8], file_len: usize) -> Result<HeaderLayout, Stri
     })
 }
 
-/// Read a block directory from an isolated directory buffer.
-/// `file_len` bounds pointed-to blocks; `dir` is raw bytes starting at `ptr`.
-pub fn read_block_dir_bytes(dir: &[u8], n_entries: u32, file_len: usize) -> Vec<(u32, u16)> {
-    let mut entries = Vec::new();
-    let mut o = 0usize;
-    for _ in 0..(n_entries as usize + 8) {
-        if o + 8 > dir.len() {
-            break;
-        }
-        let off = u32(dir, o);
-        let s1 = u16(dir, o + 4);
-        let s2 = u16(dir, o + 6);
-        if off == 0 && s1 == 0 {
-            break;
-        }
-        let ok = s1 == s2 || s2 == 4 * ((s1 + 3) / 4) || s2 >= s1;
-        if !ok || s1 == 0 || (off as usize) + (s1 as usize) > file_len {
-            break;
-        }
-        entries.push((off, s1));
-        o += 8;
-        if entries.len() >= n_entries as usize {
-            break;
-        }
-    }
-    entries
-}
-
 pub fn dim_slots(data: &[u8], max_dims: usize) -> Vec<DimSlot> {
     let mut out = Vec::new();
     for k in 0..max_dims {
@@ -226,39 +197,12 @@ pub fn dim_slots(data: &[u8], max_dims: usize) -> Vec<DimSlot> {
         }
         out.push(DimSlot {
             index: k,
-            dir_ptr,
             alloc,
             n_entries,
             flag,
         });
     }
     out
-}
-
-pub fn read_block_dir(data: &[u8], ptr: u32, n_entries: u32) -> Vec<(u32, u16)> {
-    let mut entries = Vec::new();
-    let mut o = ptr as usize;
-    for _ in 0..(n_entries as usize + 8) {
-        if o + 8 > data.len() {
-            break;
-        }
-        let off = u32(data, o);
-        let s1 = u16(data, o + 4);
-        let s2 = u16(data, o + 6);
-        if off == 0 && s1 == 0 {
-            break;
-        }
-        let ok = s1 == s2 || s2 == 4 * ((s1 + 3) / 4) || s2 >= s1;
-        if !ok || s1 == 0 || (off as usize) + (s1 as usize) > data.len() {
-            break;
-        }
-        entries.push((off, s1));
-        o += 8;
-        if entries.len() >= n_entries as usize {
-            break;
-        }
-    }
-    entries
 }
 
 #[cfg(test)]

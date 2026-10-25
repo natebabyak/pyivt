@@ -246,8 +246,12 @@ def test_localized_access(localized):
 
 def test_localized_labels_are_copies():
     localized = LocalizedLabels(en=["English"])
-    localized.en.append("changed")
-    localized["en"].clear()
+    english = localized.en
+    assert english is not None
+    english.append("changed")
+    indexed_english = localized["en"]
+    assert indexed_english is not None
+    indexed_english.clear()
     assert localized.en == ["English"]
 
 

@@ -108,7 +108,7 @@ impl MetadataDirectory {
         Self::range(self.offset, pointer_length, file_len)?;
         let pointers = source.read_range(self.offset as u64, pointer_length)?;
         let mut entries = Vec::with_capacity(length);
-        for (page, raw) in pointers.chunks_exact(4).enumerate() {
+        for (page, raw) in pointers.as_chunks::<4>().0.iter().enumerate() {
             let offset = u32(raw, 0) as usize;
             let count = size.min(self.count - page * size);
             let length = count * ENTRY_SIZE;

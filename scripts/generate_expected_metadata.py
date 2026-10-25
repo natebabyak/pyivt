@@ -9,12 +9,12 @@ from dataclasses import asdict, dataclass
 from dataclasses import field as dataclass_field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Self
 
 from bs4 import BeautifulSoup, Tag
 from bs4.element import PageElement
 from pywinauto import Application, Desktop, ElementNotFoundError
 from pywinauto.keyboard import send_keys
+from typing_extensions import Self
 
 
 @dataclass

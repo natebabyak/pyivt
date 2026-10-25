@@ -4,10 +4,74 @@ import json
 import subprocess
 import sys
 import textwrap
+from pathlib import Path
 
 import pytest
 
-from benchmarks.harness import ROOT, BackendUnavailable, discover_files, measure
+from benchmarks.harness import (
+    ROOT,
+    BackendUnavailable,
+    discover_files,
+    measure,
+    worker_command,
+)
+
+
+@pytest.mark.parametrize("backend", ["pyivt", "canivt"])
+@pytest.mark.parametrize("operation", ["metadata", "arrow"])
+def test_benchmark_uses_python_worker(backend, operation, tmp_path):
+    source = tmp_path / "a table with spaces.ivt"
+    library = tmp_path / "R library"
+    command = worker_command(backend, operation, source, r_library=library)
+    assert command[:6] == [
+        sys.executable,
+        "-m",
+        "benchmarks.worker",
+        backend,
+        operation,
+        str(source),
+    ]
+    assert command[6:] == ([str(library.resolve())] if backend == "canivt" else [])
+
+
+@pytest.mark.parametrize("backend,operation", [("unknown", "arrow"), ("pyivt", "bad")])
+def test_benchmark_rejects_unknown_workload(backend, operation):
+    with pytest.raises(ValueError, match="Unknown benchmark"):
+        worker_command(backend, operation, Path("input.ivt"))
+
+
+def test_canivt_worker_missing_rpy2_is_unavailable():
+    with pytest.raises(BackendUnavailable, match="rpy2"):
+        run_worker(
+            """
+            import runpy, sys
+            sys.modules['rpy2'] = None
+            sys.argv = ['worker', 'canivt', 'metadata', 'input.ivt']
+            runpy.run_module('benchmarks.worker', run_name='__main__')
+            """
+        )
+
+
+@pytest.mark.parametrize("operation", ["metadata", "arrow"])
+def test_canivt_worker_embeds_r(operation):
+    sources = discover_files(ROOT / "data")
+    if not sources:
+        pytest.skip("No IVT fixtures available")
+    pytest.importorskip("psutil")
+    try:
+        result = measure(
+            worker_command(
+                "canivt", operation, min(sources, key=lambda p: p.stat().st_size)
+            )
+        )
+    except BackendUnavailable as error:
+        pytest.skip(str(error))
+    assert result["backend_version"]
+    assert result["runtime"]
+    assert result["dimensions" if operation == "metadata" else "rows"] > 0
+    if operation == "arrow":
+        assert result["columns"] > 0
+        assert result["arrow_version"]
 
 
 def test_benchmark_discovery(tmp_path):

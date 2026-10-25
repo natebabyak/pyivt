@@ -12,64 +12,6 @@ pub fn u32(data: &[u8], off: usize) -> u32 {
     u32::from_le_bytes([data[off], data[off + 1], data[off + 2], data[off + 3]])
 }
 
-pub fn i16_run(data: &[u8], off: usize, n: usize) -> Vec<i16> {
-    if n == 0 {
-        return Vec::new();
-    }
-    let mut out = Vec::with_capacity(n);
-    let mut o = off;
-    for _ in 0..n {
-        out.push(i16::from_le_bytes([data[o], data[o + 1]]));
-        o += 2;
-    }
-    out
-}
-
-pub fn i32_run(data: &[u8], off: usize, n: usize) -> Vec<i32> {
-    if n == 0 {
-        return Vec::new();
-    }
-    let mut out = Vec::with_capacity(n);
-    let mut o = off;
-    for _ in 0..n {
-        out.push(i32::from_le_bytes([
-            data[o],
-            data[o + 1],
-            data[o + 2],
-            data[o + 3],
-        ]));
-        o += 4;
-    }
-    out
-}
-
-pub fn f64_run(data: &[u8], off: usize, n: usize) -> Vec<f64> {
-    if n == 0 {
-        return Vec::new();
-    }
-    let mut out = Vec::with_capacity(n);
-    let mut o = off;
-    for _ in 0..n {
-        out.push(f64::from_le_bytes([
-            data[o],
-            data[o + 1],
-            data[o + 2],
-            data[o + 3],
-            data[o + 4],
-            data[o + 5],
-            data[o + 6],
-            data[o + 7],
-        ]));
-        o += 8;
-    }
-    out
-}
-
-#[inline]
-pub fn is_label_byte(b: u8) -> bool {
-    (b >= 32 && b != 127) || matches!(b, 9 | 10 | 13)
-}
-
 pub fn latin1(data: &[u8]) -> String {
     // Match Python: bytes.replace(b"\x00", b" ").decode("cp1252", errors="replace")
     let mut buf = Vec::with_capacity(data.len());
@@ -83,33 +25,6 @@ pub fn latin1(data: &[u8]) -> String {
         s = s.replace(ch, "\u{FFFD}");
     }
     s
-}
-
-#[derive(Debug, Clone)]
-pub struct PascalStr {
-    pub text: String,
-    #[allow(dead_code)]
-    pub len: usize,
-    pub end: usize,
-}
-
-pub fn rd_pascal(data: &[u8], off: usize, max_len: usize) -> Option<PascalStr> {
-    if off >= data.len() {
-        return None;
-    }
-    let length = data[off] as usize;
-    if length < 1 || length > max_len || off + 1 + length > data.len() {
-        return None;
-    }
-    let chunk = &data[off + 1..off + 1 + length];
-    if !chunk.iter().copied().all(is_label_byte) {
-        return None;
-    }
-    Some(PascalStr {
-        text: latin1(chunk),
-        len: length,
-        end: off + 1 + length,
-    })
 }
 
 pub fn nextpow2(x: i64) -> i64 {
