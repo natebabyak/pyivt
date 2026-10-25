@@ -44,14 +44,14 @@ No REA decompilation Evidence IDs were produced for these native conclusions.
 
 The evidence labels in this report are local finding references, not REA IDs:
 
-| Reference | Evidence and scope |
-| --- | --- |
-| N1 | [Retained native disassembly and diagnostic literals](evidence/brwpro-dimensions-native.txt), code/member validation `0x14022c7f0` through `0x14022d053` |
-| N2 | Same capture, field-definition validation at `0x14022eba0`, definition-table validation around `0x14022ef47` |
-| N3 | Same capture, field chunk/type validation beginning `0x14022fe30` |
-| N4 | Same capture, group loader/validator at `0x140230540` and code-to-group traversal at `0x140230940` |
-| F1 | Direct component-byte inspection of 20 repository `data/*.ivt` files and installed Sample, People, Products and Oecd demo tables; selected concrete examples below |
-| P1 | Existing parsers in [members.rs](../src/members.rs), [metadata.rs](../src/metadata.rs) and [descriptor.rs](../src/descriptor.rs); implementation evidence only where native confirmation is absent |
+| Reference | Evidence and scope                                                                                                                                                                                 |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| N1        | [Retained native disassembly and diagnostic literals](evidence/brwpro-dimensions-native.txt), code/member validation `0x14022c7f0` through `0x14022d053`                                           |
+| N2        | Same capture, field-definition validation at `0x14022eba0`, definition-table validation around `0x14022ef47`                                                                                       |
+| N3        | Same capture, field chunk/type validation beginning `0x14022fe30`                                                                                                                                  |
+| N4        | Same capture, group loader/validator at `0x140230540` and code-to-group traversal at `0x140230940`                                                                                                 |
+| F1        | Direct component-byte inspection of 20 repository `data/*.ivt` files and installed Sample, People, Products and Oecd demo tables; selected concrete examples below                                 |
+| P1        | Existing parsers in [members.rs](../src/members.rs), [metadata.rs](../src/metadata.rs) and [descriptor.rs](../src/descriptor.rs); implementation evidence only where native confirmation is absent |
 
 The [read-only probe](evidence/brwpro_dimension_probe.py) hashes the executable,
 maps PE file offsets to addresses, finds RIP-relative references to selected
@@ -74,13 +74,13 @@ to be instructions merely because objdump renders them.
 Master/table entry 1 has expanded 82-byte dimension rows. Existing fixture
 analysis establishes these offsets within each row:
 
-| Offset | Representation | Meaning |
-| --- | --- | --- |
-| 0 | u32 | Authoritative axis item count |
-| 4 | u16 | Bits needed for an item index |
-| 6 | u16 | Axis kind: 0 normal, 1 geographic, 2 time |
-| 12 | 18 bytes | Short name |
-| 30 | 52 bytes | Description |
+| Offset | Representation | Meaning                                   |
+| ------ | -------------- | ----------------------------------------- |
+| 0      | u32            | Authoritative axis item count             |
+| 4      | u16            | Bits needed for an item index             |
+| 6      | u16            | Axis kind: 0 normal, 1 geographic, 2 time |
+| 12     | 18 bytes       | Short name                                |
+| 30     | 52 bytes       | Description                               |
 
 Index width and axis kind are different fields. For example, the 718-member
 normal axis in fixture `941238d8…` has index width 10 and kind 0. Sample's
@@ -94,13 +94,13 @@ ordinals and follow directory flags as described in
 
 Dimension entry 3 expands to 86-byte localized summary rows:
 
-| Row offset | Meaning established by fixtures/current parser |
-| --- | --- |
-| 0..17 | Dimension short-name storage |
-| 18 | u16 display member-field ordinal |
-| 20 | u16 member-note field selector (fixture corroboration) |
-| 22 | u16 dimension-note component ordinal |
-| 34..85 | Dimension description storage |
+| Row offset | Meaning established by fixtures/current parser         |
+| ---------- | ------------------------------------------------------ |
+| 0..17      | Dimension short-name storage                           |
+| 18         | u16 display member-field ordinal                       |
+| 20         | u16 member-note field selector (fixture corroboration) |
+| 22         | u16 dimension-note component ordinal                   |
+| 34..85     | Dimension description storage                          |
 
 Field ordinals and component ordinals are different reference domains. In
 Sample's Units dimension the field order is Code, French description, English
@@ -119,18 +119,18 @@ Field zero is handled specially as the code/time field. [N2]
 All integers below are little-endian; offsets refer to an expanded definition
 row, excluding the component header.
 
-| Offset | Size | Recovered interpretation |
-| --- | --- | --- |
-| 0 | 1 | Name length; general validator warns above 16 |
-| 1..16 | 16 | Name bytes, followed by NUL in valid native rows |
-| 17 | 1 | Reserved, expected zero |
-| 18 | 2 | Type word; native dispatch in the inspected paths uses the low byte |
-| 20 | 2 | Blocking exponent for code fields: block capacity = `1 << value` |
-| 22 | 2 | Language ID, or zero for an unlocalized field |
-| 24 | 2 | Meaning not established; do not fold into the language ID |
-| 26 | 4 | Component ordinal of the field's chunk-index vector |
-| 30 | 2 | Display column width; code validator warns if below 5 |
-| 32 | 2 | Flags, only partly understood |
+| Offset | Size | Recovered interpretation                                            |
+| ------ | ---- | ------------------------------------------------------------------- |
+| 0      | 1    | Name length; general validator warns above 16                       |
+| 1..16  | 16   | Name bytes, followed by NUL in valid native rows                    |
+| 17     | 1    | Reserved, expected zero                                             |
+| 18     | 2    | Type word; native dispatch in the inspected paths uses the low byte |
+| 20     | 2    | Blocking exponent for code fields: block capacity = `1 << value`    |
+| 22     | 2    | Language ID, or zero for an unlocalized field                       |
+| 24     | 2    | Meaning not established; do not fold into the language ID           |
+| 26     | 4    | Component ordinal of the field's chunk-index vector                 |
+| 30     | 2    | Display column width; code validator warns if below 5               |
+| 32     | 2    | Flags, only partly understood                                       |
 
 Native anchors: stride multiplication at `0x14022ebeb`; name length/terminator
 checks at `0x14022ec32` and `0x14022ec62`; reserved byte at `0x14022ecfb`;
@@ -162,13 +162,13 @@ fields have different chunk vectors and chunk sizes. Neither file offsets nor
 adjacent component numbers determine member order. Component zero expansion
 must happen before interpreting any of these payloads. [N1, N3, F1]
 
-| Observed definition type | Member representation | Evidence boundary |
-| --- | --- | --- |
-| `0x0140` | Fixed-width code rows, 22 bytes in the native validator | Native low-byte `0x40` dispatch and fixture rows |
-| `0x0180` | Time rows, 8 bytes: serial u32 and auxiliary u32 | Native low-byte `0x80` dispatch and demo rows |
-| `0x0001` | Variable text: u16 string count, then byte-length/text/NUL tuples in a byte vector | Fixtures/current parser; native character path calls variable-array validator `0x140232d60` |
-| `0x0304` | u32 vector of component references to individual note text records; zero means absent | Fixtures/current parser; native note path requires long storage and follows nonzero component references |
-| `0x0302` | Numeric attribute vectors | Fixtures/current parser; native short/long/double validation paths confirm additional numeric storage families |
+| Observed definition type | Member representation                                                                 | Evidence boundary                                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `0x0140`                 | Fixed-width code rows, 22 bytes in the native validator                               | Native low-byte `0x40` dispatch and fixture rows                                                               |
+| `0x0180`                 | Time rows, 8 bytes: serial u32 and auxiliary u32                                      | Native low-byte `0x80` dispatch and demo rows                                                                  |
+| `0x0001`                 | Variable text: u16 string count, then byte-length/text/NUL tuples in a byte vector    | Fixtures/current parser; native character path calls variable-array validator `0x140232d60`                    |
+| `0x0304`                 | u32 vector of component references to individual note text records; zero means absent | Fixtures/current parser; native note path requires long storage and follows nonzero component references       |
+| `0x0302`                 | Numeric attribute vectors                                                             | Fixtures/current parser; native short/long/double validation paths confirm additional numeric storage families |
 
 The complete native type enum is broader than the five observed full type
 words. Its general validator accepts low-byte values 1, 2, 4, 8, 32, 64 and
@@ -183,11 +183,11 @@ vectors with an additional text-format byte before their text. [F1, P1]
 
 Concrete fixture examples (filenames identify the records, not parsing rules):
 
-| Fixture / axis | Axis count | Field references and physical capacity |
-| --- | ---: | --- |
-| `625ff7c387bd3d45af25b0bfd48aff3e186d46d93e749d0632f1840dee806192.ivt`, axis 0 | 14 | Entry 0 at file offset 22297, stored length 526, expands to `01 02 16 00 22 00` plus 22 definitions. Code index entry 1 contains `[2]`; English entry 4 contains `[5]`; French entry 6 contains `[7]`. Chunks have 16 slots. |
-| `941238d8af783ad01ca29687cd8d39bc5eb5be1811f52678c336293e3c03a601.ivt`, axis 1 | 718 | Code index entry 1 contains `[2]`, capacity 1024. English entry 4 contains `[5, 8, 10, 11]`; French entry 6 contains `[7, 9, 12, 13]`. Each text chunk has 256 slots. |
-| `cf698c42fbb1ae18e0527fe167a5e269fe4ad8064ffaf564f67d2aed6669460c.ivt`, axis 0 | 63404 | Code vector has 64 chunks, beginning `[2, 94, 167, 168, 313, 314, 315, 316]`; English vector has 256 chunks, beginning `[5, 40, 58, 59, 95, 96, 97, 98]`. |
+| Fixture / axis                                                                 | Axis count | Field references and physical capacity                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------ | ---------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `625ff7c387bd3d45af25b0bfd48aff3e186d46d93e749d0632f1840dee806192.ivt`, axis 0 |         14 | Entry 0 at file offset 22297, stored length 526, expands to `01 02 16 00 22 00` plus 22 definitions. Code index entry 1 contains `[2]`; English entry 4 contains `[5]`; French entry 6 contains `[7]`. Chunks have 16 slots. |
+| `941238d8af783ad01ca29687cd8d39bc5eb5be1811f52678c336293e3c03a601.ivt`, axis 1 |        718 | Code index entry 1 contains `[2]`, capacity 1024. English entry 4 contains `[5, 8, 10, 11]`; French entry 6 contains `[7, 9, 12, 13]`. Each text chunk has 256 slots.                                                        |
+| `cf698c42fbb1ae18e0527fe167a5e269fe4ad8064ffaf564f67d2aed6669460c.ivt`, axis 0 |      63404 | Code vector has 64 chunks, beginning `[2, 94, 167, 168, 313, 314, 315, 316]`; English vector has 256 chunks, beginning `[5, 40, 58, 59, 95, 96, 97, 98]`.                                                                    |
 
 Trailing empty capacity must not create members or change the cube's declared
 axis size. Conversely, deletion holes must not be compacted without an explicit
@@ -213,12 +213,12 @@ separately from label indentation. [N4]
 The inspected nonempty group format is a rank-1 byte component. Within its
 expanded payload, excluding the four-byte component header:
 
-| Payload offset | Representation | Native use |
-| --- | --- | --- |
-| 0 | u16 | Group kind; inspected validation admits 1, 2 and 9 |
-| 2 | i32 | Owner/item slot, required to identify a valid slot |
-| 6 | u32 | Number of member slots; inspected validator limits it to 8000 |
-| 10 | u32[count] | Explicit member slot indices |
+| Payload offset   | Representation             | Native use                                                                              |
+| ---------------- | -------------------------- | --------------------------------------------------------------------------------------- |
+| 0                | u16                        | Group kind; inspected validation admits 1, 2 and 9                                      |
+| 2                | i32                        | Owner/item slot, required to identify a valid slot                                      |
+| 6                | u32                        | Number of member slots; inspected validator limits it to 8000                           |
+| 10               | u32[count]                 | Explicit member slot indices                                                            |
 | `10 + 4 * count` | Additional data for kind 2 | u16 length and trailing text storage; diagnostic identifies a computed-group definition |
 
 Anchors: group-kind check `0x1402306d6`; count and base size `0x1402306ef`;
@@ -276,17 +276,17 @@ calendar code in this pass. [F1, P1]
 The validator also exposes a partial native object layout. These are offsets
 from the validation-context pointer, not on-disk offsets or a named C++ class:
 
-| Context offset | Observed role |
-| --- | --- |
-| `0x30 + 4 * language_index` | Table language IDs |
-| `0x64 + 4 * axis` | Default member-label field ordinal |
-| `0x128` | Component/subfile reader pointer |
-| `0x140` | Base subfile number; dimension lookup adds axis |
-| `0x148`, `0x14c` | First and last date serials |
-| `0x150 + 8 * axis` | Pointer to per-slot validity bytes allocated during validation |
-| `0x1e8 + 4 * axis` | Allocated slot count checked against code storage |
-| `0x218 + 4 * axis` | Active item count checked against populated code/time slots |
-| `0x244` | Number of table languages |
+| Context offset              | Observed role                                                  |
+| --------------------------- | -------------------------------------------------------------- |
+| `0x30 + 4 * language_index` | Table language IDs                                             |
+| `0x64 + 4 * axis`           | Default member-label field ordinal                             |
+| `0x128`                     | Component/subfile reader pointer                               |
+| `0x140`                     | Base subfile number; dimension lookup adds axis                |
+| `0x148`, `0x14c`            | First and last date serials                                    |
+| `0x150 + 8 * axis`          | Pointer to per-slot validity bytes allocated during validation |
+| `0x1e8 + 4 * axis`          | Allocated slot count checked against code storage              |
+| `0x218 + 4 * axis`          | Active item count checked against populated code/time slots    |
+| `0x244`                     | Number of table languages                                      |
 
 The code validator accumulates active and allocated counts separately and
 compares them at `0x14022ce83` and `0x14022cebf`. This is direct evidence that
@@ -294,13 +294,13 @@ native slot capacity and active item count are not interchangeable. [N1, N2]
 
 ## Coverage and implications for pyivt
 
-| Investigation question | Status |
-| --- | --- |
-| Dimension directory and field schema | Answered for the inspected native validation path and fixture layouts |
-| Member codes, labels, localization and chunk alignment | Answered for the observed storage types; native type enum only partial |
-| Active/deleted slots and separate allocation counts | Native checks established; export mapping with holes unresolved |
-| Explicit groups versus label indentation | Native pointer/list checks and 26 demo groups corroborated, including nesting and stored child order; aggregation/UI behavior unresolved |
-| Native in-memory classes and display order | Partial validation-context offsets only; class ownership and ordering algorithms unresolved |
+| Investigation question                                 | Status                                                                                                                                   |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Dimension directory and field schema                   | Answered for the inspected native validation path and fixture layouts                                                                    |
+| Member codes, labels, localization and chunk alignment | Answered for the observed storage types; native type enum only partial                                                                   |
+| Active/deleted slots and separate allocation counts    | Native checks established; export mapping with holes unresolved                                                                          |
+| Explicit groups versus label indentation               | Native pointer/list checks and 26 demo groups corroborated, including nesting and stored child order; aggregation/UI behavior unresolved |
+| Native in-memory classes and display order             | Partial validation-context offsets only; class ownership and ordering algorithms unresolved                                              |
 
 For future parser work, retain field definitions and flags, expose code/group
 references without conflating them with translated labels, and preserve native
@@ -317,9 +317,9 @@ observed application execution or exhaustive support for every IVT version.
 Demo content identities for reproducing F1 (under
 `C:\Program Files\Beyond 2020\Professional Browser\Data`):
 
-| File | SHA-256 |
-| --- | --- |
-| Sample.ivt | `6268c7b79e4720360ba960cc5ab45643fa572b9fb265305646977185b886ca01` |
-| People.ivt | `3c69fe81afee0ad5ef6775b3182b5a084bea6c5719e2829069bbaf5d87d27ef1` |
+| File         | SHA-256                                                            |
+| ------------ | ------------------------------------------------------------------ |
+| Sample.ivt   | `6268c7b79e4720360ba960cc5ab45643fa572b9fb265305646977185b886ca01` |
+| People.ivt   | `3c69fe81afee0ad5ef6775b3182b5a084bea6c5719e2829069bbaf5d87d27ef1` |
 | Products.ivt | `ba4e6142cf9bafa1520dcb119b2fd9b8a14459f137d383e7926c98bd35818a4d` |
-| Oecd.ivt | `ed23e0b5d8c869296889e75bf2da3eb4b2db6f7b828f7057bcb606afcb4b8297` |
+| Oecd.ivt     | `ed23e0b5d8c869296889e75bf2da3eb4b2db6f7b828f7057bcb606afcb4b8297` |

@@ -5,12 +5,12 @@ from __future__ import annotations
 import json
 import os
 import queue
-import shutil
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 from statistics import median
@@ -32,47 +32,28 @@ def discover_files(directory: Path) -> list[Path]:
     )
 
 
-def find_rscript() -> str:
-    if executable := shutil.which("Rscript"):
-        return executable
-    home = os.environ.get("R_HOME")
-    if not home and os.name == "nt":
-        import winreg
-
-        for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
-            try:
-                with winreg.OpenKey(hive, r"Software\R-core\R") as key:
-                    home = winreg.QueryValueEx(key, "InstallPath")[0]
-                break
-            except OSError:
-                continue
-    if home:
-        path = Path(home) / "bin" / ("Rscript.exe" if os.name == "nt" else "Rscript")
-        if path.is_file():
-            return str(path)
-    raise BackendUnavailable("Install R and put Rscript on PATH, or set R_HOME.")
-
-
 def worker_command(
     backend: str,
     operation: str,
     path: Path,
     *,
-    rscript: str | None = None,
     r_library: Path | None = None,
 ) -> list[str]:
     if backend not in BACKENDS or operation not in OPERATIONS:
         raise ValueError(f"Unknown benchmark: {backend}/{operation}")
-    if backend == "pyivt":
-        return [sys.executable, "-m", "benchmarks.worker", operation, str(path)]
-    return [
-        rscript or find_rscript(),
-        "--vanilla",
-        str(ROOT / "benchmarks" / "worker.R"),
+    command = [
+        sys.executable,
+        "-m",
+        "benchmarks.worker",
+        backend,
         operation,
         str(path),
-        str((r_library or ROOT / ".cache" / "generate_expected_parquet").resolve()),
     ]
+    if backend == "canivt":
+        command.append(
+            str((r_library or ROOT / ".cache" / "generate_expected_parquet").resolve())
+        )
+    return command
 
 
 def measure(
@@ -103,8 +84,11 @@ def measure(
             errors="replace",
         )
 
+        stdin, stdout = process.stdin, process.stdout
+        assert stdin is not None and stdout is not None
+
         def read_stdout() -> None:
-            for line in process.stdout:
+            for line in stdout:
                 messages.put(line)
             messages.put(None)
 
@@ -112,7 +96,7 @@ def measure(
         reader.start()
         deadline = time.monotonic() + timeout
 
-        def receive(poll=None) -> dict:
+        def receive(poll: Callable[[], None] | None = None) -> dict:
             while time.monotonic() < deadline:
                 if poll is not None:
                     poll()
@@ -137,7 +121,7 @@ def measure(
             ready = receive()
             if ready.get("ready") is not True:
                 raise RuntimeError(f"Unexpected worker readiness: {ready}")
-            # Windows venv Python and Rscript can be launchers. The worker
+            # Windows venv Python can be a launcher. The worker
             # reports the PID that actually owns Rust/R/Arrow allocations.
             monitored = psutil.Process(ready["pid"])
             baseline = monitored.memory_info().rss
@@ -152,15 +136,15 @@ def measure(
                     peak = max(peak, monitored.memory_info().rss)
                     samples += 1
 
-            process.stdin.write("GO\n")
-            process.stdin.flush()
+            stdin.write("GO\n")
+            stdin.flush()
             result = receive(sample)
             sample()
             for key in ("wall_seconds", "cpu_seconds"):
                 if not isinstance(result.get(key), (float, int)) or result[key] < 0:
                     raise RuntimeError(f"Invalid worker measurement: {result}")
-            process.stdin.write("ACK\n")
-            process.stdin.flush()
+            stdin.write("ACK\n")
+            stdin.flush()
             process.wait(timeout=max(0.01, deadline - time.monotonic()))
             if process.returncode:
                 errors.seek(0)
@@ -184,7 +168,7 @@ def measure(
             }
         finally:
             if process.poll() is None:
-                # Killing just Rscript or a venv launcher can orphan the worker.
+                # Killing just a venv launcher can orphan the worker.
                 with suppress(psutil.NoSuchProcess):
                     for child in psutil.Process(process.pid).children(recursive=True):
                         with suppress(psutil.NoSuchProcess):
@@ -192,8 +176,8 @@ def measure(
                 process.kill()
             process.wait()
             reader.join(timeout=1)
-            process.stdin.close()
-            process.stdout.close()
+            stdin.close()
+            stdout.close()
 
 
 def summarize(samples: list[dict]) -> dict:

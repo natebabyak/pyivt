@@ -25,7 +25,6 @@ def pytest_addoption(parser):
     group.addoption("--ivt-rounds", type=int, default=3)
     group.addoption("--ivt-timeout", type=float, default=300)
     group.addoption("--ivt-sample-interval", type=float, default=0.001)
-    group.addoption("--ivt-rscript", default=None)
     group.addoption("--ivt-r-library", type=Path, default=None)
     group.addoption("--ivt-report", type=Path, default=None)
 
@@ -78,7 +77,6 @@ def run_benchmark(request, benchmark_file, backend):
                 backend,
                 operation,
                 benchmark_file,
-                rscript=config.getoption("--ivt-rscript"),
                 r_library=config.getoption("--ivt-r-library"),
             )
             for _ in range(config.getoption("--ivt-rounds")):

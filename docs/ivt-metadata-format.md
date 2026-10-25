@@ -55,12 +55,12 @@ u32 entry count, and u16 flags. Each directory entry contains a u32 component
 offset and two u16 length/allocation values. Empty entries retain their
 ordinals; compacting them changes the meaning of references.
 
-| Header offset | Directory |
-| --- | --- |
-| 544 | Master/table metadata |
-| 698 | Missing-value legend |
-| 712 | Table annotation/footnote legend |
-| 824 + 14 × axis | Dimension metadata |
+| Header offset   | Directory                        |
+| --------------- | -------------------------------- |
+| 544             | Master/table metadata            |
+| 698             | Missing-value legend             |
+| 712             | Table annotation/footnote legend |
+| 824 + 14 × axis | Dimension metadata               |
 
 Master entry 7 is a byte matrix with 32-byte language rows. The sampled files
 use language IDs 1 (English), 2 (French), and 6 (Spanish). Row u32 offsets are
@@ -75,10 +75,10 @@ following the matrix matters.
 Native loader `0x140230be0` validates component payload sizes `0x304`,
 `0x3cc`, and the older `0xc3`. It copies fields from the expanded payload:
 
-| Payload size | Title offset/width | Author offset/width | Category offset/width |
-| --- | --- | --- | --- |
-| 0x304 or 0x3cc | 7 / 255 | 0x106 / 255 | 0x205 / 255 |
-| 0xc3 | 7 / 60 | 0x43 / 64 | 0x83 / 64 |
+| Payload size   | Title offset/width | Author offset/width | Category offset/width |
+| -------------- | ------------------ | ------------------- | --------------------- |
+| 0x304 or 0x3cc | 7 / 255            | 0x106 / 255         | 0x205 / 255           |
+| 0xc3           | 7 / 60             | 0x43 / 64           | 0x83 / 64             |
 
 The payload begins with `FACET` and a two-byte version. Native anchors for
 the larger fields are `0x140230d9c`, `0x140230db5`, and `0x140230dcf`.

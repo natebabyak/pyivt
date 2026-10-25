@@ -169,11 +169,20 @@ Memory is sampled resident memory (RSS), including native allocations. Peak memo
 
 Tests automatically discover IVT files under `data`, including subdirectories.
 
-````bash
+```bash
 uv sync --group benchmark
 uv run maturin develop --release --skip-install
 uv run --group benchmark pytest benchmarks --ivt-report .cache/benchmarks/results.json
+```
 
+The `canivt` backend embeds R through `rpy2` in each Python worker. Install R
+and the R packages `canivt` and `arrow`; set `R_HOME` if R is not discovered.
+Use `--ivt-r-library PATH` to add an R package library (the default also searches
+the cache created by `scripts/generate_expected_parquet.py`). To benchmark only
+Python, pass `--ivt-backends pyivt`.
+
+The published results above used the previous standalone R worker. Rerun the
+benchmarks to compare memory usage with the embedded R runtime.
 
 ## Tests
 
@@ -188,7 +197,7 @@ tests still run without these references.
 
    ```bash
    uv run --no-project scripts/copy_test_inputs.py
-````
+   ```
 
 2. Generate expected test outputs
 
