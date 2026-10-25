@@ -1,6 +1,6 @@
 [project]
 name = "pyivt"
-version = "0.0.2"
+version = "0.0.3"
 description = "Read Statistics Canada Beyond 20/20 .ivt tables: metadata and Apache Arrow export"
 readme = "README.md"
 requires-python = ">=3.10"

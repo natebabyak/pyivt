@@ -7,22 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-10-25
+
 ### Changed
 
 - Flattened time series onto `IvtMetadata`: `frequency`, `start_date`, `end_date` replace nested `time_series` / `TimeSeries`
-- Dimension bilingual fields are EN/FR-symmetric: `name_en`, `description_en`, `members_en` (with existing `*_fr`); removed public `is_geography`
+- Dimension `name`, `description`, and `notes` now use `LocalizedText`; `members` and `geographies.geo_label` use the new `LocalizedLabels` type, with `.en` / `.fr` and language-key access
+- `Ivt.to_arrow()` is parameterless and exports the complete typed member grid, including missing cells, statuses, and raw annotations
+- Tests discover local IVT inputs; benchmarks run isolated workers with an optional embedded R backend for `canivt` comparisons
 
 ### Added
 
-- `tests/scripts/beyond_summary_expected.py` — optional pywinauto + BeautifulSoup helper that scrapes Beyond File Summary HTML into the golden metadata shape (`uv sync --group beyond`)
+- Scripts for downloading test inputs and generating metadata and Parquet references
 - Local dev/test deps managed with uv (`dependency-groups`, `uv.lock`; `uv sync` installs the default `dev` group)
+- Optional benchmark dependencies (`uv sync --group benchmark`)
+
+### Fixed
+
+- Reading paged IVT metadata directories and legacy missing-value entries
+- Package, Rust crate, and runtime version identifiers now agree
 
 ### Migration
 
 - Replace `meta.time_series.frequency` / `.start` / `.end` with `meta.frequency` / `meta.start_date` / `meta.end_date`
-- Replace `dim.name` / `dim.description` / `dim.members` with `dim.name_en` / `dim.description_en` / `dim.members_en`
+- Replace dimension `_en` / `_fr` fields with `dim.name.en`, `dim.description.fr`, `dim.members.en`, and `dim.notes.fr` (or language-key access)
+- Replace `geographies.geo_label_en` / `geo_label_fr` with `geographies.geo_label.en` / `.fr`
 - Drop use of `dim.is_geography` (use `dim.type_label == "Geographic"` or `layout.geo_dim` instead)
 - `from pyivt import TimeSeries` is removed
+- Remove `complete`, `max_cells`, `labels`, and `language` arguments from `to_arrow()` calls
 
 ## [0.0.2] - 2026-10-20
 
@@ -64,4 +76,7 @@ First public release: Rust/PyO3 reader for Statistics Canada Beyond 20/20 `.ivt`
 - Demo IVT tests skip in CI unless Beyond sample files are linked locally
 - No CLI or catalogue download; write Parquet yourself via `pyarrow` / Polars / pandas
 
+[Unreleased]: https://github.com/natebabyak/pyivt/compare/v0.0.3...HEAD
+[0.0.3]: https://github.com/natebabyak/pyivt/compare/v0.0.2...v0.0.3
+[0.0.2]: https://github.com/natebabyak/pyivt/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/natebabyak/pyivt/releases/tag/v0.0.1
