@@ -1,4 +1,5 @@
 /.cache/generate_expected_parquet/
+/.cache/benchmarks/
 /.pytest_cache/
 /.ruff_cache/
 /.venv/
@@ -6,6 +7,7 @@
 /dist/
 __pycache__/
 /python/pyivt/_native.pyd
+/python/pyivt/*.pdb
 /target/
 /tests/expected/*
 !/tests/expected/47ffb2b43e083b83853c814467f0ca1c4fa09bffe2e0df7594f780108589de1c.json

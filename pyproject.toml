@@ -50,7 +50,7 @@ dev = [
 ]
 
 benchmark = [
-  "rpy2>=3.0",
+  "psutil>=5.9",
 ]
 
 [build-system]
@@ -63,7 +63,7 @@ module-name = "pyivt._native"
 python-source = "python"
 
 [tool.pytest.ini_options]
-pythonpath = ["python"]
+pythonpath = ["python", "."]
 testpaths = ["tests"]
 
 [tool.uv]
