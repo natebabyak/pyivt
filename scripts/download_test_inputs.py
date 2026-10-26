@@ -3,13 +3,45 @@
 import argparse
 import hashlib
 import json
+import sys
+import time
 from io import BytesIO
 from pathlib import Path
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from zipfile import ZipFile, is_zipfile
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+
+
+def download(url: str, *, attempts: int = 3) -> bytes:
+    """Retry transient HTTP and transport failures, including response read timeouts."""
+    for attempt in range(1, attempts + 1):
+        try:
+            request = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urlopen(request, timeout=60) as response:
+                return response.read()
+        except (HTTPError, URLError, TimeoutError, ConnectionError) as error:
+            if isinstance(error, HTTPError) and error.code not in {
+                408,
+                429,
+                500,
+                502,
+                503,
+                504,
+            }:
+                raise
+            if attempt == attempts:
+                raise
+            delay = 2 ** (attempt - 1)
+            print(
+                f"Download failed ({error}); retrying {url} "
+                f"in {delay}s (attempt {attempt + 1}/{attempts})",
+                file=sys.stderr,
+                flush=True,
+            )
+            time.sleep(delay)
+    raise ValueError("attempts must be positive")
 
 
 def main() -> int:
@@ -41,10 +73,8 @@ def main() -> int:
             if path.is_file() or path.is_symlink():
                 path.unlink()
 
-    headers = {"User-Agent": "Mozilla/5.0"}
     index_url = "https://www150.statcan.gc.ca/t1/wds/rest/getAllCubesListLite"
-    with urlopen(Request(index_url, headers=headers), timeout=60) as response:
-        tables = json.load(response)
+    tables = json.loads(download(index_url))
 
     downloaded = set()
     for table in tables:
@@ -53,12 +83,17 @@ def main() -> int:
             continue
         url = f"https://www150.statcan.gc.ca/n1/en/tbl/b2020/{product_id}.zip"
         try:
-            with urlopen(Request(url, headers=headers), timeout=60) as response:
-                payload = BytesIO(response.read())
+            payload = BytesIO(download(url))
         except HTTPError as error:
             if error.code == 404:
                 continue
-            raise
+            if error.code not in {408, 429, 500, 502, 503, 504}:
+                raise
+            print(f"Skipping {url} after retries: {error}", file=sys.stderr)
+            continue
+        except (URLError, TimeoutError, ConnectionError) as error:
+            print(f"Skipping {url} after retries: {error}", file=sys.stderr)
+            continue
         if not is_zipfile(payload):
             continue
         with ZipFile(payload) as archive:
