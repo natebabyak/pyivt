@@ -177,7 +177,7 @@ pub fn tidy_arrays(
                 .map(|code| {
                     legends
                         .get(code)
-                        .and_then(|m| m.label.en.clone().or(m.label.fr.clone()))
+                        .and_then(|m| m.description.en.clone().or(m.description.fr.clone()))
                 })
                 .collect(),
         ),

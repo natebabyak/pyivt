@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Footnotes now contain both translations in `description: LocalizedText`, with one object per legend entry
+- Missing-value `label` is renamed to `description`
+- Dimension `type` now uses `DimensionType`, a literal enum of `"geographic"`, `"normal"`, and `"time_series"`; `type_label` is removed
+- Editor and runtime documentation now includes Markdown examples; stubs describe metadata fields as read-only properties
+
+### Fixed
+
+- Keyword parsing preserves all NUL-separated or fixed-width keyword strings, including compressed records and localized language references
+- Blank author and category translations return `None`
+
+### Migration
+
+- Replace `footnote.text` and language-specific rows with `footnote.description.en` / `.fr` (or language-key access); `footnote.language` is removed
+- Replace `missing.label` with `missing.description`
+- Replace numeric dimension types and `dim.type_label` checks with `dim.type == "geographic"`, `"normal"`, or `"time_series"`
+- Treat blank author/category translations as `None` instead of `""`
+
 ## [0.0.3] - 2026-10-25
 
 ### Changed

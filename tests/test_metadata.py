@@ -54,12 +54,13 @@ def _load_expect(case: SimpleNamespace) -> dict:
 
 
 def _expect_slice(expect: dict) -> dict:
-    return {
-        key: _notes_sentences(expect[key])
-        if key in ("notes_en", "notes_fr")
-        else expect[key]
-        for key in COMPARED_KEYS
-    }
+    """Normalize Beyond's blank fields to the Python optional-value contract."""
+    result = {key: expect[key] for key in COMPARED_KEYS}
+    for key in ("notes_en", "notes_fr"):
+        result[key] = _notes_sentences(result[key])
+    for key in ("author_en", "author_fr", "category_en", "category_fr"):
+        result[key] = result[key] or None
+    return result
 
 
 def _notes_sentences(text: str | None) -> tuple[str, ...] | None:
@@ -77,31 +78,23 @@ def _keywords_list(text: str | None) -> list[str]:
 
 
 def _footnotes_beyond(meta: IvtMetadata) -> list[dict]:
-    """Pair EN/FR footnote rows into Beyond {symbol, description_*} shape."""
-    by_symbol: dict[str, dict] = {}
-    order: list[str] = []
-    for footnote in meta.footnotes:
-        symbol = footnote.symbol
-        if symbol not in by_symbol:
-            by_symbol[symbol] = {
-                "symbol": symbol,
-                "description_en": None,
-                "description_fr": None,
-            }
-            order.append(symbol)
-        if footnote.language == "fr":
-            by_symbol[symbol]["description_fr"] = footnote.text
-        else:
-            by_symbol[symbol]["description_en"] = footnote.text
-    return [by_symbol[symbol] for symbol in order]
+    """Project localized legend entries into Beyond's description_* shape."""
+    return [
+        {
+            "symbol": footnote.symbol,
+            "description_en": footnote.description.en,
+            "description_fr": footnote.description.fr,
+        }
+        for footnote in meta.footnotes
+    ]
 
 
 def _missing_values_beyond(meta: IvtMetadata) -> list[dict]:
     return [
         {
             "symbol": missing.symbol,
-            "description_en": missing.label.en,
-            "description_fr": missing.label.fr,
+            "description_en": missing.description.en,
+            "description_fr": missing.description.fr,
         }
         for missing in meta.missing_values
     ]
@@ -140,7 +133,11 @@ def snapshot_comparable(meta: IvtMetadata, path: Path) -> dict:
                 "name_en": dimension.name.en,
                 "name_fr": dimension.name.fr,
                 "items": dimension.count,
-                "type": dimension.type_label,
+                "type": {
+                    "geographic": "Geographic",
+                    "normal": "Normal",
+                    "time_series": "Time Series",
+                }[dimension.type],
                 "description_en": dimension.description.en,
                 "description_fr": dimension.description.fr,
             }
@@ -263,6 +260,8 @@ def test_metadata_localized_access(demo_ivt):
             [dimension.name, dimension.description, dimension.members, dimension.notes]
         )
         assert dimension.name.en is not None
+        assert dimension.type in ("geographic", "normal", "time_series")
+        assert not hasattr(dimension, "type_label")
         for old_name in (
             "name_en",
             "name_fr",
@@ -276,7 +275,13 @@ def test_metadata_localized_access(demo_ivt):
             assert not hasattr(dimension, old_name)
     fields.append(meta.geographies.geo_label)
     assert not hasattr(meta.geographies, "geo_label_fr")
-    fields.extend(missing.label for missing in meta.missing_values)
+    fields.extend(missing.description for missing in meta.missing_values)
+    fields.extend(note.description for note in meta.footnotes)
+    for note in meta.footnotes:
+        assert not hasattr(note, "text")
+        assert not hasattr(note, "language")
+    for missing in meta.missing_values:
+        assert not hasattr(missing, "label")
     for localized in fields:
         for language in ("en", "fr"):
             assert localized[language] == getattr(localized, language)
@@ -323,3 +328,122 @@ def test_paged_metadata_directory_matches_flat(slot, tmp_path):
         ivt = open_ivt(source)
         assert snapshot_comparable(ivt.metadata, changed_path) == expected
         assert ivt.to_arrow().equals(open_ivt(original).to_arrow())
+
+
+@pytest.fixture
+def metadata_bytes():
+    path = next((Path(__file__).parent.parent / "data").glob("625ff*.ivt"), None)
+    if path is None:
+        pytest.skip("small census fixture is not available")
+    return path.read_bytes()
+
+
+def _replace_records(data: bytes, slot: int, records: dict[int, bytes]) -> bytes:
+    """Relocate a fixture's flat directory, preserving holes and entry ordinals."""
+    changed = bytearray(data)
+    offset, _, count, flags = struct.unpack_from("<IIIH", changed, slot)
+    assert flags & 1 == 0
+    entries = bytearray(changed[offset : offset + count * 8])
+    count = max(count, max(records) + 1)
+    entries.extend(bytes(count * 8 - len(entries)))
+    for index, payload in records.items():
+        struct.pack_into(
+            "<IHH", entries, index * 8, len(changed), len(payload), len(payload)
+        )
+        changed.extend(payload)
+    struct.pack_into("<IIIH", changed, slot, len(changed), count, count, flags)
+    changed.extend(entries)
+    return bytes(changed)
+
+
+def _text_record(text: bytes) -> bytes:
+    return struct.pack("<BBH", 1, 1, len(text)) + text
+
+
+def _zero_suppress(record: bytes) -> bytes:
+    """Encode a byte component with the native zero-suppression bitmap."""
+    header = 2 + record[1] * 2
+    body = record[header:]
+    bitmap = bytearray(((len(body) + 15) // 16) * 2)
+    for i, byte in enumerate(body):
+        if byte:
+            word = struct.unpack_from("<H", bitmap, (i // 16) * 2)[0]
+            struct.pack_into("<H", bitmap, (i // 16) * 2, word | (0x8000 >> (i % 16)))
+    return (
+        bytes([record[0] | 0x80])
+        + record[1:header]
+        + bitmap
+        + bytes(filter(None, body))
+    )
+
+
+@pytest.mark.parametrize("encoding", ["vector", "matrix", "compressed"])
+def test_keywords_preserve_all_translations(metadata_bytes, tmp_path, encoding):
+    english = _text_record(b" population\0census\0\0")
+    french = _text_record(b"recensement\0soci\xe9t\xe9\0")
+    if encoding in ("matrix", "compressed"):
+        english = (
+            struct.pack("<BBHH", 1, 2, 2, 12) + b"population\0\0census\0\0\0\0\0\0"
+        )
+        french = (
+            struct.pack("<BBHH", 1, 2, 2, 12) + b"recensement\0soci\xe9t\xe9\0\0\0\0\0"
+        )
+    if encoding == "compressed":
+        english, french = _zero_suppress(english), _zero_suppress(french)
+    matrix = struct.pack("<BBHH", 1, 2, 2, 32)
+    # Reversed language rows and a French record beyond the original directory.
+    for language, facet, notes, keywords in [(2, 9, 10, 11), (1, 0, 3, 4)]:
+        matrix += struct.pack("<8I", language, facet, notes, keywords, 0, 0, 0, 0)
+    data = _replace_records(metadata_bytes, 544, {4: english, 7: matrix, 11: french})
+    path = tmp_path / "keywords.ivt"
+    path.write_bytes(data)
+    for source in (data, path):
+        keywords = open_ivt(source).metadata.keywords
+        assert keywords.en == "population, census"
+        assert keywords["fr"] == "recensement, société"
+
+
+def test_blank_summary_fields_are_none(metadata_bytes, tmp_path):
+    facet = bytearray(_text_record(bytes(0x304)))
+    facet[4:11] = b"FACET04"
+    facet[11:16] = b"Title"
+    facet[266:269] = b" \t "
+    facet[521:524] = b" \r "
+    data = _replace_records(
+        metadata_bytes, 544, {0: bytes(facet), 4: _text_record(b"\0 \t\0")}
+    )
+    path = tmp_path / "blank.ivt"
+    path.write_bytes(data)
+    for source in (data, path):
+        meta = open_ivt(source).metadata
+        assert meta.author.en is None
+        assert meta.author.fr == "Statistique Canada"
+        assert meta.category.en is None
+        assert meta.category.fr is None
+        assert meta.keywords.en is None
+        assert meta.keywords.fr is None
+
+
+@pytest.mark.parametrize("missing_language", ["en", "fr"])
+def test_footnote_missing_translation_is_none(
+    metadata_bytes, tmp_path, missing_language
+):
+    original = open_ivt(metadata_bytes).metadata.footnotes
+    directory = struct.unpack_from("<I", metadata_bytes, 712)[0]
+    offset, length = struct.unpack_from("<IH", metadata_bytes, directory)
+    index = bytearray(metadata_bytes[offset : offset + length])
+    struct.pack_into("<I", index, 6 + (4 if missing_language == "fr" else 0), 0)
+    data = _replace_records(metadata_bytes, 712, {0: index})
+    path = tmp_path / "footnotes.ivt"
+    path.write_bytes(data)
+    present_language = "fr" if missing_language == "en" else "en"
+    for source in (data, path):
+        notes = open_ivt(source).metadata.footnotes
+        assert len(notes) == len(original)
+        assert notes[0].symbol == original[0].symbol
+        assert notes[0].number == original[0].number
+        assert notes[0].description[missing_language] is None
+        assert (
+            notes[0].description[present_language]
+            == original[0].description[present_language]
+        )

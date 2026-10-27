@@ -30,6 +30,9 @@ jobs:
       - name: Format
         run: uv run ruff format --check .
 
+      - name: Type check public API
+        run: uv run ty check python tests/typing
+
       - name: Rust tests
         run: cargo test
 

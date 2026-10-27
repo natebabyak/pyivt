@@ -93,9 +93,44 @@ for dimension in meta.dimensions:
 print(meta.geographies.geo_label.en, meta.geographies.geo_label["fr"])
 ```
 
-Each translation is `None` when unavailable. Unsupported language keys raise
-`KeyError`. Dimension `name`, `description`, `members`, and `notes` replace the
-previous `_en` / `_fr` fields; `geographies.geo_label` now holds both languages.
+Each translation is `None` when unavailable. Blank authors, categories, and
+keywords also return `None`. Unsupported language keys raise `KeyError`.
+Keyword strings stored separately in the file are joined with `", "` in file
+order; `meta.keywords.en` and `.fr` remain optional strings.
+
+`dimension.type` is a typed string with three possible values: `"geographic"`,
+`"normal"`, and `"time_series"`. The `DimensionType` alias is available for your
+own annotations:
+
+```python
+from pyivt import DimensionType
+
+kind: DimensionType = "time_series"
+time_axes = [dimension for dimension in meta.dimensions if dimension.type == kind]
+```
+
+Each footnote contains both translations in `description`. Missing-value entries
+use the same field name:
+
+```python
+for footnote in meta.footnotes:
+    print(footnote.symbol, footnote.description.en, footnote.description["fr"])
+
+for missing in meta.missing_values:
+    print(missing.code, missing.symbol, missing.description.en)
+```
+
+Footnotes follow legend order and appear once per entry. A missing translation
+is `None`. Numbered footnotes embedded in table or dimension notes remain in
+those notes.
+
+### Editor Support
+
+The package includes type stubs, read-only property definitions, and Markdown
+hover documentation with Python snippets. Select the Python environment where
+`pyivt` is installed to get completions for metadata fields and the allowed
+`dimension.type` values. See [the editor guide](docs/editors.md) for examples,
+optional-value handling, and migration notes.
 
 ### Exporting Data
 

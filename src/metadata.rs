@@ -40,18 +40,34 @@ static UNIVERSE_HEAD: Lazy<Regex> = Lazy::new(|| Regex::new(r"Universe:\s*([^\r\
 static PID_FALLBACK: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"\b(\d{2}-\d{3}-[A-Z]\d{7,}|\d{8})\b").unwrap());
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DimensionType {
+    Geographic,
+    Normal,
+    TimeSeries,
+}
+
+impl DimensionType {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Geographic => "geographic",
+            Self::Normal => "normal",
+            Self::TimeSeries => "time_series",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Dimension {
     pub name_en: String,
     pub name_fr: Option<String>,
     /// Beyond File Summary "Items" (map member list when longer than the cube).
     pub count: i64,
-    pub type_code: i64,
+    pub dimension_type: DimensionType,
     /// Internal: geo dim flag for tidy export (not exposed to Python).
     pub is_geography: bool,
     pub description_en: Option<String>,
     pub description_fr: Option<String>,
-    pub type_label: String,
     pub members_en: Option<Vec<String>>,
     pub members_fr: Option<Vec<String>>,
     /// Dimension-level notes referenced by the summary language rows.
@@ -64,9 +80,8 @@ pub struct Dimension {
 pub struct Footnote {
     /// Beyond File Summary marker, e.g. `(1)` or `(§)`.
     pub symbol: String,
-    pub language: String,
     pub number: i64,
-    pub text: String,
+    pub description: LocalizedText,
     pub scope: Option<String>,
     pub dimension: Option<String>,
     pub member_id: Option<i64>,
@@ -95,7 +110,7 @@ impl TimeSeriesInfo {
 #[derive(Debug, Clone)]
 pub struct MissingValue {
     pub symbol: String,
-    pub label: LocalizedText,
+    pub description: LocalizedText,
     pub code: Option<i64>,
 }
 
@@ -301,14 +316,17 @@ fn parse_facet_summary(data: &[u8]) -> HashMap<&'static str, Option<String>> {
                 0xc3 => [(11, 60), (71, 64), (135, 64)],
                 _ => return None,
             };
-            Some(layout.map(|(offset, length)| {
-                let raw = &decoded[offset..offset + length];
+            let mut fields = Vec::with_capacity(layout.len());
+            for (offset, length) in layout {
+                let raw = decoded.get(offset..offset + length)?;
                 let end = raw.iter().position(|&b| b == 0).unwrap_or(raw.len());
-                latin1(&raw[..end]).trim().to_string()
-            }))
+                let text = latin1(&raw[..end]).trim().to_string();
+                fields.push((!text.is_empty()).then_some(text));
+            }
+            Some(fields)
         });
         for (i, key) in keys.into_iter().enumerate() {
-            out.insert(key, fields.as_ref().map(|fields| fields[i].clone()));
+            out.insert(key, fields.as_ref().and_then(|fields| fields[i].clone()));
         }
     }
     out
@@ -362,10 +380,42 @@ fn parse_identity_notes(data: &[u8]) -> (Option<String>, Option<String>, Option<
     (en, fr, product_id)
 }
 
-fn parse_keywords(data: &[u8], _product_id: Option<&str>) -> LocalizedText {
+fn keyword_text(data: &[u8], language: u32) -> Option<String> {
+    let decoded =
+        crate::decode::decompress_component(summary_language_record(data, language, 12)?).ok()?;
+    // Keywords can be a NUL-separated byte vector or a matrix of fixed-width
+    // strings. They are not notes: stopping at the first NUL loses keywords.
+    let keywords: Vec<String> = match decoded.get(..2)? {
+        [1, 1] => decoded.get(4..)?.split(|&b| b == 0).map(latin1).collect(),
+        [1, 2] => {
+            let width = u16(&decoded, 4) as usize;
+            if width == 0 {
+                return None;
+            }
+            decoded
+                .get(6..)?
+                .chunks_exact(width)
+                .map(|row| {
+                    let end = row.iter().position(|&b| b == 0).unwrap_or(row.len());
+                    latin1(&row[..end])
+                })
+                .collect()
+        }
+        _ => return None,
+    };
+    let text = keywords
+        .iter()
+        .map(|word| word.trim())
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join(", ");
+    (!text.is_empty()).then_some(text)
+}
+
+fn parse_keywords(data: &[u8]) -> LocalizedText {
     LocalizedText {
-        en: summary_text(data, 1, 12),
-        fr: summary_text(data, 2, 12),
+        en: keyword_text(data, 1),
+        fr: keyword_text(data, 2),
     }
 }
 
@@ -407,14 +457,14 @@ fn parse_time_series(data: &[u8]) -> Option<TimeSeriesInfo> {
     })
 }
 
-fn type_label_for(d: &DimDesc) -> String {
+fn dimension_type_for(d: &DimDesc) -> DimensionType {
     if d.type_code == 6 || TIME_SERIES_NAME_RE.is_match(&d.name) {
-        return "Time Series".into();
+        return DimensionType::TimeSeries;
     }
     if d.double01 || d.type_code == 0x12 {
-        return "Geographic".into();
+        return DimensionType::Geographic;
     }
-    "Normal".into()
+    DimensionType::Normal
 }
 
 fn read_only_flag(data: &[u8]) -> bool {
@@ -686,19 +736,14 @@ fn footnotes(data: &[u8]) -> Vec<Footnote> {
         let Some(symbol) = beyond_footnote_symbol(&row.symbol) else {
             continue;
         };
-        for (language, text) in [("en", row.label.en), ("fr", row.label.fr)] {
-            if let Some(text) = text {
-                out.push(Footnote {
-                    symbol: symbol.clone(),
-                    language: language.into(),
-                    number: row.code.unwrap_or(0),
-                    text,
-                    scope: None,
-                    dimension: None,
-                    member_id: None,
-                });
-            }
-        }
+        out.push(Footnote {
+            symbol,
+            number: row.code.unwrap_or(0),
+            description: row.description,
+            scope: None,
+            dimension: None,
+            member_id: None,
+        });
     }
     out
 }
@@ -860,7 +905,7 @@ fn legend_values(data: &[u8], slot: usize, trim_short_period: bool) -> Vec<Missi
         });
         out.push(MissingValue {
             symbol: symbol.unwrap(),
-            label: LocalizedText { en, fr },
+            description: LocalizedText { en, fr },
             code: Some(code as i64),
         });
     }
@@ -893,11 +938,10 @@ pub fn build_dimensions(data: &[u8], desc: &Descriptor) -> Vec<Dimension> {
             name_en,
             name_fr,
             count: items,
-            type_code: d.type_code,
+            dimension_type: dimension_type_for(d),
             is_geography: is_geo,
             description_en,
             description_fr,
-            type_label: type_label_for(d),
             members_en,
             members_fr,
             notes_en,
@@ -966,7 +1010,7 @@ fn build_metadata_memory(
     let info = parse_table_identity(data);
     let (notes_en, notes_fr, notes_pid) = parse_identity_notes(data);
     let product_id = info.get("product_id").cloned().flatten().or(notes_pid);
-    let keywords = parse_keywords(data, product_id.as_deref());
+    let keywords = parse_keywords(data);
     let number_of_datapoints = summary_datapoints(&desc);
     let (frequency, start_date, end_date) = parse_time_series(data)
         .map(TimeSeriesInfo::into_fields)
@@ -1155,4 +1199,102 @@ fn geo_from_source(
     }
     let catalog = metadata_catalog(source, false, true, &[], false)?;
     Ok(geo_from_dir(&catalog, dim, slot_index))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn master_fixture(records: &[(usize, Vec<u8>)]) -> Vec<u8> {
+        let count = records.iter().map(|(i, _)| i + 1).max().unwrap_or(0);
+        let mut data = vec![0; 1024 + count * 8];
+        data[HDR_MASTER_PTR..HDR_MASTER_PTR + 4].copy_from_slice(&1024u32.to_le_bytes());
+        data[HDR_MASTER_PTR + 8..HDR_MASTER_PTR + 12]
+            .copy_from_slice(&(count as u32).to_le_bytes());
+        for (index, record) in records {
+            let at = 1024 + index * 8;
+            let offset = data.len() as u32;
+            data[at..at + 4].copy_from_slice(&offset.to_le_bytes());
+            data[at + 4..at + 6].copy_from_slice(&(record.len() as u16).to_le_bytes());
+            data.extend_from_slice(record);
+        }
+        data
+    }
+
+    fn text_record(text: &[u8]) -> Vec<u8> {
+        let mut record = vec![1, 1];
+        record.extend_from_slice(&(text.len() as u16).to_le_bytes());
+        record.extend_from_slice(text);
+        record
+    }
+
+    #[test]
+    fn keywords_preserve_all_terms_and_follow_language_references() {
+        let mut matrix = vec![1, 2, 2, 0, 32, 0];
+        for (language, keywords) in [(2u32, 11u32), (1, 4)] {
+            let mut row = [0; 32];
+            row[..4].copy_from_slice(&language.to_le_bytes());
+            row[12..16].copy_from_slice(&keywords.to_le_bytes());
+            matrix.extend_from_slice(&row);
+        }
+        let mut french = vec![1, 2, 2, 0, 12, 0];
+        french.extend_from_slice(b"population\0\0recensement\0");
+        let data = master_fixture(&[
+            (4, text_record(b" population\0census\0\0")),
+            (7, matrix),
+            (11, french),
+        ]);
+        let keywords = parse_keywords(&data);
+        assert_eq!(keywords.en.as_deref(), Some("population, census"));
+        assert_eq!(keywords.fr.as_deref(), Some("population, recensement"));
+    }
+
+    #[test]
+    fn keywords_absent_blank_or_malformed_are_none() {
+        for record in [
+            Vec::new(),
+            text_record(b"\0 \t\0"),
+            vec![1, 2, 0, 0, 0, 0],
+            vec![1, 2, 2, 0, 12, 0, b'A'],
+            vec![4, 1, 1, 0, 1, 0, 0, 0],
+        ] {
+            let keywords = parse_keywords(&master_fixture(&[(4, record)]));
+            assert!(keywords.en.is_none());
+            assert!(keywords.fr.is_none());
+        }
+    }
+
+    #[test]
+    fn facet_blank_fields_are_none_and_truncated_fields_do_not_panic() {
+        let mut facet = text_record(&vec![0; 0x304]);
+        facet[4..11].copy_from_slice(b"FACET04");
+        facet[11..16].copy_from_slice(b"Title");
+        facet[266..269].copy_from_slice(b" \t ");
+        let parsed = parse_facet_summary(&master_fixture(&[(0, facet)]));
+        assert_eq!(parsed["title_en"].as_deref(), Some("Title"));
+        assert!(parsed["author_en"].is_none());
+        assert!(parsed["category_en"].is_none());
+        let truncated = text_record(b"FACET04");
+        let parsed = parse_facet_summary(&master_fixture(&[(0, truncated)]));
+        assert!(parsed["author_en"].is_none());
+    }
+
+    #[test]
+    fn dimension_types_are_a_closed_set() {
+        for (name, type_code, double01, expected) in [
+            ("Region", 0x12, false, "geographic"),
+            ("Region", 0, true, "geographic"),
+            ("Items", 0, false, "normal"),
+            ("TIME", 6, false, "time_series"),
+            ("Time Period", 0, false, "time_series"),
+        ] {
+            let dim = DimDesc {
+                name: name.into(),
+                count: 2,
+                type_code,
+                double01,
+            };
+            assert_eq!(dimension_type_for(&dim).as_str(), expected);
+        }
+    }
 }

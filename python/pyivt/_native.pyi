@@ -1,58 +1,53 @@
-"""Type stubs for the pyivt._native extension module."""
+"""Typed IVT reader with Markdown hover documentation and Python examples.
+
+```python
+import pyivt
+
+ivt = pyivt.open("table.ivt")
+print(ivt.metadata.title.en)
+table = ivt.to_arrow()
+```
+"""
 
 from os import PathLike
 from typing import BinaryIO
 
 import pyarrow as pa
 
+from pyivt._types import DimensionType
+
 class LocalizedText:
     """English and French versions of a metadata text field.
 
-    Parameters
-    ----------
-    en : str or None, optional
-        English text. Defaults to None.
-    fr : str or None, optional
-        French text. Defaults to None.
+    Both constructor arguments default to `None`. Translations are read-only:
+    use `.en` / `.fr` or `["en"]` / `["fr"]`. A missing translation is `None`,
+    with no automatic fallback. Unsupported language keys raise `KeyError`.
 
-    Notes
-    -----
-    Attributes are read-only. A missing translation is None; accessing one
-    language does not fall back to the other language.
-    Translations support .en / .fr and ["en"] / ["fr"]. Other keys raise KeyError.
-
-    Examples
-    --------
-    >>> text = LocalizedText(en="Population", fr="Population")
-    >>> text.en
-    'Population'
+    ```python
+    text = LocalizedText(en="Population", fr="Population")
+    english = text.en
+    french = text["fr"]
+    preferred = text.fr or text.en
+    ```
     """
 
-    en: str | None
-    """English text, or None when unavailable. No automatic translation fallback."""
-    fr: str | None
-    """French text, or None when unavailable. No automatic translation fallback."""
+    @property
+    def en(self) -> str | None:
+        """English text, or None when unavailable. No automatic translation fallback."""
+    @property
+    def fr(self) -> str | None:
+        """French text, or None when unavailable. No automatic translation fallback."""
 
     def __init__(self, en: str | None = None, fr: str | None = None) -> None:
         """English and French versions of a metadata text field.
 
-        Parameters
-        ----------
-        en : str or None, optional
-            English text. Defaults to None.
-        fr : str or None, optional
-            French text. Defaults to None.
+        - `en`: English text, default `None`.
+        - `fr`: French text, default `None`.
 
-        Notes
-        -----
-        Attributes are read-only. A missing translation is None; accessing one
-        language does not fall back to the other language.
-
-        Examples
-        --------
-        >>> text = LocalizedText(en="Population", fr="Population")
-        >>> text.en
-        'Population'
+        ```python
+        text = LocalizedText(en="Population", fr="Population")
+        print(text.en, text["fr"])
+        ```
         """
 
     def __getitem__(self, language: str) -> str | None:
@@ -63,12 +58,20 @@ class LocalizedLabels:
 
     Read-only translations support .en / .fr and ["en"] / ["fr"]. Missing
     translations are None; unsupported keys raise KeyError. Lists are copies.
+
+    ```python
+    labels = ivt.metadata.dimensions[0].members
+    for member_id, label in enumerate(labels.en or [], start=1):
+        print(member_id, label)
+    ```
     """
 
-    en: list[str] | None
-    """English labels, or None when unavailable."""
-    fr: list[str] | None
-    """French labels, or None when unavailable."""
+    @property
+    def en(self) -> list[str] | None:
+        """English labels, or None when unavailable."""
+    @property
+    def fr(self) -> list[str] | None:
+        """French labels, or None when unavailable."""
 
     def __init__(
         self, en: list[str] | None = None, fr: list[str] | None = None
@@ -85,63 +88,97 @@ class Dimension:
     Use Ivt.layout.slugs for the corresponding Arrow column names; display names
     in this object need not match those column names. Instances come from the
     reader and cannot be constructed directly.
+
+    ```python
+    for dim in ivt.metadata.dimensions:
+        print(dim.name.en, dim.type, dim.count)
+        if dim.type == "time_series":
+            print(dim.members.en)
+    ```
     """
 
-    name: LocalizedText
-    """Localized short name; English falls back to the descriptor name."""
-    count: int
-    """Declared number of members on this axis; member IDs run from 1 to count."""
-    type: int
-    """Raw IVT dimension type code. See type_label for a readable classification."""
-    description: LocalizedText
-    """Localized description; English falls back to name.en when unavailable."""
-    type_label: str
-    """Readable classification: 'Normal', 'Geographic', or 'Time Series'."""
-    members: LocalizedLabels
-    """Localized member labels in member ID order."""
-    notes: LocalizedText
-    """Localized dimension notes with normalized whitespace."""
-    ordinal: list[int] | None
-    """Optional member ordering information. Currently always None."""
+    @property
+    def name(self) -> LocalizedText:
+        """Localized short name; English falls back to the descriptor name."""
+    @property
+    def count(self) -> int:
+        """Declared number of members on this axis; member IDs run from 1 to count."""
+    @property
+    def type(self) -> DimensionType:
+        """Axis classification: `"geographic"`, `"normal"`, or `"time_series"`.
+
+        ```python
+        time_axes = [dim for dim in ivt.metadata.dimensions if dim.type == "time_series"]
+        ```
+        """
+    @property
+    def description(self) -> LocalizedText:
+        """Localized description; English falls back to name.en when unavailable."""
+    @property
+    def members(self) -> LocalizedLabels:
+        """Localized member labels in member ID order."""
+    @property
+    def notes(self) -> LocalizedText:
+        """Localized dimension notes with normalized whitespace."""
+    @property
+    def ordinal(self) -> list[int] | None:
+        """Optional member ordering information. Currently always None."""
 
 class Footnote:
-    """One language of an entry in the table's annotation legend.
+    """One annotation legend entry with English and French descriptions.
 
-    Obtain entries from IvtMetadata.footnotes. English and French descriptions
-    are separate objects sharing a symbol. Numbered notes embedded in table or
-    dimension notes are not extracted into this legend. Attributes are read-only;
-    instances cannot be constructed directly.
+    Obtain entries from `IvtMetadata.footnotes`, in legend order. Each entry
+    contains both translations in `description`; a missing translation is `None`.
+    Numbered notes embedded in table or dimension notes are separate from this
+    legend. Attributes are read-only; instances cannot be constructed directly.
+
+    ```python
+    for note in ivt.metadata.footnotes:
+        print(note.symbol, note.description.en, note.description["fr"])
+    ```
     """
 
-    symbol: str
-    """Display symbol identifying this annotation in the table legend."""
-    language: str
-    """Description language: 'en' or 'fr'."""
-    number: int
-    """Numeric legend entry code, or 0 if the code is unavailable."""
-    text: str
-    """Annotation description in the language given by language."""
-    scope: str | None
-    """Optional scope of the annotation. Currently always None."""
-    dimension: str | None
-    """Optional dimension association. Currently always None."""
-    member_id: int | None
-    """Optional member association. Currently always None."""
+    @property
+    def symbol(self) -> str:
+        """Display symbol identifying this annotation in the table legend."""
+    @property
+    def number(self) -> int:
+        """Numeric legend entry code, or 0 if the code is unavailable."""
+    @property
+    def description(self) -> LocalizedText:
+        """Localized annotation description; either translation may be `None`."""
+    @property
+    def scope(self) -> str | None:
+        """Optional scope of the annotation. Currently always None."""
+    @property
+    def dimension(self) -> str | None:
+        """Optional dimension association. Currently always None."""
+    @property
+    def member_id(self) -> int | None:
+        """Optional member association. Currently always None."""
 
 class MissingValue:
     """A missing-value or status legend entry from IvtMetadata.missing_values.
 
     The optional numeric code links this entry to Arrow's status_code column.
-    The symbol and localized label explain the file-defined status. Attributes
+    The symbol and localized description explain the file-defined status. Attributes
     are read-only; instances cannot be constructed directly.
+
+    ```python
+    for missing in ivt.metadata.missing_values:
+        print(missing.code, missing.symbol, missing.description.en)
+    ```
     """
 
-    symbol: str
-    """File-defined display symbol for this status."""
-    label: LocalizedText
-    """English and French descriptions; either translation may be None."""
-    code: int | None
-    """Numeric status code used by Arrow output, or None when unavailable."""
+    @property
+    def symbol(self) -> str:
+        """File-defined display symbol for this status."""
+    @property
+    def description(self) -> LocalizedText:
+        """English and French descriptions; either translation may be None."""
+    @property
+    def code(self) -> int | None:
+        """Numeric status code used by Arrow output, or None when unavailable."""
 
 class Geographies:
     """Parallel geography member lists from IvtMetadata.geographies.
@@ -153,18 +190,24 @@ class Geographies:
     read-only; instances cannot be constructed directly.
     """
 
-    member_id: list[int]
-    """One-based geography member IDs in file order."""
-    geo_label: LocalizedLabels
-    """Original geography labels in English and French."""
-    geo_name: list[str | None] | None
-    """Names parsed from English labels, or None when labels are unavailable."""
-    geo_uid: list[str | None] | None
-    """Geographic identifiers parsed from labels; strings preserve leading zeros."""
-    dqf_code: list[str | None] | None
-    """Data quality flag codes parsed from labels; unavailable fields are None."""
-    tnr_short_form: list[str | None] | None
-    """Short-form total non-response rates as strings with decimal points, or None."""
+    @property
+    def member_id(self) -> list[int]:
+        """One-based geography member IDs in file order."""
+    @property
+    def geo_label(self) -> LocalizedLabels:
+        """Original geography labels in English and French."""
+    @property
+    def geo_name(self) -> list[str | None] | None:
+        """Names parsed from English labels, or None when labels are unavailable."""
+    @property
+    def geo_uid(self) -> list[str | None] | None:
+        """Geographic identifiers parsed from labels; strings preserve leading zeros."""
+    @property
+    def dqf_code(self) -> list[str | None] | None:
+        """Data quality flag codes parsed from labels; unavailable fields are None."""
+    @property
+    def tnr_short_form(self) -> list[str | None] | None:
+        """Short-form total non-response rates as strings with decimal points, or None."""
 
 class IvtMetadata:
     """Read-only table metadata, obtained from Ivt.metadata.
@@ -176,11 +219,13 @@ class IvtMetadata:
     list does not update the reader or source file. Optional fields use None
     when unavailable. Instances cannot be constructed directly.
 
-    Examples
-    --------
-    >>> meta = open("table.ivt").metadata
-    >>> title = meta.title.en or meta.title.fr
-    >>> axes = [(dim.name.en, dim.count) for dim in meta.dimensions]
+    ```python
+    import pyivt
+
+    meta = pyivt.open("table.ivt").metadata
+    title = meta.title.en or meta.title.fr
+    axes = [(dim.name.en, dim.count) for dim in meta.dimensions]
+    ```
     """
     @property
     def product_id(self) -> str | None:
@@ -202,13 +247,22 @@ class IvtMetadata:
         """Four-byte file signature as eight lowercase hexadecimal digits."""
     @property
     def author(self) -> LocalizedText:
-        """Author or producing organization in each available language."""
+        """Author or producing organization; blank or missing translations are `None`."""
     @property
     def category(self) -> LocalizedText:
-        """File-defined category text in each available language."""
+        """File-defined category; blank or missing translations are `None`."""
     @property
     def keywords(self) -> LocalizedText:
-        """Keyword text in each language, returned as strings rather than split lists."""
+        """Keyword text in each language, or `None` when absent or blank.
+
+        Multiple stored keyword strings are joined with `", "` in file order.
+        No translation fallback is applied.
+
+        ```python
+        keywords = ivt.metadata.keywords.en
+        terms = [term.strip() for term in keywords.split(",")] if keywords else []
+        ```
+        """
     @property
     def number_of_datapoints(self) -> int | None:
         """Product of declared dimension counts, or None when unavailable.
@@ -250,8 +304,13 @@ class IvtMetadata:
     def footnotes(self) -> list[Footnote]:
         """Annotation legend entries, loaded on first access and cached.
 
-        Returns separate Footnote entries for each available language, or an
-        empty list when no entries are found. Raises ValueError on loading errors.
+        Returns one `Footnote` per legend entry, with a localized `description`,
+        or an empty list when no entries are found. Raises `ValueError` on errors.
+
+        ```python
+        for note in ivt.metadata.footnotes:
+            print(note.symbol, note.description.en, note.description.fr)
+        ```
         """
     @property
     def missing_values(self) -> list[MissingValue]:
@@ -275,18 +334,24 @@ class Layout:
     batches. List attributes are copies. Instances cannot be constructed directly.
     """
 
-    counts: list[int]
-    """Member counts in file dimension order; their product is the Arrow row count."""
-    slugs: list[str]
-    """Unique Arrow member-ID column names; the selected geography axis is 'geo'."""
-    n_dim: int
-    """Number of dimensions; equals len(counts) and len(slugs)."""
-    geo_dim: int
-    """One-based index of the selected geography axis; may be a fallback axis."""
-    straddle: int
-    """One-based index of the axis split across IVT page windows."""
-    window_count: int
-    """Number of page windows covering the straddle axis, not the total page count."""
+    @property
+    def counts(self) -> list[int]:
+        """Member counts in file dimension order; their product is the Arrow row count."""
+    @property
+    def slugs(self) -> list[str]:
+        """Unique Arrow member-ID column names; the selected geography axis is 'geo'."""
+    @property
+    def n_dim(self) -> int:
+        """Number of dimensions; equals len(counts) and len(slugs)."""
+    @property
+    def geo_dim(self) -> int:
+        """One-based index of the selected geography axis; may be a fallback axis."""
+    @property
+    def straddle(self) -> int:
+        """One-based index of the axis split across IVT page windows."""
+    @property
+    def window_count(self) -> int:
+        """Number of page windows covering the straddle axis, not the total page count."""
 
 class Ivt:
     """An opened Beyond 20/20 table with metadata and deferred cell decoding.
@@ -297,12 +362,13 @@ class Ivt:
     decoded columns for subsequent exports. No context manager or close() call
     is required. This reader does not modify the source file.
 
-    Examples
-    --------
-    >>> import pyivt
-    >>> ivt = pyivt.open("table.ivt")
-    >>> title = ivt.metadata.title.en
-    >>> table = ivt.to_arrow()
+    ```python
+    import pyivt
+
+    ivt = pyivt.open("table.ivt")
+    title = ivt.metadata.title.en
+    table = ivt.to_arrow()
+    ```
     """
     @property
     def metadata(self) -> IvtMetadata:
@@ -313,37 +379,34 @@ class Ivt:
     def to_arrow(self) -> pa.Table:
         """Export the complete table as a pyarrow.Table in long form.
 
-        Returns
-        -------
-        pyarrow.Table
-            One row per combination of dimension members, including combinations
-            absent from storage. Row count is math.prod(self.layout.counts).
-            Rows follow file dimension order, with the last dimension varying
-            fastest. Each dimension has an int64 column named by layout.slugs
-            containing one-based member IDs. File-defined member fields use
-            '<slug>_<field>' names with collision suffixes where needed; types
-            are string, int64, float64 or date32 according to the file.
-            Additional columns are:
+        ### Returns
 
-        * value (float64): numeric value when status_code is 0, otherwise null.
-        * status_code (int64): decoded status; 0 denotes a numeric cell.
-        * symbol (string): matching status legend symbol, or null.
-        * status (string): legend description, preferring English then French,
+        A `pyarrow.Table` with one row per combination of dimension members,
+        including combinations absent from storage. Row count is
+        `math.prod(self.layout.counts)`. Rows follow file dimension order, with
+        the last dimension varying fastest. Each dimension has an `int64` column
+        named by `layout.slugs` containing one-based member IDs. File-defined
+        member fields use `<slug>_<field>` names with collision suffixes where
+        needed; types are `string`, `int64`, `float64` or `date32`.
+
+        Additional columns:
+
+        * `value` (`float64`): numeric value when `status_code` is 0, otherwise null.
+        * `status_code` (`int64`): decoded status; 0 denotes a numeric cell.
+        * `symbol` (`string`): matching status legend symbol, or null.
+        * `status` (`string`): legend description, preferring English then French,
           or null if no description is available.
-        * footnote_raw (list<uint16>): raw cell annotation markers; an empty
+        * `footnote_raw` (`list<uint16>`): raw cell annotation markers; an empty
           list means no markers. These are not resolved footnote texts.
 
-        Raises
-        ------
-        OSError
-            The path cannot be read when the full file is first needed.
-        ValueError
-            Decoding, member metadata or dimension size validation fails.
-        ImportError
-            pyarrow is unavailable.
+        ### Raises
 
-        Notes
-        -----
+        - `OSError`: the path cannot be read when the full file is first needed.
+        - `ValueError`: decoding, member metadata or dimension validation fails.
+        - `ImportError`: pyarrow is unavailable.
+
+        ### Notes
+
         This materializes the entire grid in memory; there is no streaming or
         filtering option. Combinations absent from storage have value 0 and
         status_code 0. Nonzero statuses produce null values even if a numeric
@@ -351,11 +414,15 @@ class Ivt:
         First export caches the file bytes and decoded columns. Later calls
         construct another Arrow table from cached columns without re-decoding.
 
-        Examples
-        --------
-        >>> import pyarrow.parquet as pq
-        >>> table = open("table.ivt").to_arrow()
-        >>> pq.write_table(table, "table.parquet")
+        ### Example
+
+        ```python
+        import pyarrow.parquet as pq
+        import pyivt
+
+        table = pyivt.open("table.ivt").to_arrow()
+        pq.write_table(table, "table.parquet")
+        ```
         """
 
 def open(
@@ -363,33 +430,28 @@ def open(
 ) -> Ivt:
     """Open a Beyond 20/20 IVT source without decoding its cell values.
 
-    Parameters
-    ----------
-    source : str, os.PathLike[str], bytes, bytearray, memoryview or binary file object
-        A local file path, complete IVT contents, or an object with read().
-        Bytes are interpreted as file contents, never as a path. Path-like
-        objects must return str from __fspath__(). File objects are read once
-        with read() from their current position; they are not rewound or closed.
-        The result of read() must be bytes or support conversion via __bytes__().
-        Other objects implementing __bytes__() are also accepted.
+    ### Parameters
 
-    Returns
-    -------
-    Ivt
-        Reader exposing metadata, layout and to_arrow(). Summary metadata and
-        layout are parsed immediately; cell decoding waits until to_arrow().
+    `source`: a local path (`str` or `PathLike[str]`), complete IVT contents
+    (`bytes`, `bytearray`, `memoryview`), or a binary file object. Bytes are
+    interpreted as file contents. File objects are read once from their current
+    position and are neither rewound nor closed. Objects implementing
+    `__bytes__()` are also accepted.
 
-    Raises
-    ------
-    TypeError
-        The source type, path representation or read() result is unsupported.
-    OSError
-        The source path cannot be opened or read.
-    ValueError
-        The IVT header, descriptor or layout is invalid or unsupported.
+    ### Returns
 
-    Notes
-    -----
+    An `Ivt` reader exposing `metadata`, `layout`, and `to_arrow()`. Summary
+    metadata and layout are parsed immediately; cell decoding waits until
+    `to_arrow()`.
+
+    ### Raises
+
+    - `TypeError`: unsupported source, path representation or `read()` result.
+    - `OSError`: the source path cannot be opened or read.
+    - `ValueError`: invalid or unsupported IVT header, descriptor or layout.
+
+    ### Notes
+
     Paths use selective metadata reads. Keep the file available and unchanged:
     the first to_arrow() reads its full contents, and lazy metadata properties
     may read additional ranges. In-memory sources are copied when opened, so
@@ -397,13 +459,16 @@ def open(
     not fetch URLs or decompress archives. Exceptions raised by a supplied
     read(), __fspath__() or __bytes__() method may also propagate.
 
-    Examples
-    --------
-    >>> from pathlib import Path
-    >>> import pyivt
-    >>> ivt = pyivt.open(Path("table.ivt"))
-    >>> title = ivt.metadata.title.en or ivt.metadata.title.fr
-    >>> table = ivt.to_arrow()
-    >>> from io import BytesIO
-    >>> in_memory = pyivt.open(BytesIO(Path("table.ivt").read_bytes()))
+    ### Examples
+
+    ```python
+    from io import BytesIO
+    from pathlib import Path
+    import pyivt
+
+    ivt = pyivt.open(Path("table.ivt"))
+    title = ivt.metadata.title.en or ivt.metadata.title.fr
+    table = ivt.to_arrow()
+    in_memory = pyivt.open(BytesIO(Path("table.ivt").read_bytes()))
+    ```
     """
