@@ -14,7 +14,7 @@ from typing import BinaryIO
 
 import pyarrow as pa
 
-from pyivt._types import DimensionType
+from pyivt._types import DimensionType, Frequency
 
 class LocalizedText:
     """English and French versions of a metadata text field.
@@ -91,7 +91,7 @@ class Dimension:
 
     ```python
     for dim in ivt.metadata.dimensions:
-        print(dim.name.en, dim.type, dim.count)
+        print(dim.name.en, dim.type, dim.items)
         if dim.type == "time_series":
             print(dim.members.en)
     ```
@@ -102,7 +102,10 @@ class Dimension:
         """Localized short name; English falls back to the descriptor name."""
     @property
     def count(self) -> int:
-        """Declared number of members on this axis; member IDs run from 1 to count."""
+        """Alias for items, the declared number of members on this axis."""
+    @property
+    def items(self) -> int:
+        """Declared number of members on this axis; member IDs run from 1 to items."""
     @property
     def type(self) -> DimensionType:
         """Axis classification: `"geographic"`, `"normal"`, or `"time_series"`.
@@ -119,7 +122,7 @@ class Dimension:
         """Localized member labels in member ID order."""
     @property
     def notes(self) -> LocalizedText:
-        """Localized dimension notes with normalized whitespace."""
+        """Localized dimension notes with normalized whitespace; blank notes are None."""
     @property
     def ordinal(self) -> list[int] | None:
         """Optional member ordering information. Currently always None."""
@@ -224,7 +227,7 @@ class IvtMetadata:
 
     meta = pyivt.open("table.ivt").metadata
     title = meta.title.en or meta.title.fr
-    axes = [(dim.name.en, dim.count) for dim in meta.dimensions]
+    axes = [(dim.name.en, dim.items) for dim in meta.dimensions]
     ```
     """
     @property
@@ -238,7 +241,7 @@ class IvtMetadata:
         """Population or universe described by the table, or None when unavailable."""
     @property
     def notes(self) -> LocalizedText:
-        """Table notes in both languages, with line endings and whitespace normalized."""
+        """Table notes with normalized line endings and whitespace; blank notes are None."""
     @property
     def version(self) -> str:
         """IVT format version from the file header, not the pyivt package version."""
@@ -271,10 +274,10 @@ class IvtMetadata:
         non-missing observations. The summary product saturates at 2**63 - 1.
         """
     @property
-    def frequency(self) -> str | None:
-        """'No', 'Annual', 'Semi-annual', 'Quarterly', or 'Monthly'; None if unknown.
+    def frequency(self) -> Frequency | None:
+        """Time-series frequency: monthly, quarterly, semi_annual, or annual.
 
-        'No' is the file's explicit non-time-series frequency, distinct from None.
+        None when the table is not a time series or its rate is unknown.
         """
     @property
     def start_date(self) -> str | None:

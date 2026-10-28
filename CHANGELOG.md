@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Read-only `Dimension.items` exposes the declared member count; `count` remains an alias
+
+### Changed
+
+- Time-series `frequency` uses `Frequency`, a literal enum of `"monthly"`, `"quarterly"`, `"semi_annual"`, and `"annual"`; non-time-series and unknown rates return `None`
+
+### Fixed
+
+- Blank table and dimension notes consistently return `None`
+- Keyword decoding respects stored string boundaries without interpreting framing bytes as control characters or leading spaces
+
 ## [0.0.4] - 2026-10-27
 
 ### Changed

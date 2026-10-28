@@ -7,9 +7,17 @@ from typing_extensions import assert_type
 
 
 def check_metadata(ivt: pyivt.Ivt) -> None:
+    frequency: pyivt.Frequency = "semi_annual"
+    assert_type(
+        ivt.metadata.frequency,
+        Literal["monthly", "quarterly", "semi_annual", "annual"] | None,
+    )
+    if ivt.metadata.frequency == frequency:
+        assert_type(ivt.metadata.frequency, Literal["semi_annual"])
     kind: pyivt.DimensionType = "time_series"
     for dimension in ivt.metadata.dimensions:
         assert_type(dimension.type, Literal["geographic", "normal", "time_series"])
+        assert_type(dimension.items, int)
         if dimension.type == kind:
             assert_type(dimension.members.en, list[str] | None)
     for footnote in ivt.metadata.footnotes:

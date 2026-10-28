@@ -57,11 +57,30 @@ impl DimensionType {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Frequency {
+    Monthly,
+    Quarterly,
+    SemiAnnual,
+    Annual,
+}
+
+impl Frequency {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Monthly => "monthly",
+            Self::Quarterly => "quarterly",
+            Self::SemiAnnual => "semi_annual",
+            Self::Annual => "annual",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Dimension {
     pub name_en: String,
     pub name_fr: Option<String>,
-    /// Beyond File Summary "Items" (map member list when longer than the cube).
+    /// Beyond File Summary "Items": the declared dimension member count.
     pub count: i64,
     pub dimension_type: DimensionType,
     /// Internal: geo dim flag for tidy export (not exposed to Python).
@@ -96,13 +115,13 @@ pub struct LocalizedText {
 /// Parse intermediate for time-series bounds (flattened onto `IvtMetadata`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct TimeSeriesInfo {
-    frequency: Option<String>,
+    frequency: Option<Frequency>,
     start: Option<String>,
     end: Option<String>,
 }
 
 impl TimeSeriesInfo {
-    fn into_fields(self) -> (Option<String>, Option<String>, Option<String>) {
+    fn into_fields(self) -> (Option<Frequency>, Option<String>, Option<String>) {
         (self.frequency, self.start, self.end)
     }
 }
@@ -136,7 +155,7 @@ pub struct IvtMetadata {
     pub category: LocalizedText,
     pub keywords: LocalizedText,
     pub number_of_datapoints: Option<i64>,
-    pub frequency: Option<String>,
+    pub frequency: Option<Frequency>,
     pub start_date: Option<String>,
     pub end_date: Option<String>,
     pub read_only: Option<bool>,
@@ -341,7 +360,7 @@ fn summary_text(data: &[u8], language: u32, column: usize) -> Option<String> {
     }
     let raw = decoded.get(4..)?;
     let end = raw.iter().position(|&b| b == 0).unwrap_or(raw.len());
-    Some(normalize_notes_text(&latin1(&raw[..end])))
+    normalize_notes_text(&latin1(&raw[..end]))
 }
 
 fn identity_from_blob(text: &str) -> (Option<String>, Option<String>) {
@@ -383,26 +402,28 @@ fn parse_identity_notes(data: &[u8]) -> (Option<String>, Option<String>, Option<
 fn keyword_text(data: &[u8], language: u32) -> Option<String> {
     let decoded =
         crate::decode::decompress_component(summary_language_record(data, language, 12)?).ok()?;
-    // Keywords can be a NUL-separated byte vector or a matrix of fixed-width
-    // strings. They are not notes: stopping at the first NUL loses keywords.
-    let keywords: Vec<String> = match decoded.get(..2)? {
-        [1, 1] => decoded.get(4..)?.split(|&b| b == 0).map(latin1).collect(),
-        [1, 2] => {
-            let width = u16(&decoded, 4) as usize;
-            if width == 0 {
-                return None;
-            }
-            decoded
-                .get(6..)?
-                .chunks_exact(width)
-                .map(|row| {
-                    let end = row.iter().position(|&b| b == 0).unwrap_or(row.len());
-                    latin1(&row[..end])
-                })
-                .collect()
+    if decoded.get(..2) != Some(&[1, 1]) {
+        return None;
+    }
+    // Brwpro.exe 0x140231510 / 0x140232d60: a byte vector containing an
+    // i16 keyword count, then u8 byte length + text + NUL for each keyword.
+    // The count and lengths are framing, not NUL-separated keyword text.
+    let body = decoded.get(4..)?;
+    let count = i16::from_le_bytes(body.get(..2)?.try_into().ok()?);
+    let mut keywords = Vec::new();
+    let mut pos = 2usize;
+    for _ in 0..usize::try_from(count).ok()? {
+        let length = *body.get(pos)? as usize;
+        pos += 1;
+        let word = body.get(pos..pos + length)?;
+        if word.contains(&0) || body.get(pos + length) != Some(&0) {
+            return None;
         }
-        _ => return None,
-    };
+        keywords.push(latin1(word));
+        pos += length + 1;
+    }
+    // The native validator tolerates trailing bytes after the counted entries.
+    // They cannot introduce additional keywords.
     let text = keywords
         .iter()
         .map(|word| word.trim())
@@ -420,7 +441,7 @@ fn parse_keywords(data: &[u8]) -> LocalizedText {
 }
 
 /// Normalize identity notes toward Beyond HTML (CRLF→LF, trim line tails/indents).
-fn normalize_notes_text(text: &str) -> String {
+fn normalize_notes_text(text: &str) -> Option<String> {
     let unified = text.replace("\r\n", "\n").replace('\r', "\n");
     let lines: Vec<String> = unified
         .lines()
@@ -429,7 +450,8 @@ fn normalize_notes_text(text: &str) -> String {
             line.trim_end().trim_start().to_string()
         })
         .collect();
-    lines.join("\n").trim().to_string()
+    let text = lines.join("\n").trim().to_string();
+    (!text.is_empty()).then_some(text)
 }
 
 fn parse_time_series(data: &[u8]) -> Option<TimeSeriesInfo> {
@@ -439,11 +461,10 @@ fn parse_time_series(data: &[u8]) -> Option<TimeSeriesInfo> {
     }
     let rate = u16(&decoded, 10);
     let frequency = match rate {
-        0 => Some("No".into()),
-        1 => Some("Annual".into()),
-        2 => Some("Semi-annual".into()),
-        4 => Some("Quarterly".into()),
-        12 => Some("Monthly".into()),
+        1 => Some(Frequency::Annual),
+        2 => Some(Frequency::SemiAnnual),
+        4 => Some(Frequency::Quarterly),
+        12 => Some(Frequency::Monthly),
         _ => None,
     };
     let date = |offset| {
@@ -650,7 +671,7 @@ fn dim_slot_notes(data: &[u8], slot_index: usize) -> (Option<String>, Option<Str
         }
         let raw = &decoded[4..];
         let end = raw.iter().position(|&b| b == 0).unwrap_or(raw.len());
-        Some(normalize_notes_text(&latin1(&raw[..end])))
+        normalize_notes_text(&latin1(&raw[..end]))
     };
     let en = note(&decoded[6..92]);
     let fr = if u16(&decoded, 2) >= 2 {
@@ -1237,12 +1258,10 @@ mod tests {
             row[12..16].copy_from_slice(&keywords.to_le_bytes());
             matrix.extend_from_slice(&row);
         }
-        let mut french = vec![1, 2, 2, 0, 12, 0];
-        french.extend_from_slice(b"population\0\0recensement\0");
         let data = master_fixture(&[
-            (4, text_record(b" population\0census\0\0")),
+            (4, text_record(b"\x02\0\x0b population\0\x06census\0")),
             (7, matrix),
-            (11, french),
+            (11, text_record(b"\x02\0\x0apopulation\0\x0brecensement\0")),
         ]);
         let keywords = parse_keywords(&data);
         assert_eq!(keywords.en.as_deref(), Some("population, census"));
@@ -1253,7 +1272,13 @@ mod tests {
     fn keywords_absent_blank_or_malformed_are_none() {
         for record in [
             Vec::new(),
-            text_record(b"\0 \t\0"),
+            text_record(b"\0\0"),
+            text_record(b"\x01\0\x03 \t \0"),
+            text_record(b"\xff\xff"),
+            text_record(b"\x02\0\x01A\0"),
+            text_record(b"\x01\0\x05short"),
+            text_record(b"\x01\0\x03A\0B\0"),
+            text_record(b"\x01\0\xffshort\0"),
             vec![1, 2, 0, 0, 0, 0],
             vec![1, 2, 2, 0, 12, 0, b'A'],
             vec![4, 1, 1, 0, 1, 0, 0, 0],
@@ -1262,6 +1287,28 @@ mod tests {
             assert!(keywords.en.is_none());
             assert!(keywords.fr.is_none());
         }
+    }
+
+    #[test]
+    fn keywords_decode_observed_counted_record_and_ignore_trailing_bytes() {
+        // Decompressed keyword payload from 98-400-X2016112.IVT. The 01 00
+        // count and 0f byte length must never become keyword text.
+        for payload in [
+            &b"\x01\0\x0f98-400-X2016112\0"[..],
+            &b"\x01\0\x0f98-400-X2016112\0ignored"[..],
+        ] {
+            let keywords = parse_keywords(&master_fixture(&[(4, text_record(payload))]));
+            assert_eq!(keywords.en.as_deref(), Some("98-400-X2016112"));
+        }
+    }
+
+    #[test]
+    fn keywords_use_unsigned_byte_lengths() {
+        let mut payload = vec![1, 0, 255];
+        payload.extend_from_slice(&[b'A'; 255]);
+        payload.push(0);
+        let keywords = parse_keywords(&master_fixture(&[(4, text_record(&payload))]));
+        assert_eq!(keywords.en.as_deref(), Some("A".repeat(255).as_str()));
     }
 
     #[test]

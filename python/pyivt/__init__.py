@@ -31,12 +31,13 @@ from pyivt._native import (
     MissingValue,
     open,
 )
-from pyivt._types import DimensionType
+from pyivt._types import DimensionType, Frequency
 
 __all__ = [
     "Dimension",
     "DimensionType",
     "Footnote",
+    "Frequency",
     "Geographies",
     "Ivt",
     "IvtMetadata",

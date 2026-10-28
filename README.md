@@ -93,8 +93,9 @@ for dimension in meta.dimensions:
 print(meta.geographies.geo_label.en, meta.geographies.geo_label["fr"])
 ```
 
-Each translation is `None` when unavailable. Blank authors, categories, and
-keywords also return `None`. Unsupported language keys raise `KeyError`.
+Each translation is `None` when unavailable. Blank authors, categories,
+keywords, and table or dimension notes also return `None`. Unsupported language
+keys raise `KeyError`.
 Keyword strings stored separately in the file are joined with `", "` in file
 order; `meta.keywords.en` and `.fr` remain optional strings.
 
@@ -108,6 +109,11 @@ from pyivt import DimensionType
 kind: DimensionType = "time_series"
 time_axes = [dimension for dimension in meta.dimensions if dimension.type == kind]
 ```
+
+`meta.frequency` uses the `Frequency` literal enum: `"monthly"`, `"quarterly"`,
+`"semi_annual"`, or `"annual"`. It returns `None` when Time Series is No or the
+stored rate is unknown. `dimension.items` gives the declared number of members
+on each axis; `dimension.count` remains an alias for the same value.
 
 Each footnote contains both translations in `description`. Missing-value entries
 use the same field name:
@@ -129,8 +135,8 @@ those notes.
 The package includes type stubs, read-only property definitions, and Markdown
 hover documentation with Python snippets. Select the Python environment where
 `pyivt` is installed to get completions for metadata fields and the allowed
-`dimension.type` values. See [the editor guide](docs/editors.md) for examples,
-optional-value handling, and migration notes.
+`dimension.type` and `frequency` values. See [the editor guide](docs/editors.md)
+for examples, optional-value handling, and migration notes.
 
 ### Exporting Data
 

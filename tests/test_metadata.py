@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 import struct
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from math import prod
 from pathlib import Path
 from types import SimpleNamespace
@@ -60,12 +60,16 @@ def _expect_slice(expect: dict) -> dict:
         result[key] = _notes_sentences(result[key])
     for key in ("author_en", "author_fr", "category_en", "category_fr"):
         result[key] = result[key] or None
+    frequency = result["frequency"]
+    result["frequency"] = (
+        frequency.lower().replace("-", "_") if frequency and frequency != "No" else None
+    )
     return result
 
 
 def _notes_sentences(text: str | None) -> tuple[str, ...] | None:
     """Keep only the first and last sentences for notes comparison."""
-    if text is None:
+    if text is None or not text.strip():
         return None
     sentences = re.split(r"(?<=[.!?])\s+", text.strip())
     return (sentences[0], sentences[-1])
@@ -132,7 +136,7 @@ def snapshot_comparable(meta: IvtMetadata, path: Path) -> dict:
             {
                 "name_en": dimension.name.en,
                 "name_fr": dimension.name.fr,
-                "items": dimension.count,
+                "items": dimension.items,
                 "type": {
                     "geographic": "Geographic",
                     "normal": "Normal",
@@ -154,7 +158,7 @@ def test_metadata_matches_expected(demo_ivt):
     meta = open_ivt(demo_ivt.path).metadata
     assert snapshot_comparable(meta, demo_ivt.path) == _expect_slice(expect)
     # Summary datapoints are the product of Beyond Items (may exceed decode cube).
-    assert prod(d.count for d in meta.dimensions) == meta.number_of_datapoints
+    assert prod(d.items for d in meta.dimensions) == meta.number_of_datapoints
 
 
 def test_metadata_lazy_fields(demo_ivt):
@@ -261,6 +265,9 @@ def test_metadata_localized_access(demo_ivt):
         )
         assert dimension.name.en is not None
         assert dimension.type in ("geographic", "normal", "time_series")
+        assert dimension.items == dimension.count
+        with pytest.raises(AttributeError):
+            dimension.items = 0
         assert not hasattr(dimension, "type_label")
         for old_name in (
             "name_en",
@@ -360,6 +367,13 @@ def _text_record(text: bytes) -> bytes:
     return struct.pack("<BBH", 1, 1, len(text)) + text
 
 
+def _keyword_record(terms: list[bytes]) -> bytes:
+    payload = struct.pack("<h", len(terms))
+    for term in terms:
+        payload += struct.pack("<B", len(term)) + term + b"\0"
+    return _text_record(payload)
+
+
 def _zero_suppress(record: bytes) -> bytes:
     """Encode a byte component with the native zero-suppression bitmap."""
     header = 2 + record[1] * 2
@@ -377,18 +391,20 @@ def _zero_suppress(record: bytes) -> bytes:
     )
 
 
-@pytest.mark.parametrize("encoding", ["vector", "matrix", "compressed"])
-def test_keywords_preserve_all_translations(metadata_bytes, tmp_path, encoding):
-    english = _text_record(b" population\0census\0\0")
-    french = _text_record(b"recensement\0soci\xe9t\xe9\0")
-    if encoding in ("matrix", "compressed"):
-        english = (
-            struct.pack("<BBHH", 1, 2, 2, 12) + b"population\0\0census\0\0\0\0\0\0"
-        )
-        french = (
-            struct.pack("<BBHH", 1, 2, 2, 12) + b"recensement\0soci\xe9t\xe9\0\0\0\0\0"
-        )
-    if encoding == "compressed":
+@pytest.mark.parametrize("compressed", [False, True])
+def test_keywords_preserve_all_translations(metadata_bytes, tmp_path, compressed):
+    english = _keyword_record(
+        [
+            b" not in the labour force",
+            b"participation rate",
+            b"unemployment rate",
+            b"employment rate",
+            b"industry",
+            b"class of worker",
+        ]
+    )
+    french = _keyword_record([b"emploi", b"ch\xf4mage", b"soci\xe9t\xe9"])
+    if compressed:
         english, french = _zero_suppress(english), _zero_suppress(french)
     matrix = struct.pack("<BBHH", 1, 2, 2, 32)
     # Reversed language rows and a French record beyond the original directory.
@@ -399,8 +415,26 @@ def test_keywords_preserve_all_translations(metadata_bytes, tmp_path, encoding):
     path.write_bytes(data)
     for source in (data, path):
         keywords = open_ivt(source).metadata.keywords
-        assert keywords.en == "population, census"
-        assert keywords["fr"] == "recensement, société"
+        assert keywords.en == (
+            "not in the labour force, participation rate, unemployment rate, "
+            "employment rate, industry, class of worker"
+        )
+        assert keywords["fr"] == "emploi, chômage, société"
+
+
+def test_keywords_observed_native_record(metadata_bytes, tmp_path):
+    # Captured master entry 4 (and French entry 11) in 98-400-X2016112.IVT.
+    record = bytes.fromhex("0101130001000f39382d3430302d583230313631313200")
+    languages = struct.pack("<BBHH", 1, 2, 2, 32)
+    for language in (1, 2):
+        languages += struct.pack("<8I", language, 0, 3, 4, 0, 0, 0, 0)
+    data = _replace_records(metadata_bytes, 544, {4: record, 7: languages})
+    path = tmp_path / "native-keywords.ivt"
+    path.write_bytes(data)
+    for source in (data, path):
+        keywords = open_ivt(source).metadata.keywords
+        assert _keywords_list(keywords.en) == ["98-400-X2016112"]
+        assert _keywords_list(keywords.fr) == ["98-400-X2016112"]
 
 
 def test_blank_summary_fields_are_none(metadata_bytes, tmp_path):
@@ -410,7 +444,7 @@ def test_blank_summary_fields_are_none(metadata_bytes, tmp_path):
     facet[266:269] = b" \t "
     facet[521:524] = b" \r "
     data = _replace_records(
-        metadata_bytes, 544, {0: bytes(facet), 4: _text_record(b"\0 \t\0")}
+        metadata_bytes, 544, {0: bytes(facet), 4: _keyword_record([b" \t "])}
     )
     path = tmp_path / "blank.ivt"
     path.write_bytes(data)
@@ -422,6 +456,89 @@ def test_blank_summary_fields_are_none(metadata_bytes, tmp_path):
         assert meta.category.fr is None
         assert meta.keywords.en is None
         assert meta.keywords.fr is None
+
+
+@pytest.mark.parametrize("compressed", [False, True])
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        (b"", None),
+        (b"\0", None),
+        (b" \t\r\n \xa0\0padding", None),
+        (
+            b"  First line. \r\n \r Second line. \t\0ignored",
+            "First line.\n\nSecond line.",
+        ),
+    ],
+)
+def test_notes_normalize_consistently(
+    metadata_bytes, tmp_path, text, expected, compressed
+):
+    record = _text_record(text)
+    if compressed:
+        record = _zero_suppress(record)
+    # Both table language rows reference notes entry 3. Dimension language rows
+    # reference notes with a u16 at +22; nonzero references may point to blanks.
+    languages = struct.pack("<BBHH", 1, 2, 2, 32)
+    for language in (1, 2):
+        languages += struct.pack("<8I", language, 0, 3, 0, 0, 0, 0, 0)
+    data = _replace_records(metadata_bytes, 544, {3: record, 7: languages})
+    rows = bytearray(struct.pack("<BBHH", 1, 2, 2, 86) + bytes(2 * 86))
+    for start in (6, 92):
+        struct.pack_into("<H", rows, start + 22, 10)
+    data = _replace_records(data, 824, {3: bytes(rows), 10: record})
+    path = tmp_path / "notes.ivt"
+    path.write_bytes(data)
+    for source in (data, path):
+        meta = open_ivt(source).metadata
+        for notes in (meta.notes, meta.dimensions[0].notes):
+            assert notes.en == expected
+            assert notes.fr == expected
+
+
+@pytest.mark.parametrize("compressed", [False, True])
+@pytest.mark.parametrize(
+    "rate, expected",
+    [
+        (0, None),
+        (1, "annual"),
+        (2, "semi_annual"),
+        (4, "quarterly"),
+        (12, "monthly"),
+        (3, None),
+    ],
+)
+def test_frequency_uses_native_rate(
+    metadata_bytes, tmp_path, rate, expected, compressed
+):
+    # Master record 2 is the native 32-byte table settings vector. Its periods
+    # per year word is at +6 in the payload; date serials follow at +8 and +12.
+    settings = bytearray(_text_record(bytes(32)))
+    struct.pack_into("<H", settings, 10, rate)
+    start = date(2020, 1, 1)
+    end = date(2021, 1, 1)
+
+    def serial(value):
+        return (value - date(1970, 1, 1)).days + 719_469
+
+    struct.pack_into("<II", settings, 12, serial(start), serial(end))
+    record = _zero_suppress(settings) if compressed else bytes(settings)
+    data = _replace_records(metadata_bytes, 544, {2: record})
+    path = tmp_path / "frequency.ivt"
+    path.write_bytes(data)
+    for source in (data, path):
+        meta = open_ivt(source).metadata
+        assert meta.frequency == expected
+        assert meta.start_date == (start.isoformat() if rate else None)
+        assert meta.end_date == (end.isoformat() if rate else None)
+
+
+def test_frequency_absent_or_malformed_is_none(metadata_bytes):
+    for record in (b"", _text_record(b"short")):
+        meta = open_ivt(_replace_records(metadata_bytes, 544, {2: record})).metadata
+        assert meta.frequency is None
+        assert meta.start_date is None
+        assert meta.end_date is None
 
 
 @pytest.mark.parametrize("missing_language", ["en", "fr"])

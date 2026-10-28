@@ -127,7 +127,7 @@ impl LocalizedLabels {
 ///
 /// ```python
 /// for dim in ivt.metadata.dimensions:
-///     print(dim.name.en, dim.type, dim.count)
+///     print(dim.name.en, dim.type, dim.items)
 ///     if dim.type == "time_series":
 ///         print(dim.members.en)
 /// ```
@@ -137,7 +137,7 @@ pub struct Dimension {
     /// Localized short name; English falls back to the descriptor name.
     #[pyo3(get)]
     pub name: LocalizedText,
-    /// Declared number of members on this axis; member IDs run from 1 to count.
+    /// Alias for items, the declared number of members on this axis.
     #[pyo3(get)]
     pub count: i64,
     /// Axis classification: `"geographic"`, `"normal"`, or `"time_series"`.
@@ -153,7 +153,7 @@ pub struct Dimension {
     /// Localized member labels in member ID order.
     #[pyo3(get)]
     pub members: LocalizedLabels,
-    /// Localized dimension notes with normalized whitespace.
+    /// Localized dimension notes with normalized whitespace; blank notes are None.
     #[pyo3(get)]
     pub notes: LocalizedText,
     /// Optional member ordering information. Currently always None.
@@ -189,6 +189,12 @@ impl From<CoreDimension> for Dimension {
 
 #[pymethods]
 impl Dimension {
+    /// Declared number of members on this axis; member IDs run from 1 to items.
+    #[getter]
+    fn items(&self) -> i64 {
+        self.count
+    }
+
     fn __repr__(&self) -> String {
         format!("Dimension(name={:?}, count={})", self.name.en, self.count)
     }
@@ -346,7 +352,7 @@ impl Geographies {
 ///
 /// meta = pyivt.open("table.ivt").metadata
 /// title = meta.title.en or meta.title.fr
-/// axes = [(dim.name.en, dim.count) for dim in meta.dimensions]
+/// axes = [(dim.name.en, dim.items) for dim in meta.dimensions]
 /// ```
 #[pyclass(name = "IvtMetadata", module = "pyivt")]
 pub struct IvtMetadata {
@@ -374,7 +380,7 @@ impl IvtMetadata {
     }
 
     #[getter]
-    /// Table notes in both languages, with line endings and whitespace normalized.
+    /// Table notes with normalized line endings and whitespace; blank notes are None.
     fn notes(&self) -> LocalizedText {
         self.inner.lock().unwrap().notes.clone().into()
     }
@@ -427,11 +433,15 @@ impl IvtMetadata {
     }
 
     #[getter]
-    /// 'No', 'Annual', 'Semi-annual', 'Quarterly', or 'Monthly'; None if unknown.
+    /// Time-series frequency: monthly, quarterly, semi_annual, or annual.
     ///
-    /// 'No' is the file's explicit non-time-series frequency, distinct from None.
-    fn frequency(&self) -> Option<String> {
-        self.inner.lock().unwrap().frequency.clone()
+    /// None when the table is not a time series or its rate is unknown.
+    fn frequency(&self) -> Option<&'static str> {
+        self.inner
+            .lock()
+            .unwrap()
+            .frequency
+            .map(|rate| rate.as_str())
     }
 
     #[getter]
