@@ -42,7 +42,6 @@ pub struct HeaderLayout {
 #[derive(Debug, Clone, Copy)]
 pub struct DirEntry {
     pub off: u32,
-    pub size: u16,
     pub marker: bool,
 }
 
@@ -82,10 +81,8 @@ pub fn dir_entry(data: &[u8], o: usize) -> Option<DirEntry> {
     if s1 != s2 && !is02 && (s1 as i32 - s2 as i32).abs() > 256 {
         return None;
     }
-    let size = s1.min(s2);
     Some(DirEntry {
         off,
-        size,
         marker: is_marker(data, off as usize),
     })
 }

@@ -142,6 +142,20 @@ for examples, optional-value handling, and migration notes.
 
 Use `Ivt.to_arrow()` to export to Apache Arrow.
 
+The table contains the complete Cartesian product of all declared dimensions,
+in file dimension order (last dimension varies fastest). Each dimension has an
+`int64` member ordinal and every declared native member field: codes and labels
+as strings, integer attributes as `int64`, floating attributes as `float64`, and
+time-series dates as `date32`, with the original time serial and auxiliary word
+retained. Codes keep their leading zeros, and both languages are retained when
+stored in the file.
+
+`value` is `float64`; missing-value records determine its nulls independently of
+the numeric payload. `status_code`, `symbol`, `status`, and `footnote_raw`
+(`list<uint16>`) retain status and raw annotation information. A zero value is
+preserved when the file marks it as published. Flat and paged data directories
+use the same API and strict ordinal/range checks.
+
 Apache Arrow is ready to use with your current data stack.
 
 - `pandas`:
@@ -231,6 +245,19 @@ CI downloads three Census samples with committed JSON metadata references.
 Parquet references are generated locally and are not committed; comparisons
 against them are skipped when they are unavailable. Arrow export and round-trip
 tests still run without these references.
+
+Mandatory offline Arrow regressions additionally compare a committed paged IVT
+against all 1,155 cells of an official CSV and check a hand-authored fixture's
+complete typed output, including dates, missing statuses and raw annotations.
+See [fixture provenance](tests/fixtures/README.md) and
+[native format evidence](docs/investigations/ivt-native-directory.md).
+
+To validate the original NAICS234 report with a complete independent Parquet
+export, set `PYIVT_REGRESSION_NAICS234_PATH` and
+`PYIVT_REGRESSION_NAICS234_EXPECTED_PARQUET`, then run
+`pytest tests/test_arrow_regression.py`. The oracle must be produced independently
+and use matching column names, types and row order. A requested regression with
+a missing file or oracle fails; otherwise this optional case is skipped.
 
 1. Populate `data` with test inputs
 

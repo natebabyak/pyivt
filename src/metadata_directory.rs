@@ -1,4 +1,5 @@
-//! Native metadata directories: flat entries or an index of entry pages.
+//! Native slot directories: flat entries or an index of entry pages.
+//! Data and metadata slots use the same addressing representation.
 
 use crate::bytes::{u16, u32};
 use crate::error::IvtError;
@@ -8,7 +9,7 @@ const HEADER_PAGE_ENTRIES: usize = 20;
 const ENTRY_SIZE: usize = 8;
 
 pub(crate) struct MetadataDirectory {
-    offset: usize,
+    pub(crate) offset: usize,
     pub(crate) count: usize,
     page_entries: Option<usize>,
 }
@@ -26,7 +27,7 @@ impl MetadataDirectory {
             let raw_size = header
                 .get(HEADER_PAGE_ENTRIES..HEADER_PAGE_ENTRIES + 2)
                 .ok_or(IvtError::InvalidDirectory("metadata page size"))?;
-            let size = u16(raw_size, 0) as usize;
+            let size = usize::from(u16(raw_size, 0));
             if size == 0 {
                 return Err(IvtError::InvalidDirectory("metadata page size"));
             }
@@ -35,8 +36,10 @@ impl MetadataDirectory {
             None
         };
         Ok(Self {
-            offset: u32(raw, 0) as usize,
-            count: u32(raw, 8) as usize,
+            offset: usize::try_from(u32(raw, 0))
+                .map_err(|_| IvtError::InvalidDirectory("directory offset overflow"))?,
+            count: usize::try_from(u32(raw, 8))
+                .map_err(|_| IvtError::InvalidDirectory("directory count overflow"))?,
             page_entries,
         })
     }
@@ -60,7 +63,7 @@ impl MetadataDirectory {
     }
 
     /// Resolve an ordinal without compacting holes or reading unused capacity.
-    pub(crate) fn entry<'a>(&self, data: &'a [u8], index: usize) -> Result<&'a [u8], IvtError> {
+    pub(crate) fn entry_offset(&self, data: &[u8], index: usize) -> Result<usize, IvtError> {
         if self.offset == 0 || index >= self.count {
             return Err(IvtError::InvalidDirectory("metadata entry index"));
         }
@@ -70,7 +73,11 @@ impl MetadataDirectory {
                 .and_then(|n| self.offset.checked_add(n))
                 .ok_or(IvtError::InvalidDirectory("metadata page pointer"))?;
             let raw = &data[Self::range(pointer, 4, data.len())?];
-            (u32(raw, 0) as usize, index % size)
+            (
+                usize::try_from(u32(raw, 0))
+                    .map_err(|_| IvtError::InvalidDirectory("directory page offset overflow"))?,
+                index % size,
+            )
         } else {
             (self.offset, index)
         };
@@ -81,7 +88,13 @@ impl MetadataDirectory {
             .checked_mul(ENTRY_SIZE)
             .and_then(|n| base.checked_add(n))
             .ok_or(IvtError::InvalidDirectory("metadata entry offset"))?;
-        Ok(&data[Self::range(offset, ENTRY_SIZE, data.len())?])
+        Self::range(offset, ENTRY_SIZE, data.len())?;
+        Ok(offset)
+    }
+
+    pub(crate) fn entry<'a>(&self, data: &'a [u8], index: usize) -> Result<&'a [u8], IvtError> {
+        let offset = self.entry_offset(data, index)?;
+        Ok(&data[offset..offset + ENTRY_SIZE])
     }
 
     /// Flatten only the declared entries for the selective metadata catalog.
@@ -204,5 +217,16 @@ mod tests {
         let directory = MetadataDirectory::new(&data, SLOT).unwrap();
         assert!(directory.entry(&data, PAGE_SIZE).is_err());
         assert!(directory.read(&IvtSource::from_bytes(data)).is_err());
+    }
+
+    #[test]
+    fn entry_ranges_reject_truncation_and_arithmetic_overflow() {
+        assert!(MetadataDirectory::new(&[0; 40], SLOT).is_err());
+        assert!(MetadataDirectory::range(usize::MAX - 3, 8, usize::MAX).is_err());
+        assert!(MetadataDirectory::range(1, usize::MAX, usize::MAX).is_err());
+        let mut data = paged_fixture();
+        data.truncate(256 + PAGE_SIZE * 8 + 7);
+        let directory = MetadataDirectory::new(&data, SLOT).unwrap();
+        assert!(directory.entry(&data, PAGE_SIZE).is_err());
     }
 }

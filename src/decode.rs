@@ -1,8 +1,9 @@
 //! Unified page-directory layout and cell decode.
 
-use crate::bytes::{nextpow2, u16};
+use crate::bytes::{nextpow2, u16, u32};
 use crate::descriptor::{dim_slugs, geo_dim_index, DimDesc};
-use crate::header::{dir_anchor_header, dir_entry, HDR_MASTER_PTR, MARKER_WIDTHS};
+use crate::header::{HDR_DIR_PTR, HDR_MASTER_PTR, MARKER_WIDTHS};
+use crate::metadata_directory::MetadataDirectory;
 use std::collections::HashSet;
 
 pub const PRES_BITS: i64 = 2048;
@@ -426,8 +427,64 @@ fn decode_page(
     })
 }
 
-fn entry_index(coords: &[i64], estride: &[i64]) -> i64 {
-    coords.iter().zip(estride.iter()).map(|(c, s)| c * s).sum()
+fn entry_index(coords: &[i64], estride: &[i64]) -> Result<usize, String> {
+    coords
+        .iter()
+        .zip(estride)
+        .try_fold(0usize, |sum, (&c, &s)| {
+            usize::try_from(c)
+                .ok()
+                .zip(usize::try_from(s).ok())
+                .and_then(|(c, s)| c.checked_mul(s))
+                .and_then(|index| sum.checked_add(index))
+                .ok_or_else(|| "data directory entry index overflow".into())
+        })
+}
+
+fn directory_page(
+    data: &[u8],
+    directory: &MetadataDirectory,
+    index: usize,
+    lay: &Layout,
+    mode: u16,
+) -> Result<PageCells, String> {
+    let context = |position: Option<usize>, reason: &str| {
+        let position_text = position.map_or_else(|| "unresolved".into(), |p| p.to_string());
+        let raw = position.and_then(|o| o.checked_add(8).and_then(|end| data.get(o..end)));
+        let details = raw.map_or_else(String::new, |entry| {
+            format!(
+                ", raw={entry:02x?}, raw_offset=0x{:08x}, calculated_target_offset={}, content_length={}, allocated_length={}",
+                u32(entry, 0), u32(entry, 0), u16(entry, 4), u16(entry, 6),
+            )
+        });
+        format!(
+            "invalid data directory entry {index} at byte {position_text}: directory_start={}, expected_entry_count={}, file_size={}{}; reason={reason}",
+            directory.offset, directory.count, data.len(), details,
+        )
+    };
+    let position = directory
+        .entry_offset(data, index)
+        .map_err(|err| context(None, &err.to_string()))?;
+    let entry = &data[position..position + 8];
+    if entry.iter().all(|&v| v == 0) {
+        return decode_page(&[2, 1, 0, 0], 0, lay, 4, mode);
+    }
+    let target = usize::try_from(u32(entry, 0))
+        .map_err(|_| context(Some(position), "page offset conversion overflow"))?;
+    let size = usize::from(u16(entry, 4));
+    let allocated = usize::from(u16(entry, 6));
+    // Brwpro.exe 0x1402b6e2a reads the first length as content size; +6 is
+    // allocation capacity (release path 0x1402b5cb3), not a second copy.
+    if target == 0 || size == 0 || size > allocated {
+        return Err(context(
+            Some(position),
+            "nonblank page requires a nonzero offset and 0 < content_length <= allocated_length",
+        ));
+    }
+    if target.checked_add(size).is_none_or(|end| end > data.len()) {
+        return Err(context(Some(position), "page content outside file"));
+    }
+    decode_page(data, target, lay, size, mode).map_err(|err| context(Some(position), &err))
 }
 
 pub fn decode_store(
@@ -436,9 +493,26 @@ pub fn decode_store(
     lay: &Layout,
 ) -> Result<Vec<(String, Vec<f64>)>, String> {
     // Returns columns as (name, values) — member ids as f64 for uniformity, plus "value"
-    let base = dir_anchor_header(data).ok_or("could not locate data directory")?;
+    // The data slot is a native 14-byte directory descriptor, just like the
+    // metadata slots. Flag bit zero selects an index of directory pages;
+    // its u32 pointers are not [offset, length, capacity] entries themselves.
+    let directory = MetadataDirectory::new(data, HDR_DIR_PTR)
+        .map_err(|err| format!("invalid data directory: {err}"))?;
+    if u16(data, HDR_DIR_PTR + 12) & 1 != 0 && u16(data, 20) != 4096 {
+        return Err(format!(
+            "invalid data directory: unsupported directory page size {}",
+            u16(data, 20)
+        ));
+    }
+    let capacity = usize::try_from(u32(data, HDR_DIR_PTR + 4))
+        .map_err(|_| "data directory capacity conversion overflow")?;
+    if directory.count > capacity {
+        return Err(format!(
+            "invalid data directory at byte {}: expected_entry_count={}, allocated_capacity={capacity}; reason=entry count exceeds capacity",
+            directory.offset, directory.count,
+        ));
+    }
     let mode = missing_mode(data)?;
-    let n = data.len();
 
     let mut cols: Vec<(String, Vec<i32>)> =
         lay.slugs.iter().map(|s| (s.clone(), Vec::new())).collect();
@@ -454,8 +528,7 @@ pub fn decode_store(
         member_ids: &mut Vec<Option<i32>>,
         data: &[u8],
         lay: &Layout,
-        base: usize,
-        n: usize,
+        directory: &MetadataDirectory,
         cols: &mut [(String, Vec<i32>)],
         values: &mut Vec<f64>,
         statuses: &mut Vec<f64>,
@@ -463,22 +536,8 @@ pub fn decode_store(
         mode: u16,
     ) -> Result<(), String> {
         if level == lay.ent_counts.len() {
-            let k = entry_index(coord, &lay.estride);
-            let o = base + 8 * k as usize;
-            if o.checked_add(8).is_none_or(|end| end > n) {
-                return Err("truncated data directory".into());
-            }
-            let pg = if data[o..o + 8].iter().all(|&v| v == 0) {
-                decode_page(&[2, 1, 0, 0], 0, lay, 4, mode)?
-            } else {
-                let e = dir_entry(data, o)
-                    .ok_or_else(|| format!("invalid data directory entry at {o}"))?;
-                if (e.off as usize) + (e.size as usize) > n {
-                    return Err("page outside file".into());
-                }
-                decode_page(data, e.off as usize, lay, e.size as usize, mode)
-                    .map_err(|err| format!("page at {}: {err}", e.off))?
-            };
+            let k = entry_index(coord, &lay.estride)?;
+            let pg = directory_page(data, directory, k, lay, mode)?;
             for row in 0..pg.vals.len() {
                 let mut mids = member_ids.clone();
                 let mut skip = false;
@@ -522,8 +581,7 @@ pub fn decode_store(
                     member_ids,
                     data,
                     lay,
-                    base,
-                    n,
+                    directory,
                     cols,
                     values,
                     statuses,
@@ -540,8 +598,7 @@ pub fn decode_store(
                     member_ids,
                     data,
                     lay,
-                    base,
-                    n,
+                    directory,
                     cols,
                     values,
                     statuses,
@@ -563,8 +620,7 @@ pub fn decode_store(
         &mut member_ids,
         data,
         lay,
-        base,
-        n,
+        &directory,
         &mut cols,
         &mut values,
         &mut statuses,
@@ -667,6 +723,122 @@ pub fn complete_grid(store: &[(String, Vec<f64>)], lay: &Layout) -> Vec<(String,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn paged_data_directory() -> (Vec<u8>, Layout) {
+        // Three directory pages in deliberately nonmonotonic physical order.
+        // A partial last page must keep its holes and declared ordinal bound.
+        let pages = [1024u32, 66_560, 33_792];
+        let mut data = vec![0; 99_328];
+        data[20..22].copy_from_slice(&4096u16.to_le_bytes());
+        data[HDR_DIR_PTR..HDR_DIR_PTR + 4].copy_from_slice(&1000u32.to_le_bytes());
+        data[HDR_DIR_PTR + 4..HDR_DIR_PTR + 8].copy_from_slice(&16_384u32.to_le_bytes());
+        data[HDR_DIR_PTR + 8..HDR_DIR_PTR + 12].copy_from_slice(&8194u32.to_le_bytes());
+        data[HDR_DIR_PTR + 12..HDR_DIR_PTR + 14].copy_from_slice(&1u16.to_le_bytes());
+        for (i, page) in pages.iter().enumerate() {
+            data[1000 + 4 * i..1004 + 4 * i].copy_from_slice(&page.to_le_bytes());
+        }
+        for (index, value) in [
+            (1, 11i16),
+            (4095, 12),
+            (4096, 13),
+            (8191, 14),
+            (8192, 15),
+            (8193, 16),
+        ] {
+            let offset = data.len() as u32;
+            let mut page = vec![0; 4100];
+            page[..4].copy_from_slice(&[2, 1, 0, 8]);
+            page[4..6].copy_from_slice(&value.to_le_bytes());
+            page[6..8].copy_from_slice(&(-value).to_le_bytes());
+            data.extend_from_slice(&page);
+            let at = pages[index / 4096] as usize + 8 * (index % 4096);
+            data[at..at + 4].copy_from_slice(&offset.to_le_bytes());
+            data[at + 4..at + 6].copy_from_slice(&4100u16.to_le_bytes());
+            data[at + 6..at + 8].copy_from_slice(&4100u16.to_le_bytes());
+        }
+        let lay = build_layout(&[DimDesc {
+            name: "Items".into(),
+            count: 2,
+            type_code: 0,
+            double01: false,
+        }])
+        .unwrap();
+        (data, lay)
+    }
+
+    #[test]
+    fn data_directory_pages_preserve_coordinates_and_blank_entries() {
+        let (data, lay) = paged_data_directory();
+        let directory = MetadataDirectory::new(&data, HDR_DIR_PTR).unwrap();
+        for (index, value) in [
+            (0, 0.0),
+            (1, 11.0),
+            (4095, 12.0),
+            (4096, 13.0),
+            (8191, 14.0),
+            (8192, 15.0),
+            (8193, 16.0),
+        ] {
+            let page = directory_page(&data, &directory, index, &lay, 3).unwrap();
+            assert_eq!(page.vals[..2], [value, -value]);
+            assert_eq!(page.statuses[..2], [0.0, 0.0]);
+            assert_eq!(page.tuples[..2], [vec![1], vec![2]]);
+        }
+        let error = directory_page(&data, &directory, 8194, &lay, 3)
+            .err()
+            .unwrap();
+        assert!(error.contains("entry 8194"), "{error}");
+        assert!(error.contains("expected_entry_count=8194"), "{error}");
+    }
+
+    #[test]
+    fn data_directory_rejects_malformed_entries_with_context() {
+        let (original, lay) = paged_data_directory();
+        for (offset, content, allocated, reason) in [
+            (0, 4, 4, "nonblank page"),
+            (original.len() as u32 - 3, 4, 4, "page content outside file"),
+            (original.len() as u32, 4, 4, "page content outside file"),
+            (u32::MAX, 4, 4, "page content outside file"),
+            (99_328, 0, 4, "nonblank page"),
+            (99_328, 4, 3, "content_length <= allocated_length"),
+        ] {
+            let mut data = original.clone();
+            let at = 66_560;
+            data[at..at + 4].copy_from_slice(&offset.to_le_bytes());
+            data[at + 4..at + 6].copy_from_slice(&(content as u16).to_le_bytes());
+            data[at + 6..at + 8].copy_from_slice(&(allocated as u16).to_le_bytes());
+            let directory = MetadataDirectory::new(&data, HDR_DIR_PTR).unwrap();
+            let error = directory_page(&data, &directory, 4096, &lay, 3)
+                .err()
+                .unwrap();
+            for expected in [
+                "entry 4096 at byte 66560",
+                "raw_offset=0x",
+                "calculated_target_offset=",
+                "directory_start=1000",
+                reason,
+            ] {
+                assert!(error.contains(expected), "{expected}: {error}");
+            }
+        }
+        // Declared content, rather than allocation or a size-difference
+        // heuristic, controls the component read.
+        let mut data = original;
+        data[1038..1040].copy_from_slice(&10_000u16.to_le_bytes());
+        let directory = MetadataDirectory::new(&data, HDR_DIR_PTR).unwrap();
+        assert_eq!(
+            directory_page(&data, &directory, 1, &lay, 3).unwrap().vals[0],
+            11.0
+        );
+    }
+
+    #[test]
+    fn directory_index_arithmetic_is_checked() {
+        assert_eq!(entry_index(&[1, 2], &[1, 4096]).unwrap(), 8193);
+        assert!(entry_index(&[-1], &[1]).is_err());
+        assert!(entry_index(&[i64::MAX], &[i64::MAX]).is_err());
+        assert!(entry_index(&[1, 1, 1], &[i64::MAX; 3]).is_err());
+    }
 
     #[test]
     fn layout_accepts_single_axes_and_disambiguates_reserved_names() {

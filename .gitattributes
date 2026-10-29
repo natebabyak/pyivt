@@ -1,0 +1,2 @@
+tests/fixtures/*.ivt binary
+tests/fixtures/98100018.csv text eol=lf
