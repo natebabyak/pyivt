@@ -135,8 +135,8 @@ those notes.
 The package includes type stubs, read-only property definitions, and Markdown
 hover documentation with Python snippets. Select the Python environment where
 `pyivt` is installed to get completions for metadata fields and the allowed
-`dimension.type` and `frequency` values. See [the editor guide](docs/editors.md)
-for examples, optional-value handling, and migration notes.
+`dimension.type` and `frequency` values. The examples above show localized-field
+access and optional-value handling; see [the changelog](CHANGELOG.md) for migration notes.
 
 ### Exporting Data
 

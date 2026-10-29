@@ -7,18 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.5] - 2026-10-29
+
 ### Added
 
 - Read-only `Dimension.items` exposes the declared member count; `count` remains an alias
+- Offline Arrow regressions compare all 1,155 cells of a committed paged IVT against an official CSV and verify a hand-authored fixture's complete typed output
 
 ### Changed
 
 - Time-series `frequency` uses `Frequency`, a literal enum of `"monthly"`, `"quarterly"`, `"semi_annual"`, and `"annual"`; non-time-series and unknown rates return `None`
+- Documented and validated the complete Arrow member-field projection: typed native attributes, bilingual labels, dates, missing statuses, and raw annotations
 
 ### Fixed
 
 - Blank table and dimension notes consistently return `None`
 - Keyword decoding respects stored string boundaries without interpreting framing bytes as control characters or leading spaces
+- Arrow export resolves paged data directories using their declared capacity and count, including noncontiguous pages, with checked offsets and ordinal bounds
+- Data records use their declared content and allocation lengths; malformed directory entries raise errors with diagnostic context
+
+### Migration
+
+- Replace stored-rate strings in `meta.frequency` checks with `"monthly"`, `"quarterly"`, `"semi_annual"`, or `"annual"`; handle `None` for absent or unknown frequencies
+- Treat blank table and dimension notes as `None` instead of `""`
 
 ## [0.0.4] - 2026-10-27
 
@@ -111,7 +122,8 @@ First public release: Rust/PyO3 reader for Statistics Canada Beyond 20/20 `.ivt`
 - Demo IVT tests skip in CI unless Beyond sample files are linked locally
 - No CLI or catalogue download; write Parquet yourself via `pyarrow` / Polars / pandas
 
-[Unreleased]: https://github.com/natebabyak/pyivt/compare/v0.0.4...HEAD
+[Unreleased]: https://github.com/natebabyak/pyivt/compare/v0.0.5...HEAD
+[0.0.5]: https://github.com/natebabyak/pyivt/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/natebabyak/pyivt/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/natebabyak/pyivt/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/natebabyak/pyivt/compare/v0.0.1...v0.0.2
