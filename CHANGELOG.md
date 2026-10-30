@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Arrow member IDs use `int32`; text member fields, `symbol` and `status` use `dictionary<int32, utf8>`
 - `to_arrow()` assembles chunked batches and caches Arrow buffers for repeated exports
+- Descriptor parsing requires the native axis matrix and exposes `metadata.descriptor_path`; unverified prose scanners and demo-specific scoring are removed
 
 ### Migration
 

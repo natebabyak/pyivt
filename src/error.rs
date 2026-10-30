@@ -48,7 +48,7 @@ impl fmt::Display for IvtError {
                 "invalid pointer offset={offset} length={length} file_len={file_len}"
             ),
             Self::InvalidDirectory(what) => write!(f, "invalid directory: {what}"),
-            Self::DescriptorNotFound => write!(f, "could not parse IVT dimension descriptor"),
+            Self::DescriptorNotFound => write!(f, "unsupported IVT descriptor: native axis matrix is missing or invalid; unverified descriptor fallback is disabled"),
             Self::UnsupportedLayout(msg) => write!(f, "unsupported layout: {msg}"),
             Self::Parse(msg) => write!(f, "{msg}"),
         }

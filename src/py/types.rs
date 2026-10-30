@@ -477,6 +477,13 @@ impl IvtMetadata {
     }
 
     #[getter]
+    /// Descriptor reader used for this table: "axis_matrix". Unverified
+    /// compatibility scanners are disabled; unsupported descriptors raise errors.
+    fn descriptor_path(&self) -> &'static str {
+        self.inner.lock().unwrap().desc().source
+    }
+
+    #[getter]
     /// Geography member lists, loaded on first access and cached.
     ///
     /// Returns Geographies for the axis selected by Ivt.layout.geo_dim.

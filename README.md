@@ -140,6 +140,10 @@ access and optional-value handling; see [the changelog](CHANGELOG.md) for migrat
 
 ### Exporting Data
 
+`metadata.descriptor_path` reports `"axis_matrix"`, the native format reader.
+Files without a valid master axis matrix raise `ValueError`; the former
+unverified descriptor scanner is disabled instead of returning guessed counts.
+
 Use `Ivt.to_arrow()` to export to Apache Arrow.
 
 The table contains the complete Cartesian product of all declared dimensions,

@@ -298,6 +298,9 @@ class IvtMetadata:
         Position i corresponds to Ivt.layout.counts[i] and Ivt.layout.slugs[i].
         """
     @property
+    def descriptor_path(self) -> str:
+        """Descriptor reader used for this table: axis_matrix. Unverified fallback is disabled."""
+    @property
     def geographies(self) -> Geographies:
         """Geography member lists, loaded on first access and cached.
 
