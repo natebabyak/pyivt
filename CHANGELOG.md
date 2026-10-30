@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `to_arrow()` assembles chunked batches and caches Arrow buffers for repeated exports
 - Descriptor parsing requires the native axis matrix and exposes `metadata.descriptor_path`; unverified prose scanners and demo-specific scoring are removed
 - Unsupported container versions 2 and 3 raise explicit errors for both path and byte sources; version 4 remains supported
+- Native axis kinds and language references determine time-series types and translations; arbitrary header text no longer supplies product IDs
+- Geography selection uses native geographic kinds or UID member fields; `layout.geo_dim` is `None` when no geography is declared, and `geographies.geo_uid` uses the native DGUID column
 
 ### Migration
 

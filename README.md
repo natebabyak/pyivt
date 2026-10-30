@@ -143,6 +143,11 @@ access and optional-value handling; see [the changelog](CHANGELOG.md) for migrat
 `metadata.descriptor_path` reports `"axis_matrix"`, the native format reader.
 Files without a valid master axis matrix raise `ValueError`; the former
 unverified descriptor scanner is disabled instead of returning guessed counts.
+Axis kinds and stored language references determine types and translations.
+Geography comes from an explicit native kind or UID member field; tables without
+either have `layout.geo_dim is None`. `metadata.geographies.geo_uid` preserves
+native DGUID values. Product identity is read within native summary/notes records,
+without searching unrelated header bytes for plausible identifiers.
 
 Use `Ivt.to_arrow()` to export to Apache Arrow.
 

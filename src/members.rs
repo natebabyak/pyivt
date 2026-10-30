@@ -284,6 +284,26 @@ pub(crate) fn iso_date(days: i64) -> String {
 
 pub type MemberField = (String, Vec<Option<String>>);
 
+/// Geographic UID attributes identify a role even with a Normal axis kind.
+pub(crate) fn has_geo_uid_field(data: &[u8], dimension: usize) -> bool {
+    let Ok(dir) = Directory::new(data, dimension) else {
+        return false;
+    };
+    let Ok(Some(definitions)) = dir.record(0) else {
+        return false;
+    };
+    if definitions.get(..2) != Some(&[1, 2]) || u16(&definitions, 4) != 34 {
+        return false;
+    }
+    definitions[6..].as_chunks::<34>().0.iter().any(|field| {
+        let length = field[0] as usize;
+        length <= 17
+            && ["DGUID", "DGUID_EN", "DGUID_FR", "GEOUID", "GEO_UID"]
+                .iter()
+                .any(|name| latin1(&field[1..1 + length]).eq_ignore_ascii_case(name))
+    })
+}
+
 /// Read every declared field for an axis, in native member ordinal order.
 ///
 /// Field names are the names recorded in the IVT, without label-based guessing.

@@ -351,8 +351,8 @@ class Layout:
     def n_dim(self) -> int:
         """Number of dimensions; equals len(counts) and len(slugs)."""
     @property
-    def geo_dim(self) -> int:
-        """One-based index of the selected geography axis; may be a fallback axis."""
+    def geo_dim(self) -> int | None:
+        """One-based geography axis from the native kind or UID field, or None when absent."""
     @property
     def straddle(self) -> int:
         """One-based index of the axis split across IVT page windows."""

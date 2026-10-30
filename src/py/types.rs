@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::arrow_export::stream_capsule;
-use crate::decode::{build_layout, Layout};
+use crate::decode::{build_layout_with_geo, Layout};
 use crate::descriptor::parse_descriptor;
 use crate::error::IvtError;
 use crate::header::read_header;
@@ -555,9 +555,9 @@ pub struct PyLayout {
     /// Number of dimensions; equals len(counts) and len(slugs).
     #[pyo3(get)]
     pub n_dim: usize,
-    /// One-based index of the selected geography axis; may be a fallback axis.
+    /// One-based geography axis from the native kind or UID field; None when absent.
     #[pyo3(get)]
-    pub geo_dim: usize,
+    pub geo_dim: Option<usize>,
     /// One-based index of the axis split across IVT page windows.
     #[pyo3(get)]
     pub straddle: usize,
@@ -897,7 +897,8 @@ pub fn open_ivt(py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<Ivt> {
             let (meta, layout) = py
                 .allow_threads(|| -> Result<(CoreMeta, Layout), IvtError> {
                     let meta = metadata::open_metadata_path(&path_clone)?;
-                    let layout = build_layout(&meta.desc().dims).map_err(IvtError::Parse)?;
+                    let layout = build_layout_with_geo(&meta.desc().dims, meta.desc().geo_dim)
+                        .map_err(IvtError::Parse)?;
                     Ok((meta, layout))
                 })
                 .map_err(map_ivt_err)?;
@@ -923,7 +924,8 @@ pub fn open_ivt(py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<Ivt> {
                 .allow_threads(|| -> Result<(CoreMeta, Layout), IvtError> {
                     let hdr = read_header(&data).map_err(IvtError::Parse)?;
                     let desc = parse_descriptor(&data).ok_or(IvtError::DescriptorNotFound)?;
-                    let layout = build_layout(&desc.dims).map_err(IvtError::Parse)?;
+                    let layout =
+                        build_layout_with_geo(&desc.dims, desc.geo_dim).map_err(IvtError::Parse)?;
                     let meta = metadata::build_metadata(data.clone(), Some(desc), Some(hdr))
                         .map_err(IvtError::Parse)?;
                     Ok((meta, layout))

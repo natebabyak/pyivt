@@ -23,6 +23,7 @@ pub struct Descriptor {
     pub offset: u32,
     pub dims: Vec<DimDesc>,
     pub source: &'static str,
+    pub geo_dim: Option<usize>,
 }
 
 /// Only the native master axis matrix is authoritative. Missing or malformed
@@ -75,10 +76,16 @@ pub fn structured_descriptor(data: &[u8]) -> Option<Descriptor> {
     {
         return None;
     }
+    let geo_dim = geo_dim_index(&dims).or_else(|| {
+        (0..dims.len())
+            .find(|&axis| crate::members::has_geo_uid_field(data, axis))
+            .map(|axis| axis + 1)
+    });
     Some(Descriptor {
         offset,
         dims,
         source: "axis_matrix",
+        geo_dim,
     })
 }
 
@@ -86,25 +93,8 @@ fn is_geographic_dim(d: &DimDesc) -> bool {
     d.double01 || d.type_code == 0x12
 }
 
-pub fn geo_dim_index(dims: &[DimDesc]) -> usize {
-    if dims.is_empty() {
-        return 1;
-    }
-    let name = dims[0].name.to_lowercase();
-    if dims[0].count == 1 && (name == "values" || name == "value") {
-        return dims.len();
-    }
-    // Prefer the geographic axis kind stored in the native matrix.
-    if let Some((i, _)) = dims.iter().enumerate().find(|(_, d)| is_geographic_dim(d)) {
-        return i + 1;
-    }
-    // Census-style tables keep geography first even when Type is Normal.
-    if dims[0].name.eq_ignore_ascii_case("Geography")
-        || dims[0].name.eq_ignore_ascii_case("Géographie")
-    {
-        return 1;
-    }
-    1
+pub fn geo_dim_index(dims: &[DimDesc]) -> Option<usize> {
+    dims.iter().position(is_geographic_dim).map(|axis| axis + 1)
 }
 
 pub fn dim_slugs(names: &[String]) -> Vec<String> {

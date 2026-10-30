@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::bytes::{latin1, u16, u32};
-use crate::descriptor::{geo_dim_index, parse_descriptor, Descriptor, DimDesc};
+use crate::descriptor::{parse_descriptor, Descriptor, DimDesc};
 use crate::error::IvtError;
 use crate::header::{
     dim_slots, read_header, read_header_ex, HeaderLayout, DIM_SLOT_STRIDE, HDR_DESCRIPTOR_PTR,
@@ -14,12 +14,6 @@ use crate::header::{
 };
 use crate::io::IvtSource;
 
-static TIME_SERIES_NAME_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?i)timeseries|time\s*series|time\s*period|\bdate\b").unwrap());
-static FR_CHARS: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"[àâäéèêëïîôùûüçœæÀÂÄÉÈÊËÏÎÔÙÛÜÇ]").unwrap());
-static FR_WORDS: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?i)\b(de|des|les|une|pour|dans|recensement|année|âge)\b").unwrap());
 static PID_FIRST: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[\w.-]+$").unwrap());
 static PID_FULL: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[\dA-Za-z][\w./-]*$").unwrap());
 static GEO_INLINE_RE: Lazy<Regex> = Lazy::new(|| {
@@ -37,8 +31,6 @@ static PRODUCT_ID_HEAD: Lazy<Regex> =
 static TITLE_EN_HEAD: Lazy<Regex> = Lazy::new(|| Regex::new(r"Title:\s*([^\r\n]+)").unwrap());
 static TITLE_FR_HEAD: Lazy<Regex> = Lazy::new(|| Regex::new(r"Titre\s*:\s*([^\r\n]+)").unwrap());
 static UNIVERSE_HEAD: Lazy<Regex> = Lazy::new(|| Regex::new(r"Universe:\s*([^\r\n]+)").unwrap());
-static PID_FALLBACK: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"\b(\d{2}-\d{3}-[A-Z]\d{7,}|\d{8})\b").unwrap());
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DimensionType {
@@ -220,7 +212,10 @@ impl IvtMetadata {
         if self.geographies.is_some() {
             return Ok(());
         }
-        let gd = geo_dim_index(&self.desc.dims);
+        let Some(gd) = self.desc.geo_dim else {
+            self.geographies = Some(Geographies::default());
+            return Ok(());
+        };
         let geos = if let Some(data) = &self.metadata_image {
             geo_from_dir(data, &self.desc.dims[gd - 1], gd - 1)
         } else {
@@ -247,13 +242,6 @@ impl IvtMetadata {
     pub fn io_metrics(&self) -> crate::io::IoMetrics {
         self.source.metrics()
     }
-}
-
-fn frscore(s: &str) -> usize {
-    if s.is_empty() {
-        return 0;
-    }
-    FR_CHARS.find_iter(s).count() + FR_WORDS.find_iter(s).count()
 }
 
 fn master_dir_entries(data: &[u8], max_entries: usize) -> Vec<(u32, u16)> {
@@ -479,7 +467,7 @@ fn parse_time_series(data: &[u8]) -> Option<TimeSeriesInfo> {
 }
 
 fn dimension_type_for(d: &DimDesc) -> DimensionType {
-    if d.type_code == 6 || TIME_SERIES_NAME_RE.is_match(&d.name) {
+    if d.type_code == 6 {
         return DimensionType::TimeSeries;
     }
     if d.double01 || d.type_code == 0x12 {
@@ -495,82 +483,27 @@ fn read_only_flag(data: &[u8]) -> bool {
 }
 
 fn parse_table_identity(data: &[u8]) -> HashMap<&'static str, Option<String>> {
-    let head = latin1(&data[..data.len().min(8000)]);
-    let grab = |re: &Regex| {
-        re.captures(&head)
-            .map(|m| m.get(1).unwrap().as_str().trim().to_string())
+    let mut info = parse_facet_summary(data);
+    // Use native language references, never unrelated header bytes or word counts.
+    let en = summary_text(data, 1, 8);
+    let fr = summary_text(data, 2, 8);
+    let grab = |text: Option<&str>, pattern: &Regex| {
+        text.and_then(|s| pattern.captures(s))
+            .map(|m| m[1].trim().to_string())
     };
-    let mut info: HashMap<&'static str, Option<String>> = HashMap::new();
-    info.insert("product_id", grab(&PRODUCT_ID_HEAD));
-    info.insert("title_en", grab(&TITLE_EN_HEAD));
-    info.insert("title_fr", grab(&TITLE_FR_HEAD));
-    info.insert("universe", grab(&UNIVERSE_HEAD));
-
-    let mut blobs = Vec::new();
-    for (off, s1) in master_dir_entries(data, 32) {
-        let blk = &data[off as usize..off as usize + s1 as usize];
-        if blk.len() >= 2 && &blk[..2] == b"\x01\x01" && s1 > 8 {
-            let payload = &blk[4..];
-            let mut i = 0;
-            while i < payload.len() && payload[i] < 0x20 {
-                i += 1;
-            }
-            let text = latin1(&payload[i..]).trim().to_string();
-            if !text.is_empty() {
-                blobs.push(text);
-            }
-        } else if !blk.is_empty() && (blk[0] == b' ' || blk[0].is_ascii_alphabetic()) {
-            let text = latin1(blk).trim().to_string();
-            if text.contains("98-") || text.contains("Title") {
-                blobs.push(text);
-            }
+    info.insert(
+        "product_id",
+        grab(en.as_deref(), &PRODUCT_ID_HEAD).or_else(|| grab(fr.as_deref(), &PRODUCT_ID_HEAD)),
+    );
+    info.insert("universe", grab(en.as_deref(), &UNIVERSE_HEAD));
+    for (key, text, pattern) in [
+        ("title_en", en.as_deref(), &*TITLE_EN_HEAD),
+        ("title_fr", fr.as_deref(), &*TITLE_FR_HEAD),
+    ] {
+        if info.get(key).is_none_or(|v| v.is_none()) {
+            info.insert(key, grab(text, pattern));
         }
     }
-
-    let facet = parse_facet_summary(data);
-    let mut pid = info.get("product_id").cloned().flatten();
-    let mut title_en = info.get("title_en").cloned().flatten();
-    let mut title_fr = info.get("title_fr").cloned().flatten();
-
-    for blob in &blobs {
-        let (p, t) = identity_from_blob(blob);
-        if let Some(ref p) = p {
-            if (pid.is_none() || p.len() > pid.as_ref().map(|x| x.len()).unwrap_or(0))
-                && PID_FULL.is_match(p)
-            {
-                pid = Some(p.clone());
-            }
-        }
-        if let Some(t) = t {
-            if title_en.is_none() && title_fr.is_none() {
-                if frscore(&t) >= 2 {
-                    title_fr = Some(t);
-                } else {
-                    title_en = Some(t);
-                }
-            }
-        }
-    }
-
-    if let Some(t) = facet.get("title_en").cloned().flatten() {
-        title_en = Some(t);
-    }
-    if let Some(t) = facet.get("title_fr").cloned().flatten() {
-        title_fr = Some(t);
-    }
-    if pid.is_none() {
-        if let Some(m) = PID_FALLBACK.captures(&head) {
-            pid = Some(m.get(1).unwrap().as_str().to_string());
-        }
-    }
-
-    info.insert("product_id", pid);
-    info.insert("title_en", title_en);
-    info.insert("title_fr", title_fr);
-    info.insert("author_en", facet.get("author_en").cloned().flatten());
-    info.insert("author_fr", facet.get("author_fr").cloned().flatten());
-    info.insert("category_en", facet.get("category_en").cloned().flatten());
-    info.insert("category_fr", facet.get("category_fr").cloned().flatten());
     info
 }
 
@@ -743,6 +676,17 @@ fn geo_from_dir(data: &[u8], dim: &DimDesc, slot_index: usize) -> Geographies {
         if fr.len() >= n {
             fr.truncate(n);
             geo.geo_label_fr = Some(fr);
+        }
+    }
+    if let Ok(fields) = crate::members::read_members(data, slot_index, n) {
+        for name in ["DGUID_EN", "DGUID", "GEOUID", "GEO_UID", "DGUID_FR"] {
+            if let Some((_, values)) = fields
+                .iter()
+                .find(|(field, _)| field.eq_ignore_ascii_case(name))
+            {
+                geo.geo_uid = Some(values.clone());
+                break;
+            }
         }
     }
     geo
@@ -938,10 +882,10 @@ fn signature_hex(sig: &[u8; 4]) -> String {
 }
 
 pub fn build_dimensions(data: &[u8], desc: &Descriptor) -> Vec<Dimension> {
-    let gd = geo_dim_index(&desc.dims);
+    let gd = desc.geo_dim;
     let mut dims = Vec::new();
     for (i, d) in desc.dims.iter().enumerate() {
-        let is_geo = (i + 1) == gd;
+        let is_geo = Some(i + 1) == gd;
         let (members_en, members_fr) = dim_dir_labels(data, d, i, is_geo);
         let items = d.count;
         let (short, title_name_fr, description_en, description_fr) = dim_title(data, i);
@@ -1328,13 +1272,41 @@ mod tests {
     }
 
     #[test]
+    fn native_language_ids_override_text_vocabulary() {
+        let facet = |title: &[u8]| {
+            let mut record = text_record(&vec![0; 0x304]);
+            record[4..11].copy_from_slice(b"FACET04");
+            record[11..11 + title.len()].copy_from_slice(title);
+            record
+        };
+        let mut languages = vec![1, 2, 2, 0, 32, 0];
+        for (language, index) in [(2u32, 9u32), (1, 0)] {
+            let mut row = [0; 32];
+            row[..4].copy_from_slice(&language.to_le_bytes());
+            row[4..8].copy_from_slice(&index.to_le_bytes());
+            languages.extend_from_slice(&row);
+        }
+        let data = master_fixture(&[
+            (0, facet(b"les donnees de la population")),
+            (7, languages),
+            (9, facet(b"Plain English words")),
+        ]);
+        let info = parse_table_identity(&data);
+        assert_eq!(
+            info["title_en"].as_deref(),
+            Some("les donnees de la population")
+        );
+        assert_eq!(info["title_fr"].as_deref(), Some("Plain English words"));
+    }
+
+    #[test]
     fn dimension_types_are_a_closed_set() {
         for (name, type_code, double01, expected) in [
             ("Region", 0x12, false, "geographic"),
             ("Region", 0, true, "geographic"),
             ("Items", 0, false, "normal"),
             ("TIME", 6, false, "time_series"),
-            ("Time Period", 0, false, "time_series"),
+            ("Time Period", 0, false, "normal"),
         ] {
             let dim = DimDesc {
                 name: name.into(),

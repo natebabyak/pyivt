@@ -1,7 +1,7 @@
 //! Unified page-directory layout and cell decode.
 
 use crate::bytes::{nextpow2, u16, u32};
-use crate::descriptor::{dim_slugs, geo_dim_index, DimDesc};
+use crate::descriptor::{dim_slugs, DimDesc};
 use crate::header::{HDR_DIR_PTR, HDR_MASTER_PTR, MARKER_WIDTHS};
 use crate::metadata_directory::MetadataDirectory;
 use std::collections::HashSet;
@@ -13,7 +13,7 @@ pub struct Layout {
     pub counts: Vec<i64>,
     pub slugs: Vec<String>,
     pub n_dim: usize,
-    pub geo_dim: usize,
+    pub geo_dim: Option<usize>,
     pub straddle: usize,
     pub ipc: Vec<i64>,
     pub window_count: i64,
@@ -110,7 +110,12 @@ fn cell_grid(counts: &[i64], stride: &[i64]) -> (Vec<Vec<i32>>, Vec<i32>) {
     (rows, bit)
 }
 
+#[cfg(test)]
 pub fn build_layout(dims: &[DimDesc]) -> Result<Layout, String> {
+    build_layout_with_geo(dims, crate::descriptor::geo_dim_index(dims))
+}
+
+pub fn build_layout_with_geo(dims: &[DimDesc], gd: Option<usize>) -> Result<Layout, String> {
     if dims.is_empty() || dims.iter().any(|dim| dim.count <= 0) {
         return Err("descriptor must have dimensions with positive item counts".into());
     }
@@ -122,11 +127,12 @@ pub fn build_layout(dims: &[DimDesc]) -> Result<Layout, String> {
         .try_fold(1usize, |n, &c| n.checked_mul(c as usize))
         .ok_or("dimension product exceeds addressable memory")?;
     let m = cnt.len();
-    let gd = geo_dim_index(dims);
-    let didx: Vec<usize> = (1..=m).filter(|&i| i != gd).collect();
+    let didx: Vec<usize> = (1..=m).filter(|&i| Some(i) != gd).collect();
     let names: Vec<String> = didx.iter().map(|&i| dims[i - 1].name.clone()).collect();
     let mut slugs = vec![String::new(); m];
-    slugs[gd - 1] = "geo".into();
+    if let Some(gd) = gd {
+        slugs[gd - 1] = "geo".into();
+    }
     for (i, slug) in didx.iter().zip(dim_slugs(&names)) {
         slugs[i - 1] = slug;
     }
@@ -142,7 +148,7 @@ pub fn build_layout(dims: &[DimDesc]) -> Result<Layout, String> {
     .map(str::to_owned)
     .collect();
     for (index, slug) in slugs.iter_mut().enumerate() {
-        if index == gd - 1 {
+        if Some(index + 1) == gd {
             continue;
         }
         if slug.starts_with("footnote_raw_") {
@@ -217,7 +223,7 @@ pub fn build_layout(dims: &[DimDesc]) -> Result<Layout, String> {
         ent_idx,
         ent_counts,
         estride,
-        geo_in_page: straddle == gd,
+        geo_in_page: Some(straddle) == gd,
     })
 }
 
