@@ -54,6 +54,15 @@ pub fn read_header_ex(data: &[u8], file_len: usize) -> Result<HeaderLayout, Stri
     if data.len() < 576 {
         return Err("IVT file too small to contain a header".into());
     }
+    if data[2..4] == [0x20, 0] && u16(data, 0) != 4 {
+        return Err(format!(
+            "unsupported IVT container version {}; only version 4 is supported",
+            u16(data, 0)
+        ));
+    }
+    if data[..4] != [4, 0, 0x20, 0] {
+        return Err(format!("unrecognised IVT signature: {:02x?}", &data[..4]));
+    }
     let fr = u32(data, HDR_TITLE_FR_PTR);
     let en = u32(data, HDR_TITLE_EN_PTR);
     let legacy = en != 0 || fr != 0;

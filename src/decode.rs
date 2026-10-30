@@ -253,6 +253,11 @@ pub fn decompress_component(data: &[u8]) -> Result<Vec<u8>, String> {
         .checked_mul(width)
         .and_then(|n| n.checked_add(header))
         .ok_or("component size overflow")?;
+    // A native directory record has a u16 encoded length. Refuse adversarial
+    // standalone extents before expansion, including all-zero compressed data.
+    if bytes > 64 * 1024 * 1024 {
+        return Err("component expansion exceeds the 64 MiB safety limit".into());
+    }
     // Rank-two byte components can declare huge extents. Validate encoded
     // input before allocating its expanded destination.
     if data[0] & 0x80 == 0 {
@@ -827,6 +832,57 @@ mod tests {
         let cells = decode_page(&page, 0, &layout, page.len(), 3).unwrap();
         assert_eq!(cells.footnotes[0], [0, 3]);
         assert!(cells.footnotes[1].is_empty());
+    }
+
+    #[test]
+    fn page_capacity_two_extended_records_and_five_bit_references() {
+        let lay = build_layout(&[DimDesc {
+            name: "Items".into(),
+            count: 2048,
+            type_code: 0,
+            double01: false,
+        }])
+        .unwrap();
+        assert_eq!(lay.bit.len(), 2048);
+        assert_eq!(lay.bit[2047], 2047);
+        let mut page = vec![0u8; 4100];
+        page[..4].copy_from_slice(&[0x22, 1, 0, 8]);
+        page[4098..4100].copy_from_slice(&123i16.to_le_bytes());
+        let mut missing = vec![1, 1];
+        missing.extend_from_slice(&[0; 256]);
+        missing[257] = 1; // The final cell is missing with explicit code 1.
+        let notes = [2, 1, 2, 0, 0, 0, 255, 255]; // Cell 0/ref 0; cell 2047/ref 31.
+        page.extend_from_slice(&[2, 2, 1, 8, 0]);
+        page.extend_from_slice(&missing);
+        page.extend_from_slice(&notes);
+        if page.len() % 2 != 0 {
+            page.push(0);
+        }
+        let count = ((page.len() - 4) / 2) as u16;
+        page[2..4].copy_from_slice(&count.to_le_bytes());
+        let cells = decode_page(&page, 0, &lay, page.len(), 3).unwrap();
+        assert_eq!(cells.vals[2047], 123.0);
+        assert_eq!(cells.statuses[2047], 1);
+        assert_eq!(cells.footnotes[0], [0]);
+        assert_eq!(cells.footnotes[2047], [u16::MAX]);
+        assert_eq!(u16::MAX >> 5, 2047);
+        assert_eq!(u16::MAX & 31, 31);
+        page[4100] = 3;
+        assert!(decode_page(&page, 0, &lay, page.len(), 3)
+            .err()
+            .unwrap()
+            .contains("extended page record directory"));
+
+        let mut short = vec![0u8; 4 + 2047 * 2];
+        short[..4].copy_from_slice(&[2, 1, 255, 7]);
+        assert!(decode_page(&short, 0, &lay, short.len(), 3)
+            .err()
+            .unwrap()
+            .contains("only 2047 cells"));
+        assert!(decompress_component(&[0x88, 2, 255, 255, 255, 255])
+            .err()
+            .unwrap()
+            .contains("safety limit"));
     }
 
     #[test]

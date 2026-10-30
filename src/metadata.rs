@@ -1087,6 +1087,7 @@ fn metadata_catalog(
     let file_len = source.len()? as usize;
     let header_len = (HDR_DIM_SLOT0 + DIM_SLOT_STRIDE * 32).min(file_len);
     let mut catalog = source.read_prefix(header_len)?;
+    read_header_ex(&catalog, file_len).map_err(IvtError::Parse)?;
     if catalog.len() < 576 {
         return Err(IvtError::Parse(
             "IVT file too small to contain a header".into(),

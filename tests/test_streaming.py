@@ -149,6 +149,37 @@ def test_later_corrupt_page_raises_and_terminates_iterator():
         next(iterator)
 
 
+def test_stream_crosses_noncontiguous_paged_directory_boundary():
+    data = bytearray(cube((4097, 2049), label_fields=0))
+    flat, capacity, count = struct.unpack_from("<III", data, 558)
+    entries = bytearray(data[flat : flat + count * 8])
+    for index, value in [(4095, 17), (4096, 23)]:
+        page = struct.pack("<BBH", 2, 1, 2048) + struct.pack("<h", value) + bytes(4094)
+        offset = len(data)
+        data.extend(page)
+        struct.pack_into("<IHH", entries, index * 8, offset, len(page), len(page))
+    # Store directory pages backwards, forcing ordinal resolution through the
+    # pointer index rather than accidental contiguous addressing.
+    pointers = []
+    for start in reversed(range(0, len(entries), 4096 * 8)):
+        pointers.insert(0, len(data))
+        data.extend(entries[start : start + 4096 * 8])
+    index_offset = len(data)
+    data.extend(struct.pack(f"<{len(pointers)}I", *pointers))
+    struct.pack_into("<IIIH", data, 558, index_offset, capacity, count, 1)
+    ivt = pyivt.open(bytes(data))
+    expected = {2047 * 2049 + 2048: 17.0, 2048 * 2049: 23.0}
+    position = 0
+    seen = {}
+    for batch in ivt.to_batches(batch_size=100_000):
+        for row in expected:
+            if position <= row < position + batch.num_rows:
+                seen[row] = batch.column("value")[row - position].as_py()
+        position += batch.num_rows
+    assert position == 4097 * 2049
+    assert seen == expected
+
+
 @pytest.mark.parametrize(
     "path", sorted((Path(__file__).resolve().parents[1] / "data").glob("*.ivt"))
 )
