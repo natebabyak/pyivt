@@ -178,7 +178,8 @@ with pq.ParquetWriter("data.parquet", first.schema) as writer:
 
 `to_batches()` shares member dictionaries across batches and aligns batches to
 outer-dimension boundaries when they fit the requested size. `pa.table(ivt)`
-and `pa.RecordBatchReader.from_stream(ivt)` use the Arrow C stream protocol.
+uses the Arrow C stream protocol; recent PyArrow versions also provide
+`pa.RecordBatchReader.from_stream(ivt)` for lazy consumption.
 `to_arrow()` materializes and caches Arrow batches; repeated calls share buffers.
 It raises a catchable `MemoryError` if its conservative allocation estimate exceeds
 `max_memory_bytes` (default 2 GiB). Batches default to a 1 GiB estimate limit.

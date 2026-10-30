@@ -1,0 +1,40 @@
+name: Held-out corpus
+
+on:
+  schedule:
+    - cron: "13 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  corpus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: .cache/heldout
+          key: heldout-${{ hashFiles('tests/corpus/heldout.json') }}
+      - name: Download only pinned held-out files
+        run: uv run --no-project python scripts/download_test_inputs.py --manifest tests/corpus/heldout.json --destination .cache/heldout
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          manylinux: "2_28"
+          args: --release --out dist --interpreter python3.12
+      - name: Convert under a hard 8 GiB cgroup memory cap
+        run: |
+          docker run --rm --memory=8g --memory-swap=8g \
+            -v "$PWD:/src" -w /src python:3.12-slim \
+            sh -ec 'pip install --quiet pyarrow psutil dist/*.whl; python -m scripts.probe_corpus'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: heldout-results
+          path: .cache/heldout-results.jsonl

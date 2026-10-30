@@ -47,3 +47,32 @@ python -m scripts.benchmark_memory --mode stream --cells 100000000
 python -m scripts.benchmark_memory --mode table --cells 10000000
 python -m scripts.benchmark_memory --mode table --path data/<sha256>.ivt --hash
 ```
+
+## First frozen held-out run
+
+Parser frozen at 9cbaee9; input hashes committed at 8966557 before conversion.
+All 10 streams completed: **882,706,378 rows**, at most **613,486,592 bytes RSS**.
+The eight StatCan dimension vectors matched independent WDS metadata. Both
+JODI grids matched their native dimension products. Four materialized exports
+completed; six raised `MemoryError` in pre-flight. No crashes, caps, row-count
+failures or dimension mismatches occurred. Raw data: [heldout-results.jsonl](heldout-results.jsonl).
+
+| Input | Rows | Stream peak MB | Seconds | Materialized result |
+| --- | ---: | ---: | ---: | --- |
+| 98100036 | 336 | 39.3 | 0.042 | converted |
+| 98100042 | 93,960 | 44.5 | 0.045 | converted |
+| 98100021 | 890,112 | 103.7 | 0.125 | converted |
+| 98100277 | 12,261,780 | 240.6 | 1.789 | MemoryError |
+| 98100532 | 126,198,000 | 429.0 | 17.899 | MemoryError |
+| 98100291 | 32,345,730 | 372.4 | 4.503 | MemoryError |
+| 98100592 | 372,507,660 | 522.5 | 44.055 | MemoryError |
+| 98100439 | 315,705,600 | 613.5 | 41.989 | MemoryError |
+| NewProcedure_World_Primary.ivt | 6,985,600 | 234.2 | 0.909 | converted |
+| NewProcedure_World_Secondary.ivt | 15,717,600 | 287.3 | 1.988 | MemoryError |
+
+This run used a sampled 8 GiB RSS watchdog on Windows and a 6 GiB allocation
+estimate limit. It did **not** use a hard OS cap. The committed nightly Docker
+workflow adds an 8 GiB cgroup limit; it has not been executed on this Windows host.
+The two new unmodified official CSV samples independently match all 94,296
+coordinate/value/symbol cells, English member labels and DGUIDs. Their gzip
+containers preserve the original CSV bytes and pinned decompressed hashes.

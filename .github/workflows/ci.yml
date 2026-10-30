@@ -9,6 +9,9 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        pyarrow: [latest, "14.0.2"]
     env:
       PYIVT_REQUIRE_DATA: "1"
     steps:
@@ -41,5 +44,12 @@ jobs:
       - name: Rust tests
         run: cargo test
 
+      - name: Compile native fuzz targets
+        run: cargo check --manifest-path fuzz/Cargo.toml --bins --locked
+
+      - name: Install minimum supported Arrow
+        if: matrix.pyarrow == '14.0.2'
+        run: uv pip install 'pyarrow==14.0.2' 'numpy<2'
+
       - name: Test
-        run: uv run pytest
+        run: uv run --no-sync pytest

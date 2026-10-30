@@ -15,6 +15,13 @@ from test_typed_arrow import _expected_table, _typed_fixture
 from scripts.ivt_synthetic import cube
 
 
+def _stream_reader(ivt):
+    # PyArrow 14 supports capsules but predates the public from_stream helper.
+    if hasattr(pa.RecordBatchReader, "from_stream"):
+        return pa.RecordBatchReader.from_stream(ivt)
+    return pa.RecordBatchReader._import_from_c_capsule(ivt.__arrow_c_stream__())
+
+
 @pytest.mark.parametrize("batch_size", [1, 5, 6, 7, 100])
 def test_stream_matches_independently_declared_typed_result(batch_size):
     ivt = pyivt.open(_typed_fixture())
@@ -53,7 +60,7 @@ def test_shared_ivt_can_export_from_multiple_threads():
 def test_iterator_and_c_stream_own_source_after_ivt_is_released():
     ivt = pyivt.open(_typed_fixture())
     iterator = ivt.to_batches(batch_size=5)
-    reader = pa.RecordBatchReader.from_stream(ivt)
+    reader = _stream_reader(ivt)
     del ivt
     gc.collect()
     assert plain_table(pa.Table.from_batches(iterator)).equals(_expected_table())
@@ -64,7 +71,7 @@ def test_iterator_and_c_stream_own_source_after_ivt_is_released():
 def test_early_release_and_independent_readers():
     ivt = pyivt.open(_typed_fixture())
     for _ in range(20):
-        reader = pa.RecordBatchReader.from_stream(ivt)
+        reader = _stream_reader(ivt)
         assert reader.read_next_batch().num_rows == 12
         reader.close()
     first, second = ivt.to_batches(batch_size=5), ivt.to_batches(batch_size=7)
@@ -74,6 +81,10 @@ def test_early_release_and_independent_readers():
     assert sum(batch.num_rows for batch in second) == 6
     with pytest.raises(ValueError, match="requested_schema"):
         ivt.__arrow_c_stream__(pa.schema([]).__arrow_c_schema__())
+
+
+def test_public_arrow_table_imports_c_stream_protocol():
+    assert plain_table(pa.table(pyivt.open(_typed_fixture()))).equals(_expected_table())
 
 
 @pytest.mark.parametrize("method", ["to_arrow", "to_batches"])

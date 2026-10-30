@@ -1,12 +1,17 @@
 """Editor-facing API contracts, checked by ty in CI."""
 
+from collections.abc import Iterator
 from typing import Literal
 
+import pyarrow as pa
 import pyivt
 from typing_extensions import assert_type
 
 
 def check_metadata(ivt: pyivt.Ivt) -> None:
+    assert_type(ivt.layout.geo_dim, int | None)
+    assert_type(ivt.metadata.descriptor_path, str)
+    assert_type(ivt.to_batches(), Iterator[pa.RecordBatch])
     frequency: pyivt.Frequency = "semi_annual"
     assert_type(
         ivt.metadata.frequency,
