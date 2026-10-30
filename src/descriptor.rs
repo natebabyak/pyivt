@@ -153,14 +153,7 @@ mod tests {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
         let items = Regex::new(r#""name_en":\s*"([^"]+)"[\s\S]*?"items":\s*(\d+)"#).unwrap();
         let mut checked = 0;
-        let Ok(entries) = std::fs::read_dir(root.join("data")) else {
-            return;
-        };
-        for entry in entries {
-            let path = entry.unwrap().path();
-            if path.extension().is_none_or(|ext| ext != "ivt") {
-                continue;
-            }
+        for path in crate::test_data::files() {
             let expected = root
                 .join("tests/expected")
                 .join(path.file_stem().unwrap())
@@ -189,8 +182,9 @@ mod tests {
             assert_eq!(actual, expected, "{}", path.display());
             checked += 1;
         }
-        if checked == 0 {
-            eprintln!("No local IVT fixtures were available for descriptor verification");
-        }
+        assert!(
+            !crate::test_data::required() || checked > 0,
+            "PYIVT_REQUIRE_DATA=1: no IVT fixtures with descriptor goldens"
+        );
     }
 }

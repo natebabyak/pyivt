@@ -887,15 +887,7 @@ mod tests {
 
     #[test]
     fn supplied_pages_decode_all_dimensions_and_cells() {
-        let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
-        let Ok(files) = std::fs::read_dir(directory) else {
-            return;
-        };
-        for file in files {
-            let path = file.unwrap().path();
-            if path.extension().is_none_or(|ext| ext != "ivt") {
-                continue;
-            }
+        for path in crate::test_data::files() {
             let data = std::fs::read(&path).unwrap();
             let dims = crate::descriptor::parse_descriptor(&data).unwrap().dims;
             let layout = build_layout(&dims).unwrap();

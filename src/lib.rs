@@ -10,6 +10,8 @@ mod metadata;
 mod metadata_directory;
 mod py;
 mod stream;
+#[cfg(test)]
+mod test_data;
 mod tidy;
 
 use pyo3::prelude::*;

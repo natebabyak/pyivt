@@ -9,6 +9,8 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    env:
+      PYIVT_REQUIRE_DATA: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -33,11 +35,11 @@ jobs:
       - name: Type check public API
         run: uv run ty check python tests/typing
 
+      - name: Download fixtures
+        run: uv run python scripts/download_test_inputs.py --manifest tests/corpus/training.json
+
       - name: Rust tests
         run: cargo test
-
-      - name: Download fixtures
-        run: uv run python scripts/download_test_inputs.py --number 3 --expected-dir tests/expected
 
       - name: Test
         run: uv run pytest

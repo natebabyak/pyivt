@@ -438,7 +438,6 @@ mod tests {
 
     #[test]
     fn installed_fixture_members_are_complete_when_available() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
         let cases = [
             ("0d9e", 1159, 13),
             ("4076", 5468, 13),
@@ -452,14 +451,7 @@ mod tests {
             ("f203", 90, 7),
         ];
         for (prefix, geographies, measures) in cases {
-            let Some(path) = std::fs::read_dir(&root)
-                .ok()
-                .into_iter()
-                .flatten()
-                .filter_map(Result::ok)
-                .map(|e| e.path())
-                .find(|p| p.file_name().unwrap().to_string_lossy().starts_with(prefix))
-            else {
+            let Some(path) = crate::test_data::find(prefix) else {
                 continue;
             };
             let data = std::fs::read(path).unwrap();
@@ -490,20 +482,7 @@ mod tests {
 
     #[test]
     fn three_dimensional_fixture_keeps_the_singleton_axis() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
-        let Some(path) = std::fs::read_dir(&root)
-            .ok()
-            .into_iter()
-            .flatten()
-            .filter_map(Result::ok)
-            .map(|e| e.path())
-            .find(|p| {
-                p.file_name()
-                    .unwrap()
-                    .to_string_lossy()
-                    .starts_with("941238")
-            })
-        else {
+        let Some(path) = crate::test_data::find("941238") else {
             return;
         };
         let data = std::fs::read(path).unwrap();
@@ -522,6 +501,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "optional Beyond demo data; run explicitly with --ignored when installed"]
     fn demo_member_fields_and_dates_when_inputs_are_available() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
         let cases: [(&str, &str, &[usize]); 4] = [
@@ -547,7 +527,8 @@ mod tests {
                         })
                         .filter(|p| p.is_file())
                 });
-            let Some(path) = path else { continue };
+            let path = path
+                .unwrap_or_else(|| panic!("missing explicitly requested demo fixture {filename}"));
             let data = std::fs::read(path).unwrap();
             for (axis, &count) in counts.iter().enumerate() {
                 let fields = read_typed_members(&data, axis, count).unwrap();
