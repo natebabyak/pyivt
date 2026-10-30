@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Ivt.to_batches()` and the Arrow C stream protocol export bounded row ranges with shared member dictionaries
+- Conservative allocation estimates raise `MemoryError` and recommend streaming before unsafe materialization
+
+### Changed
+
+- Arrow member IDs use `int32`; text member fields, `symbol` and `status` use `dictionary<int32, utf8>`
+- `to_arrow()` assembles chunked batches and caches Arrow buffers for repeated exports
+
+### Migration
+
+- Cast dictionary fields to `pa.string()` and member IDs to `pa.int64()` if an application requires the former physical schema
+- Use `to_batches()` for large tables, or explicitly increase `max_memory_bytes` when materializing them
+
 ## [0.0.5] - 2026-10-29
 
 ### Added

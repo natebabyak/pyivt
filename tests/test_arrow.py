@@ -15,6 +15,7 @@ import pyarrow.compute as pc
 import pyarrow.parquet as pq
 import pyivt
 import pytest
+from arrow_helpers import plain_table
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
@@ -156,7 +157,7 @@ def test_to_arrow_matches_expected(ivt_path: Path) -> None:
         )
 
     ivt = pyivt.open(ivt_path)
-    actual = ivt.to_arrow()
+    actual = plain_table(ivt.to_arrow())
     expected = pq.read_table(expected_path)
 
     assert actual.num_rows == expected.num_rows, "Row counts differ"
@@ -199,10 +200,10 @@ def test_to_arrow_matches_expected(ivt_path: Path) -> None:
 )
 def test_full_grid_and_repeatable_export(ivt_path: Path, tmp_path: Path) -> None:
     ivt = pyivt.open(ivt_path)
-    table = ivt.to_arrow()
+    table = plain_table(ivt.to_arrow())
     _assert_grid_and_member_alignment(ivt, table)
-    assert table.equals(ivt.to_arrow())
-    assert table.equals(pyivt.open(ivt_path.read_bytes()).to_arrow())
+    assert table.equals(plain_table(ivt.to_arrow()))
+    assert table.equals(plain_table(pyivt.open(ivt_path.read_bytes()).to_arrow()))
     path = tmp_path / "full.parquet"
     pq.write_table(table, path)
     assert table.equals(pq.read_table(path))
@@ -236,7 +237,7 @@ def test_installed_demo_matches_beyond_csv_slice(filename: str) -> None:
         pytest.skip("Beyond CSV reference slice is not available")
     reference = pq.read_table(reference_path)
     ivt = pyivt.open(path)
-    table = ivt.to_arrow()
+    table = plain_table(ivt.to_arrow())
     assert table.num_rows == prod(ivt.layout.counts)
     row_axis = next(
         slug

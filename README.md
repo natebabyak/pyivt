@@ -144,8 +144,8 @@ Use `Ivt.to_arrow()` to export to Apache Arrow.
 
 The table contains the complete Cartesian product of all declared dimensions,
 in file dimension order (last dimension varies fastest). Each dimension has an
-`int64` member ordinal and every declared native member field: codes and labels
-as strings, integer attributes as `int64`, floating attributes as `float64`, and
+`int32` member ordinal and every declared native member field: codes and labels
+as `dictionary<int32, utf8>`, integer attributes as `int64`, floating attributes as `float64`, and
 time-series dates as `date32`, with the original time serial and auxiliary word
 retained. Codes keep their leading zeros, and both languages are retained when
 stored in the file.
@@ -155,6 +155,26 @@ the numeric payload. `status_code`, `symbol`, `status`, and `footnote_raw`
 (`list<uint16>`) retain status and raw annotation information. A zero value is
 preserved when the file marks it as published. Flat and paged data directories
 use the same API and strict ordinal/range checks.
+
+For large cubes, consume batches and release each after processing:
+
+```python
+batches = ivt.to_batches(batch_size=1_000_000)
+first = next(batches)
+with pq.ParquetWriter("data.parquet", first.schema) as writer:
+    writer.write_batch(first)
+    for batch in batches:
+        writer.write_batch(batch)
+```
+
+`to_batches()` shares member dictionaries across batches and aligns batches to
+outer-dimension boundaries when they fit the requested size. `pa.table(ivt)`
+and `pa.RecordBatchReader.from_stream(ivt)` use the Arrow C stream protocol.
+`to_arrow()` materializes and caches Arrow batches; repeated calls share buffers.
+It raises a catchable `MemoryError` if its conservative allocation estimate exceeds
+`max_memory_bytes` (default 2 GiB). Batches default to a 1 GiB estimate limit.
+These estimates include input and working buffers; they do not cap consumer memory.
+Decode dictionary fields with `.cast(pa.string())` when an application needs plain strings.
 
 Apache Arrow is ready to use with your current data stack.
 

@@ -19,6 +19,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyivt
 import pytest
+from arrow_helpers import plain_table
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 IVT_PATH = FIXTURES / "98100018-paged.ivt"
@@ -94,7 +95,7 @@ def test_paged_arrow_matches_complete_official_csv() -> None:
     assert ivt.layout.slugs == ["geo", "population_and"]
     assert ivt.layout.counts == [105, 11]
     assert ivt.metadata.number_of_datapoints == 1155
-    actual = ivt.to_arrow()
+    actual = plain_table(ivt.to_arrow())
     expected = _official_csv_table()
     assert actual.num_rows == expected.num_rows == 1155
     for name in expected.column_names:
@@ -143,7 +144,7 @@ def test_paged_arrow_schema_contract() -> None:
         ("status", pa.string()),
         ("footnote_raw", pa.list_(pa.uint16())),
     ]
-    table = pyivt.open(IVT_PATH).to_arrow()
+    table = plain_table(pyivt.open(IVT_PATH).to_arrow())
     assert table.num_columns == len(fields) == 32
     assert table.schema.equals(pa.schema(fields), check_metadata=False)
 

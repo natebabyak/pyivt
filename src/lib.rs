@@ -9,6 +9,7 @@ mod members;
 mod metadata;
 mod metadata_directory;
 mod py;
+mod stream;
 mod tidy;
 
 use pyo3::prelude::*;

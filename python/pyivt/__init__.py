@@ -2,7 +2,7 @@
 
 Use `open(source)` with a local path, IVT bytes, or a binary file object.
 The returned `Ivt` exposes `metadata` and `layout` immediately and defers
-cell decoding until `to_arrow()`. Detailed metadata fields load on demand.
+cell decoding until `to_batches()` or `to_arrow()`. Detailed metadata fields load on demand.
 
 ```python
 import pyivt

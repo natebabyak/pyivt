@@ -9,8 +9,9 @@ table = ivt.to_arrow()
 ```
 """
 
+from collections.abc import Iterator
 from os import PathLike
-from typing import BinaryIO
+from typing import Any, BinaryIO
 
 import pyarrow as pa
 
@@ -361,8 +362,8 @@ class Ivt:
 
     Obtain an instance with pyivt.open(source); direct construction is not
     supported. Inspect metadata and layout without exporting the cell grid.
-    to_arrow() reads and decodes the complete table on first use, then caches
-    decoded columns for subsequent exports. No context manager or close() call
+    to_batches() decodes bounded row ranges; to_arrow() caches Arrow batches
+    for subsequent exports. No context manager or close() call
     is required. This reader does not modify the source file.
 
     ```python
@@ -379,53 +380,34 @@ class Ivt:
     @property
     def layout(self) -> Layout:
         """Snapshot of dimension counts, Arrow column slugs and IVT paging details."""
-    def to_arrow(self) -> pa.Table:
-        """Export the complete table as a pyarrow.Table in long form.
+    def to_batches(
+        self, *, batch_size: int = 1_000_000, max_memory_bytes: int = 1_073_741_824
+    ) -> Iterator[pa.RecordBatch]:
+        """Iterate over bounded batches in file dimension order.
 
-        ### Returns
+        Member IDs are int32. Text fields use dictionary<int32, utf8>, with
+        member dictionaries shared across batches. Batches align to outer-axis
+        slabs where possible and never exceed batch_size. The iterator retains
+        the source and member maps, without caching decoded batches.
+        MemoryError reports an estimate exceeding max_memory_bytes; ValueError
+        reports malformed data. Release each batch to keep memory bounded.
+        """
+    def __arrow_c_stream__(self, requested_schema: Any = None) -> Any:
+        """Export an independent Arrow C stream capsule; schema requests raise ValueError."""
+    def to_arrow(self, *, max_memory_bytes: int = 2_147_483_648) -> pa.Table:
+        """Concatenate bounded batches into a chunked pyarrow.Table.
 
-        A `pyarrow.Table` with one row per combination of dimension members,
-        including combinations absent from storage. Row count is
-        `math.prod(self.layout.counts)`. Rows follow file dimension order, with
-        the last dimension varying fastest. Each dimension has an `int64` column
-        named by `layout.slugs` containing one-based member IDs. File-defined
-        member fields use `<slug>_<field>` names with collision suffixes where
-        needed; types are `string`, `int64`, `float64` or `date32`.
+        One row per dimension-member combination, last dimension fastest.
+        Member IDs are int32; text fields, symbol and status use dictionaries.
+        Native numeric and date attributes keep int64, float64 and date32.
+        value is float64, null whenever status_code (int64) is nonzero.
+        footnote_raw is list<uint16> with the original packed references.
+        Combinations absent from storage retain numeric zero and status zero.
 
-        Additional columns:
-
-        * `value` (`float64`): numeric value when `status_code` is 0, otherwise null.
-        * `status_code` (`int64`): decoded status; 0 denotes a numeric cell.
-        * `symbol` (`string`): matching status legend symbol, or null.
-        * `status` (`string`): legend description, preferring English then French,
-          or null if no description is available.
-        * `footnote_raw` (`list<uint16>`): raw cell annotation markers; an empty
-          list means no markers. These are not resolved footnote texts.
-
-        ### Raises
-
-        - `OSError`: the path cannot be read when the full file is first needed.
-        - `ValueError`: decoding, member metadata or dimension validation fails.
-        - `ImportError`: pyarrow is unavailable.
-
-        ### Notes
-
-        This materializes the entire grid in memory; there is no streaming or
-        filtering option. Combinations absent from storage have value 0 and
-        status_code 0. Nonzero statuses produce null values even if a numeric
-        payload exists. Source precision and label indentation are preserved.
-        First export caches the file bytes and decoded columns. Later calls
-        construct another Arrow table from cached columns without re-decoding.
-
-        ### Example
-
-        ```python
-        import pyarrow.parquet as pq
-        import pyivt
-
-        table = pyivt.open("table.ivt").to_arrow()
-        pq.write_table(table, "table.parquet")
-        ```
+        Arrow batches are cached and their buffers shared by subsequent calls.
+        MemoryError reports an unsafe estimate; use to_batches() to process a
+        large cube incrementally. max_memory_bytes bounds the conservative
+        allocation estimate, not the consumer's total process memory.
         """
 
 def open(

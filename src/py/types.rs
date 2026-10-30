@@ -1,13 +1,13 @@
 //! PyO3 wrappers for the public Python API.
 
-use pyo3::exceptions::{PyKeyError, PyOSError, PyTypeError, PyValueError};
+use pyo3::exceptions::{PyKeyError, PyMemoryError, PyOSError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes, PyString};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use crate::arrow_export::columns_to_pyarrow;
-use crate::decode::{build_layout, complete_grid, decode_store, Layout};
+use crate::arrow_export::stream_capsule;
+use crate::decode::{build_layout, Layout};
 use crate::descriptor::parse_descriptor;
 use crate::error::IvtError;
 use crate::header::read_header;
@@ -15,7 +15,9 @@ use crate::metadata::{
     self, Dimension as CoreDimension, Footnote as CoreFootnote, Geographies as CoreGeographies,
     IvtMetadata as CoreMeta, LocalizedText as CoreLocalized, MissingValue as CoreMissing,
 };
-use crate::tidy::{tidy_arrays, Column};
+use crate::stream::{preflight, BatchReader};
+use crate::tidy::TidySchema;
+use arrow::record_batch::{RecordBatch, RecordBatchIterator};
 
 fn map_ivt_err(e: IvtError) -> PyErr {
     match e {
@@ -570,16 +572,49 @@ impl From<&Layout> for PyLayout {
     }
 }
 
-struct DecodeCache {
-    cols: Vec<(String, Column)>,
+fn export_error(error: String) -> PyErr {
+    if error.contains("memory") || error.contains("allocation failed") {
+        PyMemoryError::new_err(error)
+    } else {
+        PyValueError::new_err(error)
+    }
+}
+
+#[pyclass(module = "pyivt")]
+pub struct BatchIterator {
+    reader: Mutex<BatchReader>,
+}
+
+#[pymethods]
+impl BatchIterator {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyAny>>> {
+        let batch = py.allow_threads(|| self.reader.lock().unwrap().next());
+        let Some(batch) = batch else {
+            return Ok(None);
+        };
+        let batch = batch.map_err(|e| export_error(e.to_string()))?;
+        let schema = batch.schema();
+        let reader = RecordBatchIterator::new(vec![Ok(batch)], schema);
+        let capsule = stream_capsule(py, Box::new(reader))?;
+        let pa = py.import("pyarrow")?;
+        Ok(Some(
+            pa.getattr("RecordBatchReader")?
+                .call_method1("_import_from_c_capsule", (capsule,))?
+                .call_method0("read_next_batch")?,
+        ))
+    }
 }
 
 /// An opened Beyond 20/20 table with metadata and deferred cell decoding.
 ///
 /// Obtain an instance with pyivt.open(source); direct construction is not
 /// supported. Inspect metadata and layout without exporting the cell grid.
-/// to_arrow() reads and decodes the complete table on first use, then caches
-/// decoded columns for subsequent exports. No context manager or close() call
+/// to_batches() decodes bounded row ranges; to_arrow() caches Arrow batches
+/// for subsequent exports. No context manager or close() call
 /// is required. This reader does not modify the source file.
 ///
 /// ```python
@@ -597,7 +632,8 @@ pub struct Ivt {
     /// Full file bytes when opened from memory, or filled lazily for path opens on `to_arrow`.
     data: Mutex<Option<Arc<Vec<u8>>>>,
     path: Option<PathBuf>,
-    cache: Mutex<Option<DecodeCache>>,
+    cache: Mutex<Option<Vec<RecordBatch>>>,
+    maps: Mutex<Option<Arc<TidySchema>>>,
 }
 
 #[pymethods]
@@ -614,91 +650,83 @@ impl Ivt {
         self.py_layout.clone()
     }
 
-    /// Export the complete table as a pyarrow.Table in long form.
-    ///
-    /// ### Returns
-    ///
-    /// A `pyarrow.Table` with one row per combination of dimension members,
-    /// including combinations absent from storage. Row count is
-    /// `math.prod(self.layout.counts)`. Rows follow file dimension order, with
-    /// the last dimension varying fastest. Each dimension has an `int64` column
-    /// named by `layout.slugs` containing one-based member IDs. File-defined
-    /// member fields use `<slug>_<field>` names with collision suffixes where
-    /// needed; types are `string`, `int64`, `float64` or `date32`.
-    ///
-    /// Additional columns:
-    ///
-    /// * `value` (`float64`): numeric value when `status_code` is 0, otherwise null.
-    /// * `status_code` (`int64`): decoded status; 0 denotes a numeric cell.
-    /// * `symbol` (`string`): matching status legend symbol, or null.
-    /// * `status` (`string`): legend description, preferring English then French,
-    ///   or null if no description is available.
-    /// * `footnote_raw` (`list<uint16>`): raw cell annotation markers; an empty
-    ///   list means no markers. These are not resolved footnote texts.
-    ///
-    /// ### Raises
-    ///
-    /// - `OSError`: the path cannot be read when the full file is first needed.
-    /// - `ValueError`: decoding, member metadata or dimension validation fails.
-    /// - `ImportError`: pyarrow is unavailable.
-    ///
-    /// ### Notes
-    ///
-    /// This materializes the entire grid in memory; there is no streaming or
-    /// filtering option. Combinations absent from storage have value 0 and
-    /// status_code 0. Nonzero statuses produce null values even if a numeric
-    /// payload exists. Source precision and label indentation are preserved.
-    /// First export caches the file bytes and decoded columns. Later calls
-    /// construct another Arrow table from cached columns without re-decoding.
-    ///
-    /// ### Example
-    ///
-    /// ```python
-    /// import pyarrow.parquet as pq
-    /// import pyivt
-    ///
-    /// table = pyivt.open("table.ivt").to_arrow()
-    /// pq.write_table(table, "table.parquet")
-    /// ```
-    fn to_arrow<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        {
-            let cache = self.cache.lock().unwrap();
-            if let Some(c) = cache.as_ref() {
-                return columns_to_pyarrow(py, &c.cols);
-            }
+    /// Iterate over bounded RecordBatches in Cartesian order. String member
+    /// fields share dictionary<int32, utf8> values; member IDs are int32.
+    /// Batches target one million rows and align to outer-axis slabs when possible.
+    /// Only the current batch is retained. MemoryError reports unsafe estimates.
+    #[pyo3(signature = (*, batch_size=1_000_000, max_memory_bytes=1_073_741_824))]
+    fn to_batches(
+        &self,
+        py: Python<'_>,
+        batch_size: usize,
+        max_memory_bytes: usize,
+    ) -> PyResult<BatchIterator> {
+        Ok(BatchIterator {
+            reader: Mutex::new(self.batch_reader(py, batch_size, max_memory_bytes)?),
+        })
+    }
+
+    /// Arrow PyCapsule stream protocol. Each invocation owns an independent
+    /// native reader; consumers can release it early without retaining batches.
+    #[pyo3(signature = (requested_schema=None))]
+    fn __arrow_c_stream__<'py>(
+        &self,
+        py: Python<'py>,
+        requested_schema: Option<Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, pyo3::types::PyCapsule>> {
+        if requested_schema.is_some_and(|s| !s.is_none()) {
+            return Err(PyValueError::new_err(
+                "requested_schema is not supported; cast the exported stream explicitly",
+            ));
         }
+        let reader = self.batch_reader(py, 1_000_000, 1_073_741_824)?;
+        stream_capsule(py, Box::new(reader))
+    }
 
-        let data = self.ensure_data(py).map_err(map_ivt_err)?;
-        let layout = self.layout.clone();
-        let dims = {
-            let meta = self.metadata.borrow(py);
-            let guard = meta.inner.lock().unwrap();
-            guard.desc().dims.clone()
-        };
-
-        let cells = py
-            .allow_threads(|| -> Result<Vec<(String, Vec<f64>)>, String> {
-                layout
-                    .counts
-                    .iter()
-                    .try_fold(1usize, |n, &count| {
-                        usize::try_from(count).ok().and_then(|c| n.checked_mul(c))
-                    })
-                    .ok_or("dimension product exceeds addressable memory")?;
-                let store = decode_store(&data, &dims, &layout)?;
-                Ok(complete_grid(&store, &layout))
+    /// Materialize the batches as a chunked pyarrow.Table. Subsequent calls
+    /// share cached Arrow buffers. Use to_batches() to bound retained memory.
+    /// The conservative pre-flight limit includes output and working buffers.
+    #[pyo3(signature = (*, max_memory_bytes=2_147_483_648))]
+    fn to_arrow<'py>(
+        &self,
+        py: Python<'py>,
+        max_memory_bytes: usize,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let reader = self.batch_reader(py, 1_000_000, max_memory_bytes)?;
+        let fixed = reader
+            .data
+            .len()
+            .saturating_mul(3)
+            .saturating_add(reader.maps.dictionary_bytes);
+        preflight(
+            reader.total,
+            reader.maps.bytes_per_row,
+            fixed,
+            max_memory_bytes,
+        )
+        .map_err(export_error)?;
+        let schema = Arc::clone(&reader.maps.schema);
+        let batches = py
+            .allow_threads(|| {
+                let mut cache = self.cache.lock().unwrap();
+                if cache.is_none() {
+                    *cache = Some(reader.collect::<Result<Vec<_>, _>>()?);
+                }
+                // RecordBatch clones only Arc buffers.
+                Ok::<_, arrow::error::ArrowError>(cache.as_ref().unwrap().clone())
             })
-            .map_err(PyValueError::new_err)?;
-
-        let tidy = {
-            let meta = self.metadata.borrow(py);
-            let mut inner = meta.inner.lock().unwrap();
-            tidy_arrays(&data, &cells, &mut inner, &self.layout).map_err(PyValueError::new_err)?
-        };
-
-        *self.cache.lock().unwrap() = Some(DecodeCache { cols: tidy.clone() });
-
-        columns_to_pyarrow(py, &tidy)
+            .map_err(|e| export_error(e.to_string()))?;
+        let capsule = stream_capsule(
+            py,
+            Box::new(RecordBatchIterator::new(
+                batches.into_iter().map(Ok),
+                schema,
+            )),
+        )?;
+        py.import("pyarrow")?
+            .getattr("RecordBatchReader")?
+            .call_method1("_import_from_c_capsule", (capsule,))?
+            .call_method0("read_all")
     }
 }
 
@@ -748,7 +776,50 @@ fn resolve_source(_py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<OpenSou
 }
 
 impl Ivt {
-    fn ensure_data(&self, _py: Python<'_>) -> Result<Arc<Vec<u8>>, IvtError> {
+    fn batch_reader(
+        &self,
+        py: Python<'_>,
+        batch_size: usize,
+        limit: usize,
+    ) -> PyResult<BatchReader> {
+        if batch_size == 0 || batch_size > i32::MAX as usize {
+            return Err(PyValueError::new_err(
+                "batch_size must be between 1 and 2147483647",
+            ));
+        }
+        let file_len = if let Some(data) = self.data.lock().unwrap().as_ref() {
+            data.len()
+        } else {
+            std::fs::metadata(self.path.as_ref().unwrap())
+                .map_err(|e| PyOSError::new_err(e.to_string()))?
+                .len() as usize
+        };
+        preflight(0, 0, file_len.saturating_mul(4), limit).map_err(export_error)?;
+        let data = py
+            .allow_threads(|| self.ensure_data())
+            .map_err(map_ivt_err)?;
+        let legends = self
+            .metadata
+            .borrow(py)
+            .inner
+            .lock()
+            .unwrap()
+            .missing_values()
+            .map_err(PyValueError::new_err)?
+            .clone();
+        let maps = py
+            .allow_threads(|| {
+                let mut maps = self.maps.lock().unwrap();
+                if maps.is_none() {
+                    *maps = Some(Arc::new(TidySchema::new(&data, &self.layout, &legends)?));
+                }
+                Ok::<_, String>(Arc::clone(maps.as_ref().unwrap()))
+            })
+            .map_err(export_error)?;
+        BatchReader::new(data, self.layout.clone(), maps, batch_size, limit).map_err(export_error)
+    }
+
+    fn ensure_data(&self) -> Result<Arc<Vec<u8>>, IvtError> {
         {
             let guard = self.data.lock().unwrap();
             if let Some(d) = guard.as_ref() {
@@ -837,6 +908,7 @@ pub fn open_ivt(py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<Ivt> {
                 data: Mutex::new(None),
                 path: Some(path),
                 cache: Mutex::new(None),
+                maps: Mutex::new(None),
             })
         }
         OpenSource::Bytes(data) => {
@@ -864,6 +936,7 @@ pub fn open_ivt(py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<Ivt> {
                 data: Mutex::new(Some(Arc::new(data))),
                 path: None,
                 cache: Mutex::new(None),
+                maps: Mutex::new(None),
             })
         }
     }
