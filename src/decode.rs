@@ -433,6 +433,20 @@ fn decode_page(
     })
 }
 
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_page(data: &[u8]) {
+    let dims = [DimDesc {
+        name: "Items".into(),
+        count: 2048,
+        type_code: 0,
+        double01: false,
+    }];
+    let layout = build_layout_with_geo(&dims, None).unwrap();
+    for mode in [0, 1, 3] {
+        let _ = decode_page(data, 0, &layout, data.len(), mode);
+    }
+}
+
 fn entry_index(coords: &[i64], estride: &[i64]) -> Result<usize, String> {
     coords
         .iter()

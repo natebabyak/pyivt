@@ -9,6 +9,7 @@ use crate::header::{DIM_SLOT_STRIDE, HDR_DIM_SLOT0};
 use crate::metadata_directory::MetadataDirectory;
 
 pub use crate::decode::decompress_component as decompress_record;
+const MAX_MEMBER_MEMORY: usize = 256 * 1024 * 1024;
 
 /// Native member-attribute storage types. Codes always remain strings, including
 /// codes containing only digits; numeric attributes retain their storage type.
@@ -21,6 +22,18 @@ pub enum MemberValues {
 }
 
 impl MemberValues {
+    fn memory_bytes(&self) -> usize {
+        match self {
+            Self::Utf8(v) => v
+                .iter()
+                .fold(v.capacity().saturating_mul(24), |sum, value| {
+                    sum.saturating_add(value.as_ref().map_or(0, String::len))
+                }),
+            Self::Int64(v) => v.capacity().saturating_mul(16),
+            Self::Float64(v) => v.capacity().saturating_mul(16),
+            Self::Date32(v) => v.capacity().saturating_mul(8),
+        }
+    }
     pub fn len(&self) -> usize {
         match self {
             Self::Utf8(v) => v.len(),
@@ -224,6 +237,7 @@ fn referenced_strings(dir: &Directory<'_>, record: &[u8]) -> Result<Vec<Option<S
     if record[0] & 15 != 4 || record[1] != 1 {
         return Err("member text references are not an integer vector".into());
     }
+    let mut expanded_bytes = 0usize;
     record[4..]
         .as_chunks::<4>()
         .0
@@ -240,6 +254,12 @@ fn referenced_strings(dir: &Directory<'_>, record: &[u8]) -> Result<Vec<Option<S
                 return Err("referenced member text is not a byte vector".into());
             }
             // Individual note records begin with the native text-format byte.
+            expanded_bytes = expanded_bytes.saturating_add(text.len());
+            if expanded_bytes > MAX_MEMBER_MEMORY {
+                return Err(
+                    "referenced member text exceeds the 256 MiB memory safety limit".into(),
+                );
+            }
             Ok(optional_text(&text[5..]))
         })
         .collect()
@@ -334,7 +354,16 @@ pub fn read_typed_members(
     if definitions[0] & 15 != 1 || definitions[1] != 2 || u16(&definitions, 4) != 34 {
         return Err("unsupported member field definition layout".into());
     }
+    let field_count = definitions[6..].len() / 34;
+    if count
+        .checked_mul(field_count)
+        .and_then(|n| n.checked_mul(32))
+        .is_none_or(|n| n > MAX_MEMBER_MEMORY)
+    {
+        return Err("member map estimate exceeds the 256 MiB memory safety limit".into());
+    }
     let mut fields = Vec::new();
+    let mut expanded_bytes = 0usize;
     for field in definitions[6..].as_chunks::<34>().0 {
         let name_len = field[0] as usize;
         if name_len > 17 {
@@ -376,6 +405,9 @@ pub fn read_typed_members(
             } else {
                 values = Some(chunk);
             }
+            if values.as_ref().unwrap().memory_bytes() > MAX_MEMBER_MEMORY {
+                return Err("member field exceeds the 256 MiB memory safety limit".into());
+            }
         }
         let mut values = match values {
             Some(v) => v,
@@ -393,6 +425,13 @@ pub fn read_typed_members(
             ));
         }
         values.truncate(count);
+        expanded_bytes = expanded_bytes
+            .saturating_add(values.memory_bytes())
+            .saturating_add(time_serials.capacity().saturating_mul(16))
+            .saturating_add(time_aux.capacity().saturating_mul(16));
+        if expanded_bytes > MAX_MEMBER_MEMORY {
+            return Err("member maps exceed the 256 MiB memory safety limit".into());
+        }
         if kind == 0x0180 {
             time_serials.resize(count, None);
             time_aux.resize(count, None);

@@ -818,7 +818,12 @@ impl Ivt {
             .allow_threads(|| {
                 let mut maps = self.maps.lock().unwrap();
                 if maps.is_none() {
-                    *maps = Some(Arc::new(TidySchema::new(&data, &self.layout, &legends)?));
+                    *maps = Some(Arc::new(TidySchema::new(
+                        &data,
+                        &self.layout,
+                        &legends,
+                        limit,
+                    )?));
                 }
                 Ok::<_, String>(Arc::clone(maps.as_ref().unwrap()))
             })

@@ -3,6 +3,8 @@ mod bytes;
 mod decode;
 mod descriptor;
 mod error;
+#[cfg(feature = "fuzzing")]
+pub mod fuzzing;
 mod header;
 mod io;
 mod members;

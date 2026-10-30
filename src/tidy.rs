@@ -86,7 +86,12 @@ fn dictionary(keys: &Int32Array, values: &ArrayRef) -> Result<ArrayRef, String> 
 }
 
 impl TidySchema {
-    pub fn new(data: &[u8], lay: &Layout, legends: &[MissingValue]) -> Result<Self, String> {
+    pub fn new(
+        data: &[u8],
+        lay: &Layout,
+        legends: &[MissingValue],
+        memory_limit: usize,
+    ) -> Result<Self, String> {
         let mut used: HashSet<String> =
             ["value", "status_code", "symbol", "status", "footnote_raw"]
                 .into_iter()
@@ -135,6 +140,14 @@ impl TidySchema {
                     values.data_type().clone()
                 };
                 dictionary_bytes += values.get_array_memory_size();
+                if data
+                    .len()
+                    .saturating_mul(3)
+                    .saturating_add(dictionary_bytes.saturating_mul(4))
+                    > memory_limit
+                {
+                    return Err(format!("member dictionaries exceed max_memory_bytes={memory_limit}; increase the memory budget"));
+                }
                 fields.push(Field::new(name, kind, true));
                 arrays.push(values);
             }

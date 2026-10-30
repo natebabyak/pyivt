@@ -98,6 +98,16 @@ def test_invalid_batch_size(batch_size):
         pyivt.open(_typed_fixture()).to_batches(batch_size=batch_size)
 
 
+def test_hostile_member_count_is_rejected_before_allocating_maps():
+    data = bytearray(cube((2, 3)))
+    master = struct.unpack_from("<I", data, 544)[0]
+    matrix = struct.unpack_from("<I", data, master + 8)[0]
+    struct.pack_into("<I", data, matrix + 6, 100_000_000)
+    ivt = pyivt.open(bytes(data))
+    with pytest.raises(MemoryError, match="member map estimate"):
+        ivt.to_batches(batch_size=1)
+
+
 def _populated_cube() -> bytes:
     """3 x 2051 x 3, five windows per outer member and power-of-two holes."""
     data = bytearray(cube((3, 2051, 3), label_fields=0))
