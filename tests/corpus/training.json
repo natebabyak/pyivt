@@ -1,0 +1,105 @@
+{
+  "role": "development fixtures; never claim held-out coverage for these hashes",
+  "files": [
+    {
+      "sha256": "0559dc74a44cb9675d249975c0b4ec26a689595d85e0a32a7bbbf8ef0d13f011",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100012.zip",
+      "product_id": "98100012"
+    },
+    {
+      "sha256": "07d7cf7da252ea1396ba7b7d070301ad165330bd6865a6ccfeb723de810ec1fc",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100020.zip",
+      "product_id": "98100020"
+    },
+    {
+      "sha256": "0d9e4cd424a9a260f4a0f97a1dff5aa3e5739412e70f254d6553d51924ef9936",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100003.zip",
+      "product_id": "98100003"
+    },
+    {
+      "sha256": "3f8d271072f3916cbc5b35f185c1abf5330c0fdd0fda4da3375003e2acd6f8b2",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100016.zip",
+      "product_id": "98100016"
+    },
+    {
+      "sha256": "4076c61e10914df51fb90fef8d517a90d1f0548654ef83603ef3e7f24a122223",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100002.zip",
+      "product_id": "98100002"
+    },
+    {
+      "sha256": "44148cd6d462df578e5af3b5c37965fb3cca2a7fea1cba7db31f281f602924cb",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100019.zip",
+      "product_id": "98100019"
+    },
+    {
+      "sha256": "47ffb2b43e083b83853c814467f0ca1c4fa09bffe2e0df7594f780108589de1c",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100017.zip",
+      "product_id": "98100017"
+    },
+    {
+      "sha256": "48918fae5735124691bf560a8e9dddd0d44238f38a4df77d128abe979b9abdcc",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100004.zip",
+      "product_id": "98100004"
+    },
+    {
+      "sha256": "56780c7993fe2990591a7b15d8de26dd7875f878a9010c81846bc34f4b749abc",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100007.zip",
+      "product_id": "98100007"
+    },
+    {
+      "sha256": "625ff7c387bd3d45af25b0bfd48aff3e186d46d93e749d0632f1840dee806192",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100001.zip",
+      "product_id": "98100001"
+    },
+    {
+      "sha256": "74e6bf7a5415dde40ccb06852807ae7517b6f13919f5afaf75974107d9275517",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100011.zip",
+      "product_id": "98100011"
+    },
+    {
+      "sha256": "7ea2a1e48a12e256ea3d6d99a6cc23ef96f1d263ad677789b82dd03b6f1bb868",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100014.zip",
+      "product_id": "98100014"
+    },
+    {
+      "sha256": "8e528a815c070d6235b36f8e359aed15530fee96e5907f5ac811848f98c00e00",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100013.zip",
+      "product_id": "98100013"
+    },
+    {
+      "sha256": "941238d8af783ad01ca29687cd8d39bc5eb5be1811f52678c336293e3c03a601",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100006.zip",
+      "product_id": "98100006"
+    },
+    {
+      "sha256": "99927f1b553b5003e3af1401deec124fe76ff834e626010fcaaf189ea59fbe73",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100008.zip",
+      "product_id": "98100008"
+    },
+    {
+      "sha256": "ac8356156f994c45bf464eed0e0cf114e48ccdadf23b00bb65bea8c546ffa99b",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100018.zip",
+      "product_id": "98100018"
+    },
+    {
+      "sha256": "cf698c42fbb1ae18e0527fe167a5e269fe4ad8064ffaf564f67d2aed6669460c",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100015.zip",
+      "product_id": "98100015"
+    },
+    {
+      "sha256": "d614bea0a96e2bbac39d22cd3d961a71cf7a24ff70f949bce0f02a5dbc2e4e3c",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100010.zip",
+      "product_id": "98100010"
+    },
+    {
+      "sha256": "e506c47f8c05eed4cf04eb4d5bc3c93747de511ff57c4885ec0dbe629bf33341",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100005.zip",
+      "product_id": "98100005"
+    },
+    {
+      "sha256": "f2036919bc4e516e81e8f48c9a3b554ef84d404ef239d80d5c2c129a86f72315",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100009.zip",
+      "product_id": "98100009"
+    }
+  ]
+}

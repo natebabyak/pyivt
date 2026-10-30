@@ -48,6 +48,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--number", "-n", type=int, default=10)
     parser.add_argument(
+        "--manifest",
+        type=Path,
+        help="Fetch every SHA-256-pinned input in a corpus manifest.",
+    )
+    parser.add_argument("--destination", type=Path, default=DATA_DIR)
+    parser.add_argument(
         "--expected-dir",
         type=Path,
         help="Only download inputs whose SHA-256 has a JSON reference in this directory.",
@@ -59,6 +65,9 @@ def main() -> int:
         help="Delete existing files in data/ before downloading (keep subdirectories).",
     )
     args = parser.parse_args()
+    if args.manifest:
+        fetch_manifest(args.manifest, args.destination)
+        return 0
     if args.number < 1:
         parser.error("--number must be positive")
     expected_hashes = None
@@ -120,6 +129,42 @@ def main() -> int:
         parser.exit(1, f"Only {len(downloaded)} distinct IVT files were available.\n")
 
     return 0
+
+
+def fetch_manifest(manifest: Path, destination: Path) -> None:
+    """Hash verification fails closed; URLs never determine input identity."""
+    destination.mkdir(parents=True, exist_ok=True)
+    archives: dict[str, bytes] = {}
+    for entry in json.loads(manifest.read_text(encoding="utf-8"))["files"]:
+        digest = entry["sha256"]
+        if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+            raise ValueError("invalid SHA-256 in manifest")
+        path = destination / f"{digest}.ivt"
+        if path.exists() and hashlib.sha256(path.read_bytes()).hexdigest() == digest:
+            continue
+        url = entry["url"]
+        if url not in archives:
+            archives[url] = download(url)
+        payload = BytesIO(archives[url])
+        candidates = []
+        if is_zipfile(payload):
+            with ZipFile(payload) as archive:
+                candidates = [
+                    archive.read(name)
+                    for name in archive.namelist()
+                    if name.lower().endswith(".ivt")
+                ]
+        else:
+            candidates = [archives[url]]
+        content = next(
+            (data for data in candidates if hashlib.sha256(data).hexdigest() == digest),
+            None,
+        )
+        if content is None:
+            raise ValueError(
+                f"pinned IVT {digest} not found in {url}; refusing changed inputs"
+            )
+        path.write_bytes(content)
 
 
 if __name__ == "__main__":

@@ -140,12 +140,21 @@ access and optional-value handling; see [the changelog](CHANGELOG.md) for migrat
 
 ### Exporting Data
 
+`metadata.descriptor_path` reports `"axis_matrix"`, the native format reader.
+Files without a valid master axis matrix raise `ValueError`; the former
+unverified descriptor scanner is disabled instead of returning guessed counts.
+Axis kinds and stored language references determine types and translations.
+Geography comes from an explicit native kind or UID member field; tables without
+either have `layout.geo_dim is None`. `metadata.geographies.geo_uid` preserves
+native DGUID values. Product identity is read within native summary/notes records,
+without searching unrelated header bytes for plausible identifiers.
+
 Use `Ivt.to_arrow()` to export to Apache Arrow.
 
 The table contains the complete Cartesian product of all declared dimensions,
 in file dimension order (last dimension varies fastest). Each dimension has an
-`int64` member ordinal and every declared native member field: codes and labels
-as strings, integer attributes as `int64`, floating attributes as `float64`, and
+`int32` member ordinal and every declared native member field: codes and labels
+as `dictionary<int32, utf8>`, integer attributes as `int64`, floating attributes as `float64`, and
 time-series dates as `date32`, with the original time serial and auxiliary word
 retained. Codes keep their leading zeros, and both languages are retained when
 stored in the file.
@@ -155,6 +164,27 @@ the numeric payload. `status_code`, `symbol`, `status`, and `footnote_raw`
 (`list<uint16>`) retain status and raw annotation information. A zero value is
 preserved when the file marks it as published. Flat and paged data directories
 use the same API and strict ordinal/range checks.
+
+For large cubes, consume batches and release each after processing:
+
+```python
+batches = ivt.to_batches(batch_size=1_000_000)
+first = next(batches)
+with pq.ParquetWriter("data.parquet", first.schema) as writer:
+    writer.write_batch(first)
+    for batch in batches:
+        writer.write_batch(batch)
+```
+
+`to_batches()` shares member dictionaries across batches and aligns batches to
+outer-dimension boundaries when they fit the requested size. `pa.table(ivt)`
+uses the Arrow C stream protocol; recent PyArrow versions also provide
+`pa.RecordBatchReader.from_stream(ivt)` for lazy consumption.
+`to_arrow()` materializes and caches Arrow batches; repeated calls share buffers.
+It raises a catchable `MemoryError` if its conservative allocation estimate exceeds
+`max_memory_bytes` (default 2 GiB). Batches default to a 1 GiB estimate limit.
+These estimates include input and working buffers; they do not cap consumer memory.
+Decode dictionary fields with `.cast(pa.string())` when an application needs plain strings.
 
 Apache Arrow is ready to use with your current data stack.
 

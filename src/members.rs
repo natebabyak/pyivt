@@ -9,6 +9,7 @@ use crate::header::{DIM_SLOT_STRIDE, HDR_DIM_SLOT0};
 use crate::metadata_directory::MetadataDirectory;
 
 pub use crate::decode::decompress_component as decompress_record;
+const MAX_MEMBER_MEMORY: usize = 256 * 1024 * 1024;
 
 /// Native member-attribute storage types. Codes always remain strings, including
 /// codes containing only digits; numeric attributes retain their storage type.
@@ -21,6 +22,18 @@ pub enum MemberValues {
 }
 
 impl MemberValues {
+    fn memory_bytes(&self) -> usize {
+        match self {
+            Self::Utf8(v) => v
+                .iter()
+                .fold(v.capacity().saturating_mul(24), |sum, value| {
+                    sum.saturating_add(value.as_ref().map_or(0, String::len))
+                }),
+            Self::Int64(v) => v.capacity().saturating_mul(16),
+            Self::Float64(v) => v.capacity().saturating_mul(16),
+            Self::Date32(v) => v.capacity().saturating_mul(8),
+        }
+    }
     pub fn len(&self) -> usize {
         match self {
             Self::Utf8(v) => v.len(),
@@ -224,6 +237,7 @@ fn referenced_strings(dir: &Directory<'_>, record: &[u8]) -> Result<Vec<Option<S
     if record[0] & 15 != 4 || record[1] != 1 {
         return Err("member text references are not an integer vector".into());
     }
+    let mut expanded_bytes = 0usize;
     record[4..]
         .as_chunks::<4>()
         .0
@@ -240,6 +254,12 @@ fn referenced_strings(dir: &Directory<'_>, record: &[u8]) -> Result<Vec<Option<S
                 return Err("referenced member text is not a byte vector".into());
             }
             // Individual note records begin with the native text-format byte.
+            expanded_bytes = expanded_bytes.saturating_add(text.len());
+            if expanded_bytes > MAX_MEMBER_MEMORY {
+                return Err(
+                    "referenced member text exceeds the 256 MiB memory safety limit".into(),
+                );
+            }
             Ok(optional_text(&text[5..]))
         })
         .collect()
@@ -284,6 +304,26 @@ pub(crate) fn iso_date(days: i64) -> String {
 
 pub type MemberField = (String, Vec<Option<String>>);
 
+/// Geographic UID attributes identify a role even with a Normal axis kind.
+pub(crate) fn has_geo_uid_field(data: &[u8], dimension: usize) -> bool {
+    let Ok(dir) = Directory::new(data, dimension) else {
+        return false;
+    };
+    let Ok(Some(definitions)) = dir.record(0) else {
+        return false;
+    };
+    if definitions.get(..2) != Some(&[1, 2]) || u16(&definitions, 4) != 34 {
+        return false;
+    }
+    definitions[6..].as_chunks::<34>().0.iter().any(|field| {
+        let length = field[0] as usize;
+        length <= 17
+            && ["DGUID", "DGUID_EN", "DGUID_FR", "GEOUID", "GEO_UID"]
+                .iter()
+                .any(|name| latin1(&field[1..1 + length]).eq_ignore_ascii_case(name))
+    })
+}
+
 /// Read every declared field for an axis, in native member ordinal order.
 ///
 /// Field names are the names recorded in the IVT, without label-based guessing.
@@ -314,7 +354,16 @@ pub fn read_typed_members(
     if definitions[0] & 15 != 1 || definitions[1] != 2 || u16(&definitions, 4) != 34 {
         return Err("unsupported member field definition layout".into());
     }
+    let field_count = definitions[6..].len() / 34;
+    if count
+        .checked_mul(field_count)
+        .and_then(|n| n.checked_mul(32))
+        .is_none_or(|n| n > MAX_MEMBER_MEMORY)
+    {
+        return Err("member map estimate exceeds the 256 MiB memory safety limit".into());
+    }
     let mut fields = Vec::new();
+    let mut expanded_bytes = 0usize;
     for field in definitions[6..].as_chunks::<34>().0 {
         let name_len = field[0] as usize;
         if name_len > 17 {
@@ -356,6 +405,9 @@ pub fn read_typed_members(
             } else {
                 values = Some(chunk);
             }
+            if values.as_ref().unwrap().memory_bytes() > MAX_MEMBER_MEMORY {
+                return Err("member field exceeds the 256 MiB memory safety limit".into());
+            }
         }
         let mut values = match values {
             Some(v) => v,
@@ -373,6 +425,13 @@ pub fn read_typed_members(
             ));
         }
         values.truncate(count);
+        expanded_bytes = expanded_bytes
+            .saturating_add(values.memory_bytes())
+            .saturating_add(time_serials.capacity().saturating_mul(16))
+            .saturating_add(time_aux.capacity().saturating_mul(16));
+        if expanded_bytes > MAX_MEMBER_MEMORY {
+            return Err("member maps exceed the 256 MiB memory safety limit".into());
+        }
         if kind == 0x0180 {
             time_serials.resize(count, None);
             time_aux.resize(count, None);
@@ -438,7 +497,6 @@ mod tests {
 
     #[test]
     fn installed_fixture_members_are_complete_when_available() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
         let cases = [
             ("0d9e", 1159, 13),
             ("4076", 5468, 13),
@@ -452,14 +510,7 @@ mod tests {
             ("f203", 90, 7),
         ];
         for (prefix, geographies, measures) in cases {
-            let Some(path) = std::fs::read_dir(&root)
-                .ok()
-                .into_iter()
-                .flatten()
-                .filter_map(Result::ok)
-                .map(|e| e.path())
-                .find(|p| p.file_name().unwrap().to_string_lossy().starts_with(prefix))
-            else {
+            let Some(path) = crate::test_data::find(prefix) else {
                 continue;
             };
             let data = std::fs::read(path).unwrap();
@@ -490,20 +541,7 @@ mod tests {
 
     #[test]
     fn three_dimensional_fixture_keeps_the_singleton_axis() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
-        let Some(path) = std::fs::read_dir(&root)
-            .ok()
-            .into_iter()
-            .flatten()
-            .filter_map(Result::ok)
-            .map(|e| e.path())
-            .find(|p| {
-                p.file_name()
-                    .unwrap()
-                    .to_string_lossy()
-                    .starts_with("941238")
-            })
-        else {
+        let Some(path) = crate::test_data::find("941238") else {
             return;
         };
         let data = std::fs::read(path).unwrap();
@@ -522,6 +560,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "optional Beyond demo data; run explicitly with --ignored when installed"]
     fn demo_member_fields_and_dates_when_inputs_are_available() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
         let cases: [(&str, &str, &[usize]); 4] = [
@@ -547,7 +586,8 @@ mod tests {
                         })
                         .filter(|p| p.is_file())
                 });
-            let Some(path) = path else { continue };
+            let path = path
+                .unwrap_or_else(|| panic!("missing explicitly requested demo fixture {filename}"));
             let data = std::fs::read(path).unwrap();
             for (axis, &count) in counts.iter().enumerate() {
                 let fields = read_typed_members(&data, axis, count).unwrap();

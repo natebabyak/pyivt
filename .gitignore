@@ -1,8 +1,8 @@
-/.cache/generate_expected_parquet/
-/.cache/benchmarks/
+/.cache/
 /.pytest_cache/
 /.ruff_cache/
 /.venv/
+/.venv-*/
 /data/
 /dist/
 __pycache__/

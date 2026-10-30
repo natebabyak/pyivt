@@ -7,6 +7,9 @@ edition = "2021"
 name = "pyivt"
 crate-type = ["cdylib", "rlib"]
 
+[features]
+fuzzing = []
+
 [dependencies]
 arrow = { version = "54", default-features = false, features = ["ffi"] }
 encoding_rs = "0.8"

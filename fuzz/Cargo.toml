@@ -1,0 +1,43 @@
+[package]
+name = "pyivt-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+pyivt = { path = "..", features = ["fuzzing"] }
+
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "decompress_component"
+path = "fuzz_targets/decompress_component.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "metadata_directory"
+path = "fuzz_targets/metadata_directory.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decode_page"
+path = "fuzz_targets/decode_page.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "read_members"
+path = "fuzz_targets/read_members.rs"
+test = false
+doc = false
+bench = false

@@ -1,7 +1,7 @@
 //! Unified page-directory layout and cell decode.
 
 use crate::bytes::{nextpow2, u16, u32};
-use crate::descriptor::{dim_slugs, geo_dim_index, DimDesc};
+use crate::descriptor::{dim_slugs, DimDesc};
 use crate::header::{HDR_DIR_PTR, HDR_MASTER_PTR, MARKER_WIDTHS};
 use crate::metadata_directory::MetadataDirectory;
 use std::collections::HashSet;
@@ -13,7 +13,7 @@ pub struct Layout {
     pub counts: Vec<i64>,
     pub slugs: Vec<String>,
     pub n_dim: usize,
-    pub geo_dim: usize,
+    pub geo_dim: Option<usize>,
     pub straddle: usize,
     pub ipc: Vec<i64>,
     pub window_count: i64,
@@ -110,17 +110,29 @@ fn cell_grid(counts: &[i64], stride: &[i64]) -> (Vec<Vec<i32>>, Vec<i32>) {
     (rows, bit)
 }
 
+#[cfg(test)]
 pub fn build_layout(dims: &[DimDesc]) -> Result<Layout, String> {
+    build_layout_with_geo(dims, crate::descriptor::geo_dim_index(dims))
+}
+
+pub fn build_layout_with_geo(dims: &[DimDesc], gd: Option<usize>) -> Result<Layout, String> {
     if dims.is_empty() || dims.iter().any(|dim| dim.count <= 0) {
         return Err("descriptor must have dimensions with positive item counts".into());
     }
     let cnt: Vec<i64> = dims.iter().map(|d| d.count).collect();
+    if cnt.iter().any(|&c| c > i32::MAX as i64) {
+        return Err("dimension member count exceeds int32 member IDs".into());
+    }
+    cnt.iter()
+        .try_fold(1usize, |n, &c| n.checked_mul(c as usize))
+        .ok_or("dimension product exceeds addressable memory")?;
     let m = cnt.len();
-    let gd = geo_dim_index(dims);
-    let didx: Vec<usize> = (1..=m).filter(|&i| i != gd).collect();
+    let didx: Vec<usize> = (1..=m).filter(|&i| Some(i) != gd).collect();
     let names: Vec<String> = didx.iter().map(|&i| dims[i - 1].name.clone()).collect();
     let mut slugs = vec![String::new(); m];
-    slugs[gd - 1] = "geo".into();
+    if let Some(gd) = gd {
+        slugs[gd - 1] = "geo".into();
+    }
     for (i, slug) in didx.iter().zip(dim_slugs(&names)) {
         slugs[i - 1] = slug;
     }
@@ -136,7 +148,7 @@ pub fn build_layout(dims: &[DimDesc]) -> Result<Layout, String> {
     .map(str::to_owned)
     .collect();
     for (index, slug) in slugs.iter_mut().enumerate() {
-        if index == gd - 1 {
+        if Some(index + 1) == gd {
             continue;
         }
         if slug.starts_with("footnote_raw_") {
@@ -188,10 +200,12 @@ pub fn build_layout(dims: &[DimDesc]) -> Result<Layout, String> {
     }
 
     let mut estride = Vec::new();
-    let mut eb = 1.0f64;
+    let mut eb = 1i64;
     for &ep in &ent_pad {
-        estride.push(eb as i64);
-        eb = nextpow2((ep as f64 * eb).max(1.0) as i64) as f64;
+        estride.push(eb);
+        eb = ep
+            .checked_mul(eb)
+            .ok_or("padded data directory size overflow")?;
     }
 
     Ok(Layout {
@@ -209,14 +223,13 @@ pub fn build_layout(dims: &[DimDesc]) -> Result<Layout, String> {
         ent_idx,
         ent_counts,
         estride,
-        geo_in_page: straddle == gd,
+        geo_in_page: Some(straddle) == gd,
     })
 }
 
 struct PageCells {
-    tuples: Vec<Vec<i32>>,
     vals: Vec<f64>,
-    statuses: Vec<f64>,
+    statuses: Vec<i16>,
     footnotes: Vec<Vec<u16>>,
 }
 
@@ -246,6 +259,11 @@ pub fn decompress_component(data: &[u8]) -> Result<Vec<u8>, String> {
         .checked_mul(width)
         .and_then(|n| n.checked_add(header))
         .ok_or("component size overflow")?;
+    // A native directory record has a u16 encoded length. Refuse adversarial
+    // standalone extents before expansion, including all-zero compressed data.
+    if bytes > 64 * 1024 * 1024 {
+        return Err("component expansion exceeds the 64 MiB safety limit".into());
+    }
     // Rank-two byte components can declare huge extents. Validate encoded
     // input before allocating its expanded destination.
     if data[0] & 0x80 == 0 {
@@ -305,7 +323,7 @@ fn missing_mode(data: &[u8]) -> Result<u16, String> {
 fn decode_page(
     data: &[u8],
     off: usize,
-    lay: &Layout,
+    _lay: &Layout,
     size: usize,
     mode: u16,
 ) -> Result<PageCells, String> {
@@ -407,24 +425,26 @@ fn decode_page(
             }
         }
     }
-    let mut vals = Vec::with_capacity(lay.bit.len());
-    let mut statuses = Vec::with_capacity(lay.bit.len());
-    let mut footnotes = Vec::with_capacity(lay.bit.len());
-    for &bit in &lay.bit {
-        let cell = usize::try_from(bit).map_err(|_| "negative page coordinate")?;
-        if cell >= codes.len() {
-            return Err("coordinate outside page".into());
-        }
-        vals.push(scalar(cell));
-        statuses.push(codes[cell] as f64);
-        footnotes.push(notes[cell].clone());
-    }
+    let vals = (0..PRES_BITS as usize).map(scalar).collect();
     Ok(PageCells {
-        tuples: lay.tuples.clone(),
         vals,
-        statuses,
-        footnotes,
+        statuses: codes,
+        footnotes: notes,
     })
+}
+
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_page(data: &[u8]) {
+    let dims = [DimDesc {
+        name: "Items".into(),
+        count: 2048,
+        type_code: 0,
+        double01: false,
+    }];
+    let layout = build_layout_with_geo(&dims, None).unwrap();
+    for mode in [0, 1, 3] {
+        let _ = decode_page(data, 0, &layout, data.len(), mode);
+    }
 }
 
 fn entry_index(coords: &[i64], estride: &[i64]) -> Result<usize, String> {
@@ -487,15 +507,44 @@ fn directory_page(
     decode_page(data, target, lay, size, mode).map_err(|err| context(Some(position), &err))
 }
 
-pub fn decode_store(
+/// Dense row range in file dimension order. Only the value column uses f64.
+pub struct CellBatch {
+    pub ids: Vec<Vec<i32>>,
+    pub values: Vec<f64>,
+    pub statuses: Vec<i16>,
+    pub note_offsets: Vec<i32>,
+    pub notes: Vec<u16>,
+}
+
+pub fn row_count(lay: &Layout) -> Result<usize, String> {
+    lay.counts
+        .iter()
+        .try_fold(1usize, |n, &count| {
+            usize::try_from(count).ok().and_then(|c| n.checked_mul(c))
+        })
+        .ok_or_else(|| "dimension product exceeds addressable memory".into())
+}
+
+fn reserved<T>(n: usize) -> Result<Vec<T>, String> {
+    let mut result = Vec::new();
+    result
+        .try_reserve_exact(n)
+        .map_err(|_| "memory allocation failed for cell batch")?;
+    Ok(result)
+}
+
+/// Decode just [start, end), walking consecutive page windows and writing
+/// directly in Cartesian order. No full store, sort, or per-cell ID copies.
+pub fn decode_range(
     data: &[u8],
-    dims: &[DimDesc],
     lay: &Layout,
-) -> Result<Vec<(String, Vec<f64>)>, String> {
-    // Returns columns as (name, values) — member ids as f64 for uniformity, plus "value"
-    // The data slot is a native 14-byte directory descriptor, just like the
-    // metadata slots. Flag bit zero selects an index of directory pages;
-    // its u32 pointers are not [offset, length, capacity] entries themselves.
+    start: usize,
+    end: usize,
+) -> Result<CellBatch, String> {
+    let total = row_count(lay)?;
+    if start > end || end > total {
+        return Err("cell batch range outside grid".into());
+    }
     let directory = MetadataDirectory::new(data, HDR_DIR_PTR)
         .map_err(|err| format!("invalid data directory: {err}"))?;
     if u16(data, HDR_DIR_PTR + 12) & 1 != 0 && u16(data, 20) != 4096 {
@@ -504,220 +553,66 @@ pub fn decode_store(
             u16(data, 20)
         ));
     }
-    let capacity = usize::try_from(u32(data, HDR_DIR_PTR + 4))
-        .map_err(|_| "data directory capacity conversion overflow")?;
+    let capacity = u32(data, HDR_DIR_PTR + 4) as usize;
     if directory.count > capacity {
-        return Err(format!(
-            "invalid data directory at byte {}: expected_entry_count={}, allocated_capacity={capacity}; reason=entry count exceeds capacity",
-            directory.offset, directory.count,
-        ));
+        return Err(format!("invalid data directory: expected_entry_count={}, allocated_capacity={capacity}; reason=entry count exceeds capacity", directory.count));
     }
     let mode = missing_mode(data)?;
-
-    let mut cols: Vec<(String, Vec<i32>)> =
-        lay.slugs.iter().map(|s| (s.clone(), Vec::new())).collect();
-    let mut values: Vec<f64> = Vec::new();
-    let mut statuses = Vec::new();
-    let mut footnotes = Vec::new();
-
-    // Recursive traversal carries the shared output buffers through each level.
-    #[allow(clippy::too_many_arguments)]
-    fn walk(
-        level: usize,
-        coord: &mut Vec<i64>,
-        member_ids: &mut Vec<Option<i32>>,
-        data: &[u8],
-        lay: &Layout,
-        directory: &MetadataDirectory,
-        cols: &mut [(String, Vec<i32>)],
-        values: &mut Vec<f64>,
-        statuses: &mut Vec<f64>,
-        footnotes: &mut Vec<Vec<u16>>,
-        mode: u16,
-    ) -> Result<(), String> {
-        if level == lay.ent_counts.len() {
-            let k = entry_index(coord, &lay.estride)?;
-            let pg = directory_page(data, directory, k, lay, mode)?;
-            for row in 0..pg.vals.len() {
-                let mut mids = member_ids.clone();
-                let mut skip = false;
-                for (col_i, &dim_i) in lay.inpage_idx.iter().enumerate() {
-                    let mut mid = pg.tuples[row][col_i];
-                    if dim_i == lay.straddle {
-                        let win_i = coord[0];
-                        mid += (win_i * lay.ipc[0]) as i32;
-                        if mid as i64 > lay.counts[dim_i - 1] {
-                            skip = true;
-                            break;
-                        }
-                    }
-                    mids[dim_i - 1] = Some(mid);
-                }
-                if skip {
-                    continue;
-                }
-                if let Some(Some(mid)) = mids.get(lay.straddle - 1) {
-                    if *mid as i64 > lay.counts[lay.straddle - 1] {
-                        continue;
-                    }
-                }
-                for (dim_i, (_slug, col)) in cols.iter_mut().enumerate() {
-                    col.push(mids[dim_i].unwrap_or(0));
-                }
-                values.push(pg.vals[row]);
-                statuses.push(pg.statuses[row]);
-                footnotes.push(pg.footnotes[row].clone());
-            }
-            return Ok(());
-        }
-
-        for i in 0..lay.ent_counts[level] {
-            let dim_i = lay.ent_idx[level];
-            coord.push(i);
-            if dim_i == lay.straddle {
-                walk(
-                    level + 1,
-                    coord,
-                    member_ids,
-                    data,
-                    lay,
-                    directory,
-                    cols,
-                    values,
-                    statuses,
-                    footnotes,
-                    mode,
-                )?;
-            } else {
-                let mid = (i + 1) as i32;
-                let prev = member_ids[dim_i - 1];
-                member_ids[dim_i - 1] = Some(mid);
-                walk(
-                    level + 1,
-                    coord,
-                    member_ids,
-                    data,
-                    lay,
-                    directory,
-                    cols,
-                    values,
-                    statuses,
-                    footnotes,
-                    mode,
-                )?;
-                member_ids[dim_i - 1] = prev;
-            }
-            coord.pop();
-        }
-        Ok(())
+    let n = end - start;
+    let mut strides = vec![1usize; lay.n_dim];
+    for axis in (0..lay.n_dim - 1).rev() {
+        strides[axis] = strides[axis + 1] * lay.counts[axis + 1] as usize;
     }
-
-    let mut coord = Vec::new();
-    let mut member_ids = vec![None; lay.n_dim];
-    walk(
-        0,
-        &mut coord,
-        &mut member_ids,
-        data,
-        lay,
-        &directory,
-        &mut cols,
-        &mut values,
-        &mut statuses,
-        &mut footnotes,
-        mode,
-    )?;
-
-    let mut out: Vec<(String, Vec<f64>)> = cols
-        .into_iter()
-        .map(|(k, v)| (k, v.into_iter().map(|x| x as f64).collect()))
-        .collect();
-    out.push(("value".into(), values));
-    out.push(("status_code".into(), statuses));
-    let note_columns = footnotes.iter().map(Vec::len).max().unwrap_or(0).max(1);
-    for index in 0..note_columns {
-        out.push((
-            format!("footnote_raw_{}", index + 1),
-            footnotes
-                .iter()
-                .map(|notes| notes.get(index).map(|&note| note as f64).unwrap_or(-1.0))
-                .collect(),
-        ));
+    let mut ids = Vec::with_capacity(lay.n_dim);
+    for (axis, &stride) in strides.iter().enumerate() {
+        let mut column = reserved(n)?;
+        column
+            .extend((start..end).map(|row| (row / stride % lay.counts[axis] as usize + 1) as i32));
+        ids.push(column);
     }
-    let _ = dims;
-    Ok(out)
-}
-
-pub fn complete_grid(store: &[(String, Vec<f64>)], lay: &Layout) -> Vec<(String, Vec<f64>)> {
-    let counts = &lay.counts;
-    let n: usize = counts
-        .iter()
-        .fold(1usize, |a, &c| a.saturating_mul(c as usize));
-
-    // Build dense member-id columns without meshgrid temporaries
-    let mut out: Vec<(String, Vec<f64>)> = Vec::with_capacity(lay.slugs.len() + 1);
-    for (dim_i, slug) in lay.slugs.iter().enumerate() {
-        let mut col = Vec::with_capacity(n);
-        let mut stride_after = 1usize;
-        for c in counts.iter().skip(dim_i + 1) {
-            stride_after *= *c as usize;
+    let mut batch = CellBatch {
+        ids,
+        values: reserved(n)?,
+        statuses: reserved(n)?,
+        note_offsets: reserved(n + 1)?,
+        notes: Vec::new(),
+    };
+    batch.note_offsets.push(0);
+    let axis = lay.straddle - 1;
+    let inner = strides[axis];
+    let mut row = start;
+    while row < end {
+        let member = row / inner % lay.counts[axis] as usize;
+        let window = member / lay.ipc[0] as usize;
+        let mut coords = vec![window as i64];
+        for &dim in &lay.ent_idx[1..] {
+            coords.push((row / strides[dim - 1] % lay.counts[dim - 1] as usize) as i64);
         }
-        let ci = counts[dim_i] as usize;
-        let stride_before = n / (ci * stride_after);
-        for _ in 0..stride_before {
-            for mid in 1..=ci {
-                for _ in 0..stride_after {
-                    col.push(mid as f64);
-                }
-            }
+        let index = entry_index(&coords, &lay.estride)?;
+        let page = directory_page(data, &directory, index, lay, mode)?;
+        let first = (member % lay.ipc[0] as usize) * inner + row % inner;
+        let remaining = (lay.ipc[0] as usize - member % lay.ipc[0] as usize)
+            .min(lay.counts[axis] as usize - member)
+            * inner
+            - row % inner;
+        let length = remaining.min(end - row);
+        for &bit in &lay.bit[first..first + length] {
+            let bit = bit as usize;
+            batch.values.push(page.vals[bit]);
+            batch.statuses.push(page.statuses[bit]);
+            batch
+                .notes
+                .try_reserve(page.footnotes[bit].len())
+                .map_err(|_| "memory allocation failed for annotations")?;
+            batch.notes.extend_from_slice(&page.footnotes[bit]);
+            batch.note_offsets.push(
+                i32::try_from(batch.notes.len())
+                    .map_err(|_| "too many annotations in one batch")?,
+            );
         }
-        out.push((slug.clone(), col));
+        row += length;
     }
-
-    let value_col = store
-        .iter()
-        .find(|(k, _)| k == "value")
-        .map(|(_, v)| v.as_slice())
-        .unwrap_or(&[]);
-    let mut flat = vec![0i64; value_col.len()];
-    if !value_col.is_empty() {
-        let mut stride = 1i64;
-        for dim_i in (0..lay.n_dim).rev() {
-            let slug = &lay.slugs[dim_i];
-            if let Some((_, ids)) = store.iter().find(|(k, _)| k == slug) {
-                for (i, &id) in ids.iter().enumerate() {
-                    flat[i] += (id as i64 - 1) * stride;
-                }
-            }
-            stride *= counts[dim_i];
-        }
-    }
-    let columns: Vec<&str> = store
-        .iter()
-        .map(|(name, _)| name.as_str())
-        .filter(|&name| {
-            name == "value" || name == "status_code" || name.starts_with("footnote_raw_")
-        })
-        .collect();
-    for name in columns {
-        let mut values = vec![
-            if name.starts_with("footnote_raw_") {
-                -1.0
-            } else {
-                0.0
-            };
-            n
-        ];
-        if let Some((_, source)) = store.iter().find(|(key, _)| key == name) {
-            for (i, &f) in flat.iter().enumerate() {
-                if f >= 0 && (f as usize) < n {
-                    values[f as usize] = source[i];
-                }
-            }
-        }
-        out.push((name.into(), values));
-    }
-    out
+    Ok(batch)
 }
 
 #[cfg(test)]
@@ -781,8 +676,8 @@ mod tests {
         ] {
             let page = directory_page(&data, &directory, index, &lay, 3).unwrap();
             assert_eq!(page.vals[..2], [value, -value]);
-            assert_eq!(page.statuses[..2], [0.0, 0.0]);
-            assert_eq!(page.tuples[..2], [vec![1], vec![2]]);
+            assert_eq!(page.statuses[..2], [0, 0]);
+            assert_eq!(lay.tuples[..2], [vec![1], vec![2]]);
         }
         let error = directory_page(&data, &directory, 8194, &lay, 3)
             .err()
@@ -911,7 +806,7 @@ mod tests {
         page[trailer + 5] = 0x40; // Cell zero is valid; cell one is missing.
         let cells = decode_page(&page, 0, &layout, page.len(), 3).unwrap();
         assert_eq!(cells.vals[0], i16::MIN as f64);
-        assert_eq!(cells.statuses[..2], [0.0, 1.0]);
+        assert_eq!(cells.statuses[..2], [0, 1]);
         assert_eq!(cells.vals[1], 0.0);
     }
 
@@ -928,18 +823,18 @@ mod tests {
         page[..4].copy_from_slice(&[2, 1, 0x80, 8]);
         page[4100] = 0x80;
         let cells = decode_page(&page, 0, &layout, page.len(), 3).unwrap();
-        assert_eq!(cells.statuses[..2], [0.0, -1.0]);
+        assert_eq!(cells.statuses[..2], [0, -1]);
         let cells = decode_page(&page, 0, &layout, page.len(), 1).unwrap();
-        assert_eq!(cells.statuses[..2], [-1.0, 0.0]);
+        assert_eq!(cells.statuses[..2], [-1, 0]);
         // A page without a mask publishes zeros regardless of the table's
         // default policy. This also covers the zero-length short encoding.
         page.truncate(4100);
         page[2..4].copy_from_slice(&(PRES_BITS as u16).to_le_bytes());
         let cells = decode_page(&page, 0, &layout, page.len(), 3).unwrap();
         assert_eq!(cells.vals[..2], [0.0, 0.0]);
-        assert_eq!(cells.statuses[..2], [0.0, 0.0]);
+        assert_eq!(cells.statuses[..2], [0, 0]);
         let cells = decode_page(&[2, 1, 0, 0], 0, &layout, 4, 3).unwrap();
-        assert_eq!(cells.statuses[..2], [0.0, 0.0]);
+        assert_eq!(cells.statuses[..2], [0, 0]);
     }
 
     #[test]
@@ -960,25 +855,70 @@ mod tests {
     }
 
     #[test]
+    fn page_capacity_two_extended_records_and_five_bit_references() {
+        let lay = build_layout(&[DimDesc {
+            name: "Items".into(),
+            count: 2048,
+            type_code: 0,
+            double01: false,
+        }])
+        .unwrap();
+        assert_eq!(lay.bit.len(), 2048);
+        assert_eq!(lay.bit[2047], 2047);
+        let mut page = vec![0u8; 4100];
+        page[..4].copy_from_slice(&[0x22, 1, 0, 8]);
+        page[4098..4100].copy_from_slice(&123i16.to_le_bytes());
+        let mut missing = vec![1, 1];
+        missing.extend_from_slice(&[0; 256]);
+        missing[257] = 1; // The final cell is missing with explicit code 1.
+        let notes = [2, 1, 2, 0, 0, 0, 255, 255]; // Cell 0/ref 0; cell 2047/ref 31.
+        page.extend_from_slice(&[2, 2, 1, 8, 0]);
+        page.extend_from_slice(&missing);
+        page.extend_from_slice(&notes);
+        if page.len() % 2 != 0 {
+            page.push(0);
+        }
+        let count = ((page.len() - 4) / 2) as u16;
+        page[2..4].copy_from_slice(&count.to_le_bytes());
+        let cells = decode_page(&page, 0, &lay, page.len(), 3).unwrap();
+        assert_eq!(cells.vals[2047], 123.0);
+        assert_eq!(cells.statuses[2047], 1);
+        assert_eq!(cells.footnotes[0], [0]);
+        assert_eq!(cells.footnotes[2047], [u16::MAX]);
+        assert_eq!(u16::MAX >> 5, 2047);
+        assert_eq!(u16::MAX & 31, 31);
+        page[4100] = 3;
+        assert!(decode_page(&page, 0, &lay, page.len(), 3)
+            .err()
+            .unwrap()
+            .contains("extended page record directory"));
+
+        let mut short = vec![0u8; 4 + 2047 * 2];
+        short[..4].copy_from_slice(&[2, 1, 255, 7]);
+        assert!(decode_page(&short, 0, &lay, short.len(), 3)
+            .err()
+            .unwrap()
+            .contains("only 2047 cells"));
+        assert!(decompress_component(&[0x88, 2, 255, 255, 255, 255])
+            .err()
+            .unwrap()
+            .contains("safety limit"));
+    }
+
+    #[test]
     fn supplied_pages_decode_all_dimensions_and_cells() {
-        let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
-        let Ok(files) = std::fs::read_dir(directory) else {
-            return;
-        };
-        for file in files {
-            let path = file.unwrap().path();
-            if path.extension().is_none_or(|ext| ext != "ivt") {
-                continue;
-            }
+        for path in crate::test_data::files() {
             let data = std::fs::read(&path).unwrap();
             let dims = crate::descriptor::parse_descriptor(&data).unwrap().dims;
             let layout = build_layout(&dims).unwrap();
-            let columns = decode_store(&data, &dims, &layout)
+            let count = row_count(&layout).unwrap();
+            let columns = decode_range(&data, &layout, 0, count)
                 .unwrap_or_else(|err| panic!("{}: {err}", path.display()));
             let count: usize = dims.iter().map(|dim| dim.count as usize).product();
-            assert!(columns.len() >= dims.len() + 3);
-            for (_, values) in &columns {
-                assert_eq!(values.len(), count, "{}", path.display());
+            assert_eq!(columns.values.len(), count);
+            assert_eq!(columns.statuses.len(), count);
+            for ids in &columns.ids {
+                assert_eq!(ids.len(), count, "{}", path.display());
             }
         }
     }

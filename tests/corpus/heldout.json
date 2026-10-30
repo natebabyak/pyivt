@@ -1,0 +1,258 @@
+{
+  "schema_version": 1,
+  "role": "held-out; acquired and hashed without running pyivt; do not tune parser code against these hashes",
+  "frozen_from_commit": "9cbaee9",
+  "selection": "8 size quantiles from Wayback CDX application/zip entries excluding product IDs 98100001-98100020, plus 2 JODI oil tables for producer and period diversity",
+  "files": [
+    {
+      "sha256": "d730c2e93aa3717f26ba4be37fbe66ee0cead189417c50de8e1a2da0a20c659a",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100036.zip",
+      "bytes": 15728,
+      "archive_member": "98100036.ivt",
+      "product_id": "98100036",
+      "producer": "Statistics Canada",
+      "reference_year": 2021,
+      "cdx_snapshot": "20220427125648",
+      "cdx_url": "https://www150.statcan.gc.ca/n1/tbl/b2020/98100036.zip",
+      "cdx_zip_digest": "W2NO6VKO7MRT2PB5U2Y3RUWQARJ735H5",
+      "official_dimension_counts": [
+        14,
+        3,
+        8
+      ],
+      "official_dimension_names": [
+        "Geography",
+        "Broad age groups (3)",
+        "Gender (8)"
+      ],
+      "official_metadata_source": "https://www.statcan.gc.ca/en/developers/wds/user-guide#getCubeMetadata"
+    },
+    {
+      "sha256": "f6d48df8d62fcadcd29adce04835599a3f5fb646d9ec25b7aa453487f57c37eb",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100042.zip",
+      "bytes": 393710,
+      "archive_member": "98100042.ivt",
+      "product_id": "98100042",
+      "producer": "Statistics Canada",
+      "reference_year": 2021,
+      "cdx_snapshot": "20220427125553",
+      "cdx_url": "https://www150.statcan.gc.ca/n1/tbl/b2020/98100042.zip",
+      "cdx_zip_digest": "7CMGKWNUIFIG67UB4LZSCWPNZBW74762",
+      "official_dimension_counts": [
+        174,
+        3,
+        20,
+        9
+      ],
+      "official_dimension_names": [
+        "Geography",
+        "Gender (3)",
+        "Age (20)",
+        "Structural type of dwelling (9)"
+      ],
+      "official_metadata_source": "https://www.statcan.gc.ca/en/developers/wds/user-guide#getCubeMetadata"
+    },
+    {
+      "sha256": "1c2e72290d3224a096547adf7ad13be6089cbcf5f554453c806859189b64222e",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100021.zip",
+      "bytes": 6291830,
+      "archive_member": "98100021.ivt",
+      "product_id": "98100021",
+      "producer": "Statistics Canada",
+      "reference_year": 2021,
+      "cdx_snapshot": "20220428153802",
+      "cdx_url": "https://www150.statcan.gc.ca/n1/tbl/b2020/98100021.zip",
+      "cdx_zip_digest": "XYLQ4LHKP3LBXEGXF3AQNNDQTJTKIGQI",
+      "official_dimension_counts": [
+        1159,
+        2,
+        128,
+        3
+      ],
+      "official_dimension_names": [
+        "Geography",
+        "Census year (2)",
+        "Age (in single years), average age and median age (128)",
+        "Gender (3a)"
+      ],
+      "official_metadata_source": "https://www.statcan.gc.ca/en/developers/wds/user-guide#getCubeMetadata"
+    },
+    {
+      "sha256": "e24adcc61806380d2e6ec2e6cb0604c6d314187cdfe4f37189478741adb5f2ce",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100277.zip",
+      "bytes": 22721197,
+      "archive_member": "98100277.ivt",
+      "product_id": "98100277",
+      "producer": "Statistics Canada",
+      "reference_year": 2021,
+      "cdx_snapshot": "20261019094509",
+      "cdx_url": "https://www150.statcan.gc.ca/n1/tbl/b2020/98100277.zip",
+      "cdx_zip_digest": "MMJVI63BZM2ED5TBHBD3NLJAEYUQT2QB",
+      "official_dimension_counts": [
+        174,
+        3,
+        10,
+        3,
+        3,
+        29,
+        9
+      ],
+      "official_dimension_names": [
+        "Geography",
+        "Registered or Treaty Indian status (3)",
+        "Age (10A)",
+        "Gender (3)",
+        "Statistics (3)",
+        "Household and family characteristics of persons including detailed information on stepfamilies (29)",
+        "Indigenous identity (9)"
+      ],
+      "official_metadata_source": "https://www.statcan.gc.ca/en/developers/wds/user-guide#getCubeMetadata"
+    },
+    {
+      "sha256": "c87d2a164e699496141bdacce00234a7e44b53245e4fe8ce55c057ea367a2236",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100532.zip",
+      "bytes": 208450429,
+      "archive_member": "98100532.ivt",
+      "product_id": "98100532",
+      "producer": "Statistics Canada",
+      "reference_year": 2021,
+      "cdx_snapshot": "20260102084342",
+      "cdx_url": "https://www150.statcan.gc.ca/n1/tbl/b2020/98100532.zip",
+      "cdx_zip_digest": "QZ5R5SAS6ZBUURKTN2R6CWDRBPDNS6VT",
+      "official_dimension_counts": [
+        57,
+        820,
+        5,
+        2,
+        3,
+        10,
+        9
+      ],
+      "official_dimension_names": [
+        "Geography",
+        "Occupation - Unit group - National Occupational Classification (NOC) 2021 (820)",
+        "Knowledge of official languages (5)",
+        "Labour force status (2)",
+        "Statistics (3)",
+        "Other language(s) used regularly at work (10)",
+        "Language used most often at work (9)"
+      ],
+      "official_metadata_source": "https://www.statcan.gc.ca/en/developers/wds/user-guide#getCubeMetadata"
+    },
+    {
+      "sha256": "fda295d88ea1492b1b1fd4e917412ea219971a8da992e7319326d1489f01bd56",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100291.zip",
+      "bytes": 164498755,
+      "archive_member": "98100291.ivt",
+      "product_id": "98100291",
+      "producer": "Statistics Canada",
+      "reference_year": 2021,
+      "cdx_snapshot": "20261018223202",
+      "cdx_url": "https://www150.statcan.gc.ca/n1/tbl/b2020/98100291.zip",
+      "cdx_zip_digest": "I3IV376M4GDCGBQYRZJZ4GN5K5EOK5NB",
+      "official_dimension_counts": [
+        174,
+        15,
+        9,
+        3,
+        3,
+        17,
+        9
+      ],
+      "official_dimension_names": [
+        "Geography",
+        "Highest certificate, diploma or degree (15)",
+        "Age (9)",
+        "Gender (3)",
+        "Statistics (3)",
+        "Income statistics (17)",
+        "Indigenous identity (9)"
+      ],
+      "official_metadata_source": "https://www.statcan.gc.ca/en/developers/wds/user-guide#getCubeMetadata"
+    },
+    {
+      "sha256": "f0e667207961aedf14f7f8a626f3ba3049b340d5ec392d60858957f1ec3a25a7",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100592.zip",
+      "bytes": 300996293,
+      "archive_member": "98100592.ivt",
+      "product_id": "98100592",
+      "producer": "Statistics Canada",
+      "reference_year": 2021,
+      "cdx_snapshot": "20250818223451",
+      "cdx_url": "https://www150.statcan.gc.ca/n1/tbl/b2020/98100592.zip",
+      "cdx_zip_digest": "GRLAM27DEJO54D656COK3D4LS3ZBX5RW",
+      "official_dimension_counts": [
+        307,
+        3,
+        3,
+        15,
+        3,
+        428,
+        7
+      ],
+      "official_dimension_names": [
+        "Geography",
+        "Statistics (3)",
+        "Labour force status (3)",
+        "Age (15A)",
+        "Gender (3)",
+        "Industry - Groups - North American Industry Classification System (NAICS) 2017 (428A)",
+        "Class of worker (7A)"
+      ],
+      "official_metadata_source": "https://www.statcan.gc.ca/en/developers/wds/user-guide#getCubeMetadata"
+    },
+    {
+      "sha256": "41aaaef1c9608dd1b5f4b434f9aeff6f6b073922e2ca67c9f352098ff9cccde0",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100439.zip",
+      "bytes": 360096177,
+      "archive_member": "98100439.ivt",
+      "product_id": "98100439",
+      "producer": "Statistics Canada",
+      "reference_year": 2021,
+      "cdx_snapshot": "20260223175021",
+      "cdx_url": "https://www150.statcan.gc.ca/n1/tbl/b2020/98100439.zip",
+      "cdx_zip_digest": "HW3ZRCRES6IQIZZLR73L3MLY7B4BP7K7",
+      "official_dimension_counts": [
+        174,
+        3,
+        3,
+        15,
+        7,
+        4,
+        2,
+        16,
+        15
+      ],
+      "official_dimension_names": [
+        "Geography",
+        "Statistics (3)",
+        "Gender (3)",
+        "Age (15A)",
+        "Employment income statistics (7)",
+        "Immigrant status (4A)",
+        "Income year (2)",
+        "Highest certificate, diploma or degree (16)",
+        "Visible minority (15)"
+      ],
+      "official_metadata_source": "https://www.statcan.gc.ca/en/developers/wds/user-guide#getCubeMetadata"
+    },
+    {
+      "sha256": "fbf816309a51272c006040b29759013a705c54b0870d31ccb641b8a7a54a7c8c",
+      "url": "https://www.jodidata.org/_resources/files/downloads/oil-data/world_ext.zip?iid=183",
+      "bytes": 30330609,
+      "archive_member": "NewProcedure_World_Primary.ivt",
+      "producer": "JODI / IEF",
+      "reference_year": "2009-2026",
+      "source_page": "https://www.jodidata.org/oil/database/data-downloads.aspx"
+    },
+    {
+      "sha256": "490ae98229cc46da7db9de64b4af897dc1444b0f0c1250d6f5a327afabd3abfa",
+      "url": "https://www.jodidata.org/_resources/files/downloads/oil-data/world_ext.zip?iid=183",
+      "bytes": 79873351,
+      "archive_member": "NewProcedure_World_Secondary.ivt",
+      "producer": "JODI / IEF",
+      "reference_year": "2009-2026",
+      "source_page": "https://www.jodidata.org/oil/database/data-downloads.aspx"
+    }
+  ]
+}

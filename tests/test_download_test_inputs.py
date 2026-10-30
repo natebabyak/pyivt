@@ -1,5 +1,7 @@
 """Fixture downloads recover from transient failures without hiding missing inputs."""
 
+import hashlib
+import json
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError
@@ -78,3 +80,37 @@ def test_unavailable_candidate_does_not_prevent_later_download(tmp_path, monkeyp
     files = list(tmp_path.glob("*.ivt"))
     assert len(files) == 1
     assert files[0].read_bytes() == b"fixture"
+
+
+def test_manifest_fetch_verifies_hash_and_reuses_cached_file(tmp_path):
+    content = b"pinned IVT"
+    digest = hashlib.sha256(content).hexdigest()
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {"files": [{"sha256": digest, "url": "https://example.com/table.zip"}]}
+        )
+    )
+    payload = BytesIO()
+    with ZipFile(payload, "w") as archive:
+        archive.writestr("nested/table.ivt", content)
+    destination = tmp_path / "data"
+    with patch.object(downloader, "download", return_value=payload.getvalue()) as fetch:
+        downloader.fetch_manifest(manifest, destination)
+        downloader.fetch_manifest(manifest, destination)
+    fetch.assert_called_once()
+    assert (destination / f"{digest}.ivt").read_bytes() == content
+
+
+def test_manifest_refuses_changed_remote_bytes(tmp_path):
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {"files": [{"sha256": "a" * 64, "url": "https://example.com/table.ivt"}]}
+        )
+    )
+    with (
+        patch.object(downloader, "download", return_value=b"changed"),
+        pytest.raises(ValueError, match="refusing changed inputs"),
+    ):
+        downloader.fetch_manifest(manifest, tmp_path / "data")

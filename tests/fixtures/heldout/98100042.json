@@ -1,0 +1,12 @@
+{
+  "product_id": "98100042",
+  "csv_url": "https://www150.statcan.gc.ca/n1/en/tbl/csv/98100042-eng.zip",
+  "csv_sha256": "c855357233adccaaa33ee4fbb96660e0f5e65af7bcfe04405713bc5d8c51be13",
+  "ivt_sha256": "f6d48df8d62fcadcd29adce04835599a3f5fb646d9ec25b7aa453487f57c37eb",
+  "official_dimension_counts": [
+    174,
+    3,
+    20,
+    9
+  ]
+}

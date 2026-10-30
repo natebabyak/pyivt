@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Ivt.to_batches()` and the Arrow C stream protocol export bounded row ranges with shared member dictionaries
+- Conservative allocation estimates raise `MemoryError` and recommend streaming before unsafe materialization
+
+### Changed
+
+- Arrow member IDs use `int32`; text member fields, `symbol` and `status` use `dictionary<int32, utf8>`
+- `to_arrow()` assembles chunked batches and caches Arrow buffers for repeated exports
+- Dictionary categories are deduplicated and non-null so repeated or missing member labels remain compatible with categorical consumers
+- Descriptor parsing requires the native axis matrix and exposes `metadata.descriptor_path`; unverified prose scanners and demo-specific scoring are removed
+- Unsupported container versions 2 and 3 raise explicit errors for both path and byte sources; version 4 remains supported
+- Native axis kinds and language references determine time-series types and translations; arbitrary header text no longer supplies product IDs
+- Geography selection uses native geographic kinds or UID member fields; `layout.geo_dim` is `None` when no geography is declared, and `geographies.geo_uid` uses the native DGUID column
+
+### Migration
+
+- Cast dictionary fields to `pa.string()` and member IDs to `pa.int64()` if an application requires the former physical schema
+- Use `to_batches()` for large tables, or explicitly increase `max_memory_bytes` when materializing them
+
 ## [0.0.5] - 2026-10-29
 
 ### Added
