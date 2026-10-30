@@ -3,6 +3,7 @@
 use crate::decode::{CellBatch, Layout};
 use crate::members::{read_typed_members, MemberValues};
 use crate::metadata::MissingValue;
+use arrow::array::builder::StringDictionaryBuilder;
 use arrow::array::{
     Array, ArrayRef, Date32Array, DictionaryArray, Float64Array, Int32Array, Int64Array, ListArray,
     StringArray, UInt16Array,
@@ -58,31 +59,74 @@ pub fn label_parent(labels: &[String], unit: usize) -> Vec<Option<i64>> {
 /// Member arrays are allocated once and shared by every exported batch.
 pub struct TidySchema {
     pub schema: SchemaRef,
-    members: Vec<Vec<ArrayRef>>,
-    symbols: ArrayRef,
-    descriptions: ArrayRef,
+    members: Vec<Vec<MemberArray>>,
+    symbols: MemberArray,
+    descriptions: MemberArray,
     status_keys: HashMap<i16, i32>,
     pub bytes_per_row: usize,
     pub dictionary_bytes: usize,
 }
 
-fn dictionary(keys: &Int32Array, values: &ArrayRef) -> Result<ArrayRef, String> {
-    // A null member must be a null key, so Arrow's null_count agrees with
-    // decoded values (a valid key pointing at a null dictionary value isn't).
-    let keys = if values.null_count() == 0 {
-        keys.clone()
-    } else {
-        Int32Array::new(
-            keys.values().clone(),
-            Some(NullBuffer::from_iter(
-                keys.iter()
-                    .map(|key| key.is_some_and(|k| !values.is_null(k as usize))),
-            )),
-        )
-    };
-    DictionaryArray::<Int32Type>::try_new(keys, Arc::clone(values))
-        .map(|a| Arc::new(a) as ArrayRef)
-        .map_err(|e| e.to_string())
+/// Text maps use canonical categories: unique non-null dictionary values,
+/// with a nullable member-to-category lookup. Unique maps can reuse row keys.
+struct MemberArray {
+    data: ArrayRef,
+    identity: bool,
+}
+
+impl MemberArray {
+    fn new(values: ArrayRef) -> Result<Self, String> {
+        let Some(text) = values.as_any().downcast_ref::<StringArray>() else {
+            return Ok(Self {
+                data: values,
+                identity: false,
+            });
+        };
+        let mut builder = StringDictionaryBuilder::<Int32Type>::new();
+        for value in text {
+            match value {
+                Some(value) => {
+                    builder.append(value).map_err(|e| e.to_string())?;
+                }
+                None => builder.append_null(),
+            }
+        }
+        let encoded = builder.finish();
+        let identity = encoded.keys().null_count() == 0
+            && encoded
+                .keys()
+                .values()
+                .iter()
+                .enumerate()
+                .all(|(i, &key)| key as usize == i);
+        Ok(Self {
+            data: Arc::new(encoded),
+            identity,
+        })
+    }
+
+    fn array(&self, keys: &Int32Array) -> Result<ArrayRef, String> {
+        let Some(map) = self
+            .data
+            .as_any()
+            .downcast_ref::<DictionaryArray<Int32Type>>()
+        else {
+            return take(self.data.as_ref(), keys, None).map_err(|e| e.to_string());
+        };
+        let mapped = if self.identity {
+            keys.clone()
+        } else {
+            let lookup = take(map.keys(), keys, None).map_err(|e| e.to_string())?;
+            lookup
+                .as_any()
+                .downcast_ref::<Int32Array>()
+                .ok_or("invalid dictionary key type")?
+                .clone()
+        };
+        DictionaryArray::<Int32Type>::try_new(mapped, Arc::clone(map.values()))
+            .map(|a| Arc::new(a) as ArrayRef)
+            .map_err(|e| e.to_string())
+    }
 }
 
 impl TidySchema {
@@ -131,15 +175,17 @@ impl TidySchema {
                     name = format!("{base}_{suffix}");
                     suffix += 1;
                 }
-                let empty = Int32Array::from(Vec::<i32>::new());
-                let kind = if values.data_type() == &arrow::datatypes::DataType::Utf8 {
-                    bytes_per_row += 5;
-                    dictionary(&empty, &values)?.data_type().clone()
+                let values = MemberArray::new(values)?;
+                bytes_per_row += if matches!(
+                    values.data.data_type(),
+                    arrow::datatypes::DataType::Dictionary(_, _)
+                ) {
+                    5
                 } else {
-                    bytes_per_row += 9;
-                    values.data_type().clone()
+                    9
                 };
-                dictionary_bytes += values.get_array_memory_size();
+                let kind = values.data.data_type().clone();
+                dictionary_bytes += values.data.get_array_memory_size();
                 if data
                     .len()
                     .saturating_mul(3)
@@ -153,18 +199,18 @@ impl TidySchema {
             }
             maps.push(arrays);
         }
-        let symbols: ArrayRef = Arc::new(StringArray::from(
+        let symbols = MemberArray::new(Arc::new(StringArray::from(
             legends
                 .iter()
                 .map(|m| Some(m.symbol.as_str()))
                 .collect::<Vec<_>>(),
-        ));
-        let descriptions: ArrayRef = Arc::new(StringArray::from(
+        )))?;
+        let descriptions = MemberArray::new(Arc::new(StringArray::from(
             legends
                 .iter()
                 .map(|m| m.description.en.as_deref().or(m.description.fr.as_deref()))
                 .collect::<Vec<_>>(),
-        ));
+        )))?;
         let status_keys = legends
             .iter()
             .enumerate()
@@ -178,27 +224,16 @@ impl TidySchema {
         fields.extend([
             Field::new("value", DataType::Float64, true),
             Field::new("status_code", DataType::Int64, false),
-            Field::new(
-                "symbol",
-                dictionary(&Int32Array::from(Vec::<i32>::new()), &symbols)?
-                    .data_type()
-                    .clone(),
-                true,
-            ),
-            Field::new(
-                "status",
-                dictionary(&Int32Array::from(Vec::<i32>::new()), &descriptions)?
-                    .data_type()
-                    .clone(),
-                true,
-            ),
+            Field::new("symbol", symbols.data.data_type().clone(), true),
+            Field::new("status", descriptions.data.data_type().clone(), true),
             Field::new(
                 "footnote_raw",
                 DataType::List(Arc::new(Field::new("item", DataType::UInt16, true))),
                 false,
             ),
         ]);
-        dictionary_bytes += symbols.get_array_memory_size() + descriptions.get_array_memory_size();
+        dictionary_bytes +=
+            symbols.data.get_array_memory_size() + descriptions.data.get_array_memory_size();
         Ok(Self {
             schema: Arc::new(Schema::new(fields)),
             members: maps,
@@ -216,11 +251,7 @@ impl TidySchema {
             let keys = Int32Array::from(ids.iter().map(|id| id - 1).collect::<Vec<_>>());
             arrays.push(Arc::new(Int32Array::from(ids)));
             for values in fields {
-                arrays.push(if values.data_type() == &arrow::datatypes::DataType::Utf8 {
-                    dictionary(&keys, values)?
-                } else {
-                    take(values.as_ref(), &keys, None).map_err(|e| e.to_string())?
-                });
+                arrays.push(values.array(&keys)?);
             }
         }
         let valid = NullBuffer::from_iter(cells.statuses.iter().zip(&mut cells.values).map(
@@ -249,8 +280,8 @@ impl TidySchema {
                 .map(i64::from)
                 .collect::<Vec<_>>(),
         )));
-        arrays.push(dictionary(&keys, &self.symbols)?);
-        arrays.push(dictionary(&keys, &self.descriptions)?);
+        arrays.push(self.symbols.array(&keys)?);
+        arrays.push(self.descriptions.array(&keys)?);
         arrays.push(Arc::new(
             ListArray::try_new(
                 Arc::new(Field::new("item", arrow::datatypes::DataType::UInt16, true)),
@@ -267,6 +298,53 @@ impl TidySchema {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dictionary_categories_are_unique_and_non_null() {
+        let map = MemberArray::new(Arc::new(StringArray::from(vec![
+            Some("Alpha"),
+            Some("Alpha"),
+            None,
+            Some("Beta"),
+        ])))
+        .unwrap();
+        let indices = Int32Array::from(vec![Some(0), Some(1), Some(2), Some(3), Some(1), None]);
+        let array = map.array(&indices).unwrap();
+        let dictionary = array
+            .as_any()
+            .downcast_ref::<DictionaryArray<Int32Type>>()
+            .unwrap();
+        assert_eq!(dictionary.values().len(), 2);
+        assert_eq!(dictionary.values().null_count(), 0);
+        assert_eq!(
+            dictionary.keys(),
+            &Int32Array::from(vec![Some(0), Some(0), None, Some(1), Some(0), None])
+        );
+        let values = dictionary
+            .values()
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .unwrap();
+        assert_eq!(
+            values.iter().collect::<Vec<_>>(),
+            [Some("Alpha"), Some("Beta")]
+        );
+    }
+
+    #[test]
+    fn unique_text_maps_reuse_row_key_buffers() {
+        let map = MemberArray::new(Arc::new(StringArray::from(vec!["Alpha", "Beta"]))).unwrap();
+        let indices = Int32Array::from(vec![0, 1, 0]);
+        let array = map.array(&indices).unwrap();
+        let dictionary = array
+            .as_any()
+            .downcast_ref::<DictionaryArray<Int32Type>>()
+            .unwrap();
+        assert_eq!(
+            indices.values().as_ptr(),
+            dictionary.keys().values().as_ptr()
+        );
+    }
 
     #[test]
     fn test_label_hierarchy() {

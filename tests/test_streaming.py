@@ -7,6 +7,7 @@ from math import prod
 from pathlib import Path
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyivt
 import pytest
 from arrow_helpers import plain_table
@@ -48,6 +49,19 @@ def test_dictionary_buffers_and_cached_exports_are_shared():
         first["value"].chunk(0).buffers()[1].address
         == second["value"].chunk(0).buffers()[1].address
     )
+
+
+def test_dictionary_categories_dedupe_members_and_exclude_null_values():
+    data = cube((2, 3), label_fields=1).replace(b"member 0001", b"member 0000")
+    batch = next(pyivt.open(data).to_batches())
+    assert len(batch.column("axis_0_label_0").dictionary) == 1
+    assert len(batch.column("axis_1_label_0").dictionary) == 2
+    for source in [data, _typed_fixture()]:
+        for batch in pyivt.open(source).to_batches(batch_size=5):
+            for array in batch.columns:
+                if pa.types.is_dictionary(array.type):
+                    assert array.dictionary.null_count == 0
+                    assert len(pc.unique(array.dictionary)) == len(array.dictionary)
 
 
 def test_shared_ivt_can_export_from_multiple_threads():

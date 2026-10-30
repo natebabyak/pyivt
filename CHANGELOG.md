@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Arrow member IDs use `int32`; text member fields, `symbol` and `status` use `dictionary<int32, utf8>`
 - `to_arrow()` assembles chunked batches and caches Arrow buffers for repeated exports
+- Dictionary categories are deduplicated and non-null so repeated or missing member labels remain compatible with categorical consumers
 - Descriptor parsing requires the native axis matrix and exposes `metadata.descriptor_path`; unverified prose scanners and demo-specific scoring are removed
 - Unsupported container versions 2 and 3 raise explicit errors for both path and byte sources; version 4 remains supported
 - Native axis kinds and language references determine time-series types and translations; arbitrary header text no longer supplies product IDs
