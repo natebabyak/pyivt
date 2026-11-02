@@ -136,6 +136,7 @@ impl TidySchema {
         legends: &[MissingValue],
         memory_limit: usize,
     ) -> Result<Self, String> {
+        let _profile = crate::profile::Stage::new("prepare_member_arrays");
         let mut used: HashSet<String> =
             ["value", "status_code", "symbol", "status", "footnote_raw"]
                 .into_iter()
@@ -246,6 +247,7 @@ impl TidySchema {
     }
 
     pub fn record_batch(&self, mut cells: CellBatch) -> Result<RecordBatch, String> {
+        let _profile = crate::profile::Stage::new("attach_metadata");
         let mut arrays: Vec<ArrayRef> = Vec::new();
         for (ids, fields) in cells.ids.into_iter().zip(&self.members) {
             let keys = Int32Array::from(ids.iter().map(|id| id - 1).collect::<Vec<_>>());

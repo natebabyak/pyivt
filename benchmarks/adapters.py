@@ -22,4 +22,4 @@ def extract_metadata_with_pyivt(path: Path) -> pyivt.IvtMetadata:
 
 
 def convert_to_arrow_with_pyivt(path: Path) -> pa.Table:
-    return pyivt.open(path).to_arrow()
+    return pyivt.open(path).to_arrow()[0]

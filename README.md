@@ -3,7 +3,7 @@
 `pyivt` is a library for Statistics Canada Beyond 20/20 `.ivt` files, written in Rust. It is designed to be minimal and easily adaptable for existing codebases. Key features are:
 
 > [!NOTE]
-> `pyivt` is under active development and is not considered stable until v0.1.0
+> `pyivt` is under active development. Version 0.1.0 introduces a breaking Arrow API change; see the migration notes below.
 
 - **Fast**: Orders of magnitude faster than GUI automation for metadata
 - **Python**: Easily integrates into modern data workflows with a minimal API
@@ -36,7 +36,9 @@ import pyivt
 
 ivt = pyivt.open("data.ivt")
 print(ivt.metadata.title.en)
-pq.write_table(ivt.to_arrow(), "data.parquet")
+table, members = ivt.to_arrow()
+pq.write_table(table, "data.parquet")
+members.to_json("data.members.json")
 ```
 
 ### Opening IVT Files
@@ -149,89 +151,135 @@ either have `layout.geo_dim is None`. `metadata.geographies.geo_uid` preserves
 native DGUID values. Product identity is read within native summary/notes records,
 without searching unrelated header bytes for plausible identifiers.
 
-Use `Ivt.to_arrow()` to export to Apache Arrow.
+`Ivt.to_arrow()` returns `(table, members)`:
 
-The table contains the complete Cartesian product of all declared dimensions,
-in file dimension order (last dimension varies fastest). Each dimension has an
-`int32` member ordinal and every declared native member field: codes and labels
-as `dictionary<int32, utf8>`, integer attributes as `int64`, floating attributes as `float64`, and
-time-series dates as `date32`, with the original time serial and auxiliary word
-retained. Codes keep their leading zeros, and both languages are retained when
-stored in the file.
+```python
+table, members = ivt.to_arrow()
+```
 
-`value` is `float64`; missing-value records determine its nulls independently of
-the numeric payload. `status_code`, `symbol`, `status`, and `footnote_raw`
-(`list<uint16>`) retain status and raw annotation information. A zero value is
-preserved when the file marks it as published. Flat and paged data directories
-use the same API and strict ordinal/range checks.
+The full table has one row per combination of dimension members, in file
+order with the last dimension varying fastest. Each dimension has exactly one
+`dictionary<uint8|uint16|uint32|uint64, utf8>` column containing its display
+labels, plus a nullable `float64` `value` column. The dictionary uses native
+member order; its index type is the smallest unsigned type that holds all
+zero-based indices (256 members still fit `uint8`). Labels can repeat or be
+missing; the original member identity is retained by dictionary position.
+Missing-value records determine value nulls independently of numeric payloads.
+Published zero values remain zero. Absent storage cells retain the native
+zero/published default. Flat and paged directories use the same strict reader.
 
-For large cubes, consume batches and release each after processing:
+Member codes in this API are **native numeric ordinals**, currently 1-based.
+Their full map is checked for non-negative, unique, sorted, dense codes and
+records `first_code`. Stored text codes such as `"001"`, both languages, dates,
+notes and numeric attributes live in member metadata without row repetition.
+
+#### Select members and columns before materializing
+
+```python
+# Keys are dimension slugs from ivt.layout.slugs, values are numeric ordinals.
+select = {ivt.layout.slugs[0]: [1, 3]}
+table, members = ivt.to_arrow(select)
+```
+
+Codes are validated and sorted into native order. Duplicate, non-integer or
+unknown codes raise `ValueError` naming the dimension. Each specified axis is
+restricted to its selected codes. An omitted dimension keeps all its rows,
+but contributes no output column or members entry. There is no aggregation.
+`None` selects every member and column; `{}` returns only `value` for the full
+grid. An empty code list produces a zero-row table with an empty dictionary.
+Selected dictionaries contain only selected members. Dictionary index `i`
+corresponds to `members.dimensions[axis].members[i].code`, including subsets
+with gaps. Selection runs before allocating row buffers or reading data pages.
+
+#### Typed member maps and JSON
+
+```python
+# Same selection, without decoding cells:
+assert ivt.members(select) == members
+
+for dimension in members.dimensions:
+    print(dimension.name, dimension.label, dimension.first_code)
+    for member in dimension.members:
+        print(member.code, member.label, member.metadata)
+
+members.to_json("data.members.json")
+restored = pyivt.Members.read_json("data.members.json")
+restored.validate_table(table)
+# Members.from_json(text) also reads JSON strings.
+```
+
+`Members`, `DimensionMembers` and `Member` are immutable typed objects.
+Metadata maps retain native field names and JSON scalar types; dates are ISO
+strings and unavailable values are `null`. JSON includes `schema_version: 1`,
+a `table_id` (SHA-256 of the complete source bytes), `selection_id` and the
+dimension/member maps. The Arrow schema stores matching `pyivt.table_id`,
+`pyivt.selection_id` and `pyivt.members_schema_version` keys. Loading altered
+JSON or validating a different source, selection or dictionary raises
+`ValueError`. Keep the JSON alongside the Arrow IPC or Parquet artifact;
+format conversions may change Arrow index types.
+
+#### pandas and Polars
+
+```python
+import polars as pl
+
+frame = pl.from_arrow(table)  # dimension labels become categoricals
+```
+
+```python
+# Requires pandas. Handles duplicate and missing labels by remapping keys,
+# without constructing one Python string per row.
+frame = members.to_pandas(table)
+```
+
+For unique, non-null labels, `table.to_pandas()` also yields categoricals.
+pandas merges equal labels into one category; retain `members` and the original
+Arrow dictionary indices when distinct native member codes matter.
+
+```python
+import pyarrow.parquet as pq
+
+pq.write_table(table, "data.parquet")
+members.to_json("data.members.json")
+```
+
+The most recent equivalent export shares cached Arrow buffers. A different
+selection releases the reader's previous cached table. `to_arrow()` raises
+`MemoryError` when its allocation estimate exceeds `max_memory_bytes` (default
+2 GiB). Estimates account for final row buffers, member maps, source bytes and
+decoder scratch; they do not enforce a process memory limit or include other
+consumer-held tables. The GIL is released for native cell decoding and column
+construction, which run concurrently.
+
+#### Detailed streaming exports
+
+The existing `to_batches()` and Arrow C stream APIs keep their **detailed
+schema**: native member IDs, every member field, `value`, `status_code`,
+`symbol`, `status` and compact `footnote_raw` lists. This preserves access to
+per-cell statuses and annotations, which are absent from the compact table.
+These APIs return batches directly, without a members tuple; compact streaming
+and enum code generation are outside this change's scope.
 
 ```python
 batches = ivt.to_batches(batch_size=1_000_000)
 first = next(batches)
-with pq.ParquetWriter("data.parquet", first.schema) as writer:
+with pq.ParquetWriter("detailed.parquet", first.schema) as writer:
     writer.write_batch(first)
     for batch in batches:
         writer.write_batch(batch)
 ```
 
-`to_batches()` shares member dictionaries across batches and aligns batches to
-outer-dimension boundaries when they fit the requested size. `pa.table(ivt)`
-uses the Arrow C stream protocol; recent PyArrow versions also provide
-`pa.RecordBatchReader.from_stream(ivt)` for lazy consumption.
-`to_arrow()` materializes and caches Arrow batches; repeated calls share buffers.
-It raises a catchable `MemoryError` if its conservative allocation estimate exceeds
-`max_memory_bytes` (default 2 GiB). Batches default to a 1 GiB estimate limit.
-These estimates include input and working buffers; they do not cap consumer memory.
-Decode dictionary fields with `.cast(pa.string())` when an application needs plain strings.
+Streaming text fields use shared `dictionary<int32, utf8>` values and member
+IDs use `int32`. Batches default to a 1 GiB estimate limit. `pa.table(ivt)`
+consumes this detailed stream, as does `pa.RecordBatchReader.from_stream(ivt)`
+on recent PyArrow versions. For the compact table, unpack `ivt.to_arrow()`.
 
-Apache Arrow is ready to use with your current data stack.
-
-- `pandas`:
-
-  ```python
-  import pandas as pd
-  import pyivt
-
-  ivt = pyivt.open("example.ivt")
-
-  tab = ivt.to_arrow()
-
-  df = pd.DataFrame.from_arrow(tab)
-  print(df)
-  ```
-
-- `polars`:
-
-  ```python
-  import polars as pl
-  import pyivt
-
-  ivt = pyivt.open("example.ivt")
-
-  tab = ivt.to_arrow()
-
-  df = pl.from_arrow(tab)
-  print(df)
-  ```
-
-- `pyarrow`:
-
-  ```python
-  import pyarrow.parquet as pq
-  import pyivt
-
-  ivt = pyivt.open("example.ivt")
-
-  tab = ivt.to_arrow()
-
-  pq.write_table(tab, "example.parquet")
-  ```
+See [the compact export measurements](docs/benchmarks/compact-arrow.md) for the
+80M-row synthetic comparison and a command to profile private files locally.
 
 ## Benchmarks
 
-Compared with `canivt` across 20 IVT files, `pyivt` achieved a median per-file speedup of **69.2× for metadata extraction** and **29.1× for Arrow conversion**.
+The following historical measurements predate the compact 0.1.0 schema. Compared with `canivt` across 20 IVT files, `pyivt` achieved a median per-file speedup of **69.2× for metadata extraction** and **29.1× for Arrow conversion**.
 
 | Operation        | Library | Wall time (ms) | CPU time (ms) | Peak memory (MiB) | Memory growth (MiB) |
 | ---------------- | ------- | -------------: | ------------: | ----------------: | ------------------: |

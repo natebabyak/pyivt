@@ -27,7 +27,7 @@ def worker(path: Path, mode: str, memory: int) -> dict:
         batches = (
             ivt.to_batches(max_memory_bytes=memory)
             if mode == "stream"
-            else ivt.to_arrow(max_memory_bytes=memory).to_batches()
+            else ivt.to_arrow(max_memory_bytes=memory)[0].to_batches()
         )
         rows = sum(batch.num_rows for batch in batches)
         if rows != prod(ivt.layout.counts):

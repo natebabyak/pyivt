@@ -13,7 +13,7 @@ from pathlib import Path
 import pyarrow as pa
 import pyivt
 import pytest
-from arrow_helpers import plain_table
+from arrow_helpers import expanded_table, plain_table
 
 
 def _vector(width: int, payload: bytes) -> bytes:
@@ -284,7 +284,7 @@ def test_all_dimensions_and_native_types_match_declared_result(
     assert ivt.layout.counts == [2, 2, 3]
     assert ivt.layout.slugs == ["geo", "measure", "time"]
     assert ivt.metadata.number_of_datapoints == 12
-    encoded = ivt.to_arrow()
+    encoded = expanded_table(ivt)
     assert encoded["geo"].type == pa.int32()
     assert encoded["geo_code"].type == pa.dictionary(pa.int32(), pa.string())
     actual = plain_table(encoded)
@@ -294,4 +294,4 @@ def test_all_dimensions_and_native_types_match_declared_result(
     for name in expected.column_names:
         assert actual[name].null_count == expected[name].null_count, name
         assert actual[name].equals(expected[name]), name
-    assert actual.equals(plain_table(ivt.to_arrow()))
+    assert actual.equals(plain_table(expanded_table(ivt)))

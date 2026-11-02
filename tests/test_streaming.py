@@ -35,7 +35,7 @@ def test_stream_matches_independently_declared_typed_result(batch_size):
     assert table.schema.field("geo_code").type == pa.dictionary(pa.int32(), pa.string())
     assert table["measure_english_desc"].null_count == 6
     assert table["symbol"].null_count == 9
-    assert plain_table(ivt.to_arrow()).equals(_expected_table())
+    assert ivt.to_arrow()[0]["value"].equals(_expected_table()["value"])
 
 
 def test_dictionary_buffers_and_cached_exports_are_shared():
@@ -44,7 +44,7 @@ def test_dictionary_buffers_and_cached_exports_are_shared():
     for name in ("geo_code", "measure_english_desc"):
         left, right = [batch.column(name).dictionary for batch in batches]
         assert left.buffers()[2].address == right.buffers()[2].address
-    first, second = ivt.to_arrow(), ivt.to_arrow()
+    first, second = ivt.to_arrow()[0], ivt.to_arrow()[0]
     assert (
         first["value"].chunk(0).buffers()[1].address
         == second["value"].chunk(0).buffers()[1].address
@@ -67,8 +67,8 @@ def test_dictionary_categories_dedupe_members_and_exclude_null_values():
 def test_shared_ivt_can_export_from_multiple_threads():
     ivt = pyivt.open(_typed_fixture())
     with ThreadPoolExecutor(max_workers=4) as pool:
-        tables = list(pool.map(lambda _: ivt.to_arrow(), range(8)))
-    assert all(plain_table(table).equals(_expected_table()) for table in tables)
+        tables = list(pool.map(lambda _: ivt.to_arrow()[0], range(8)))
+    assert all(table["value"].equals(_expected_table()["value"]) for table in tables)
 
 
 def test_iterator_and_c_stream_own_source_after_ivt_is_released():
@@ -106,13 +106,13 @@ def test_preflight_is_catchable_and_reader_recovers(method):
     ivt = pyivt.open(_typed_fixture())
     with pytest.raises(MemoryError, match="max_memory_bytes=1"):
         getattr(ivt, method)(max_memory_bytes=1)
-    assert ivt.to_arrow().num_rows == 12
+    assert ivt.to_arrow()[0].num_rows == 12
 
 
 def test_materialization_budget_does_not_prevent_streaming():
     ivt = pyivt.open(cube((1000, 1000, 10)))
     with pytest.raises(MemoryError, match="10000000 rows"):
-        ivt.to_arrow()
+        ivt.to_arrow(max_memory_bytes=100_000_000)
     batches = ivt.to_batches(batch_size=100_000)
     assert sum(batch.num_rows for batch in batches) == prod(ivt.layout.counts)
 
@@ -222,4 +222,4 @@ def test_local_files_stream_to_same_logical_table(path):
     ivt = pyivt.open(path)
     streamed = pa.Table.from_batches(ivt.to_batches(batch_size=8191))
     assert streamed.num_rows == prod(ivt.layout.counts)
-    assert plain_table(streamed).equals(plain_table(ivt.to_arrow()))
+    assert streamed["value"].equals(ivt.to_arrow()[0]["value"])

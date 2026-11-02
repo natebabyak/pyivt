@@ -3,6 +3,11 @@
 import pyarrow as pa
 
 
+def expanded_table(ivt) -> pa.Table:
+    """Detailed streaming schema for pre-0.1 member/status export oracles."""
+    return pa.Table.from_batches(ivt.to_batches())
+
+
 def plain_table(table: pa.Table) -> pa.Table:
     schema = pa.schema(
         [

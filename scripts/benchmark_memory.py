@@ -35,7 +35,7 @@ def worker(args):
         batches = (
             ivt.to_batches()
             if args.mode == "stream"
-            else ivt.to_arrow().to_batches(max_chunksize=65536)
+            else ivt.to_arrow()[0].to_batches(max_chunksize=65536)
         )
         for batch in batches:
             rows += batch.num_rows
