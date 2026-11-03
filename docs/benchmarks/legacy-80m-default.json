@@ -1,0 +1,24 @@
+{
+  "mode": "legacy",
+  "path": null,
+  "synthetic_cells": 80000000,
+  "fraction": 1,
+  "peak_rss_bytes": 52854784,
+  "termination": null,
+  "exit_code": 0,
+  "stages": {
+    "prepare_member_arrays": {
+      "seconds": 0.0068059,
+      "peak_rss_bytes": 52854784,
+      "completed_calls": 1
+    }
+  },
+  "ready_rss_bytes": 47632384,
+  "pyarrow_version": "26.0.0",
+  "pyivt_version": "0.1.0",
+  "error": "MemoryError",
+  "message": "memory estimate for 80000000 rows exceeds max_memory_bytes=2147483648 (estimated 35205233862 bytes); use to_batches() with a smaller batch_size or increase max_memory_bytes",
+  "seconds": 0.008550699800252914,
+  "python_version": "3.13.3",
+  "platform": "win32"
+}

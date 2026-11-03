@@ -5,16 +5,17 @@ import pyivt
 
 ivt = pyivt.open("table.ivt")
 print(ivt.metadata.title.en)
-table = ivt.to_arrow()
+table, members = ivt.to_arrow()
 ```
 """
 
-from collections.abc import Iterator
+from collections.abc import Mapping, Sequence
 from os import PathLike
 from typing import Any, BinaryIO
 
 import pyarrow as pa
 
+from pyivt._members import Members
 from pyivt._types import DimensionType, Frequency
 
 class LocalizedText:
@@ -299,7 +300,7 @@ class IvtMetadata:
         """
     @property
     def descriptor_path(self) -> str:
-        """Descriptor reader used for this table: axis_matrix. Unverified fallback is disabled."""
+        """Name of the descriptor reader, `"axis_matrix"`."""
     @property
     def geographies(self) -> Geographies:
         """Geography member lists, loaded on first access and cached.
@@ -325,7 +326,7 @@ class IvtMetadata:
 
         Returns MissingValue entries linking numeric codes to symbols and
         localized descriptions, or an empty list if none are found. Raises
-        ValueError on loading errors. See Ivt.to_arrow for status column behavior.
+        ValueError on loading errors. Use the Arrow C stream for per-cell statuses.
         """
     def _loaded(self, name: str) -> bool:
         """Internal diagnostic: whether a named lazy metadata field is cached."""
@@ -346,7 +347,7 @@ class Layout:
         """Member counts in file dimension order; their product is the Arrow row count."""
     @property
     def slugs(self) -> list[str]:
-        """Unique Arrow member-ID column names; the selected geography axis is 'geo'."""
+        """Unique dimension slugs for Arrow columns and member selection."""
     @property
     def n_dim(self) -> int:
         """Number of dimensions; equals len(counts) and len(slugs)."""
@@ -365,16 +366,16 @@ class Ivt:
 
     Obtain an instance with pyivt.open(source); direct construction is not
     supported. Inspect metadata and layout without exporting the cell grid.
-    to_batches() decodes bounded row ranges; to_arrow() caches Arrow batches
-    for subsequent exports. No context manager or close() call
-    is required. This reader does not modify the source file.
+    The Arrow C stream decodes detailed row ranges. to_arrow() returns a compact
+    table and members, caching Arrow buffers for subsequent exports. No context
+    manager or close() call is required. This reader does not modify the source file.
 
     ```python
     import pyivt
 
     ivt = pyivt.open("table.ivt")
     title = ivt.metadata.title.en
-    table = ivt.to_arrow()
+    table, members = ivt.to_arrow()
     ```
     """
     @property
@@ -383,34 +384,44 @@ class Ivt:
     @property
     def layout(self) -> Layout:
         """Snapshot of dimension counts, Arrow column slugs and IVT paging details."""
-    def to_batches(
-        self, *, batch_size: int = 1_000_000, max_memory_bytes: int = 1_073_741_824
-    ) -> Iterator[pa.RecordBatch]:
-        """Iterate over bounded batches in file dimension order.
-
-        Member IDs are int32. Text fields use dictionary<int32, utf8>, with
-        member dictionaries shared across batches. Batches align to outer-axis
-        slabs where possible and never exceed batch_size. The iterator retains
-        the source and member maps, without caching decoded batches.
-        MemoryError reports an estimate exceeding max_memory_bytes; ValueError
-        reports malformed data. Release each batch to keep memory bounded.
-        """
     def __arrow_c_stream__(self, requested_schema: Any = None) -> Any:
-        """Export an independent Arrow C stream capsule; schema requests raise ValueError."""
-    def to_arrow(self, *, max_memory_bytes: int = 2_147_483_648) -> pa.Table:
-        """Concatenate bounded batches into a chunked pyarrow.Table.
+        """Export detailed batches in file order, including statuses and footnotes.
 
-        One row per dimension-member combination, last dimension fastest.
-        Member IDs are int32; text fields, symbol and status use dictionaries.
-        Native numeric and date attributes keep int64, float64 and date32.
-        value is float64, null whenever status_code (int64) is nonzero.
-        footnote_raw is list<uint16> with the original packed references.
-        Combinations absent from storage retain numeric zero and status zero.
+        Each capsule owns an independent reader. Schema requests raise ValueError.
+        """
+    def to_arrow(
+        self,
+        select: Mapping[str, Sequence[int]] | None = None,
+        *,
+        max_memory_bytes: int = 2_147_483_648,
+    ) -> tuple[pa.Table, Members]:
+        """Return a compact Arrow table and matching typed member maps.
 
-        Arrow batches are cached and their buffers shared by subsequent calls.
-        MemoryError reports an unsafe estimate; use to_batches() to process a
-        large cube incrementally. max_memory_bytes bounds the conservative
-        allocation estimate, not the consumer's total process memory.
+        Each included dimension has a dictionary of labels in native code
+        order, indexed by the smallest unsigned integer type that fits.
+        The only other column is nullable float64 value. select maps layout
+        slugs to native numeric ordinals (1-based), never stored text codes.
+        Codes are sorted into file order; duplicates and unknown codes raise
+        ValueError. Omitted dimensions retain their rows but omit their column
+        and members entry. An empty code list yields zero rows; {} projects
+        every dimension away and returns only value. No aggregation occurs.
+
+        No selection exports the complete grid, last dimension fastest.
+        Selection happens before allocating row buffers. Repeated equivalent
+        exports share cached Arrow buffers. MemoryError reports an unsafe
+        allocation estimate, not an OS-enforced process memory limit.
+        """
+    def members(
+        self,
+        select: Mapping[str, Sequence[int]] | None = None,
+        *,
+        max_memory_bytes: int = 2_147_483_648,
+    ) -> Members:
+        """Return the same selected member maps without decoding any cells.
+
+        Members.to_json/read_json preserve native attributes, source SHA-256,
+        schema version and selection identity. Members.validate_table checks
+        the association against an Arrow table.
         """
 
 def open(
@@ -429,8 +440,8 @@ def open(
     ### Returns
 
     An `Ivt` reader exposing `metadata`, `layout`, and `to_arrow()`. Summary
-    metadata and layout are parsed immediately; cell decoding waits until
-    `to_arrow()`.
+    metadata and layout are parsed immediately. Cell decoding happens during
+    export.
 
     ### Raises
 
@@ -456,7 +467,7 @@ def open(
 
     ivt = pyivt.open(Path("table.ivt"))
     title = ivt.metadata.title.en or ivt.metadata.title.fr
-    table = ivt.to_arrow()
+    table, members = ivt.to_arrow()
     in_memory = pyivt.open(BytesIO(Path("table.ivt").read_bytes()))
     ```
     """

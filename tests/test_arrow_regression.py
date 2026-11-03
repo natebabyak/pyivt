@@ -20,6 +20,7 @@ from pathlib import Path
 import pyarrow.parquet as pq
 import pyivt
 import pytest
+from arrow_helpers import expanded_table
 
 
 def test_naics234_matches_complete_independent_export() -> None:
@@ -38,7 +39,7 @@ def test_naics234_matches_complete_independent_export() -> None:
         f"Independent export is unavailable: {reference_path}"
     )
     ivt = pyivt.open(ivt_path)
-    actual = ivt.to_arrow()
+    actual = expanded_table(ivt)
     expected = pq.read_table(reference_path)
     assert actual.num_rows == expected.num_rows == prod(ivt.layout.counts)
     assert actual.num_columns == expected.num_columns

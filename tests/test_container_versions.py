@@ -24,4 +24,4 @@ def test_unsupported_container_versions_raise_clear_errors(version, source, tmp_
 def test_supported_version_four_fixture():
     ivt = pyivt.open(cube((2, 3)))
     assert ivt.metadata.signature == "04002000"
-    assert ivt.to_arrow().num_rows == 6
+    assert ivt.to_arrow()[0].num_rows == 6

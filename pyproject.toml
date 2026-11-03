@@ -1,6 +1,6 @@
 [project]
 name = "pyivt"
-version = "0.0.5"
+version = "0.0.6"
 description = "Read Statistics Canada Beyond 20/20 .ivt tables: metadata and Apache Arrow export"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -43,6 +43,7 @@ dev = [
   "beautifulsoup4>=4",
   "maturin>=1.0,<2.0",
   "polars>=2.0",
+  "pandas>=2.2",
   "pyperclip>=1.0",
   "pytest>=9.0",
   "psutil>=5.9",

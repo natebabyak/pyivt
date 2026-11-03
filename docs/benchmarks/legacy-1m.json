@@ -1,0 +1,40 @@
+{
+  "mode": "legacy",
+  "path": null,
+  "synthetic_cells": 1000000,
+  "fraction": 1,
+  "peak_rss_bytes": 101498880,
+  "termination": null,
+  "exit_code": 0,
+  "stages": {
+    "prepare_member_arrays": {
+      "seconds": 0.0065998,
+      "peak_rss_bytes": 60276736,
+      "completed_calls": 1
+    },
+    "decode_rows": {
+      "seconds": 0.0179836,
+      "peak_rss_bytes": 86892544,
+      "completed_calls": 1
+    },
+    "attach_metadata": {
+      "seconds": 0.0231889,
+      "peak_rss_bytes": 101498880,
+      "completed_calls": 1
+    },
+    "arrow_table": {
+      "seconds": 0.0002739,
+      "peak_rss_bytes": 101498880,
+      "completed_calls": 1
+    }
+  },
+  "ready_rss_bytes": 46878720,
+  "pyarrow_version": "26.0.0",
+  "pyivt_version": "0.1.0",
+  "rows": 1000000,
+  "columns": 32,
+  "arrow_bytes": 137034392,
+  "seconds": 0.05003689997829497,
+  "python_version": "3.13.3",
+  "platform": "win32"
+}

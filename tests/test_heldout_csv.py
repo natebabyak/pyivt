@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pyivt
 import pytest
+from arrow_helpers import expanded_table
 
 ROOT = Path(__file__).parent / "fixtures" / "heldout"
 
@@ -69,7 +70,7 @@ def test_frozen_heldout_table_matches_every_official_csv_cell(product):
     assert sorted(expected) == list(range(prod(counts)))
     ivt = pyivt.open(ROOT / f"{product}.ivt")
     assert ivt.layout.counts == counts
-    table = ivt.to_arrow()
+    table = expanded_table(ivt)
     assert table.num_rows == prod(counts)
     actual_ids = [table[slug].to_pylist() for slug in ivt.layout.slugs]
     actual_labels = [

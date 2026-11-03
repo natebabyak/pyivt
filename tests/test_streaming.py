@@ -10,41 +10,26 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyivt
 import pytest
-from arrow_helpers import plain_table
+from arrow_helpers import expanded_table, plain_table, stream_reader
 from test_typed_arrow import _expected_table, _typed_fixture
 
 from scripts.ivt_synthetic import cube
 
 
-def _stream_reader(ivt):
-    # PyArrow 14 supports capsules but predates the public from_stream helper.
-    if hasattr(pa.RecordBatchReader, "from_stream"):
-        return pa.RecordBatchReader.from_stream(ivt)
-    return pa.RecordBatchReader._import_from_c_capsule(ivt.__arrow_c_stream__())
-
-
-@pytest.mark.parametrize("batch_size", [1, 5, 6, 7, 100])
-def test_stream_matches_independently_declared_typed_result(batch_size):
+def test_stream_matches_independently_declared_typed_result():
     ivt = pyivt.open(_typed_fixture())
-    batches = list(ivt.to_batches(batch_size=batch_size))
-    assert all(isinstance(batch, pa.RecordBatch) for batch in batches)
-    assert all(0 < batch.num_rows <= batch_size for batch in batches)
-    table = pa.Table.from_batches(batches)
+    table = expanded_table(ivt)
     assert plain_table(table).equals(_expected_table())
     assert table.schema.field("geo").type == pa.int32()
     assert table.schema.field("geo_code").type == pa.dictionary(pa.int32(), pa.string())
     assert table["measure_english_desc"].null_count == 6
     assert table["symbol"].null_count == 9
-    assert plain_table(ivt.to_arrow()).equals(_expected_table())
+    assert ivt.to_arrow()[0]["value"].equals(_expected_table()["value"])
 
 
-def test_dictionary_buffers_and_cached_exports_are_shared():
+def test_cached_exports_share_buffers():
     ivt = pyivt.open(_typed_fixture())
-    batches = list(ivt.to_batches(batch_size=6))
-    for name in ("geo_code", "measure_english_desc"):
-        left, right = [batch.column(name).dictionary for batch in batches]
-        assert left.buffers()[2].address == right.buffers()[2].address
-    first, second = ivt.to_arrow(), ivt.to_arrow()
+    first, second = ivt.to_arrow()[0], ivt.to_arrow()[0]
     assert (
         first["value"].chunk(0).buffers()[1].address
         == second["value"].chunk(0).buffers()[1].address
@@ -53,11 +38,11 @@ def test_dictionary_buffers_and_cached_exports_are_shared():
 
 def test_dictionary_categories_dedupe_members_and_exclude_null_values():
     data = cube((2, 3), label_fields=1).replace(b"member 0001", b"member 0000")
-    batch = next(pyivt.open(data).to_batches())
+    batch = next(stream_reader(pyivt.open(data)))
     assert len(batch.column("axis_0_label_0").dictionary) == 1
     assert len(batch.column("axis_1_label_0").dictionary) == 2
     for source in [data, _typed_fixture()]:
-        for batch in pyivt.open(source).to_batches(batch_size=5):
+        for batch in stream_reader(pyivt.open(source)):
             for array in batch.columns:
                 if pa.types.is_dictionary(array.type):
                     assert array.dictionary.null_count == 0
@@ -67,17 +52,15 @@ def test_dictionary_categories_dedupe_members_and_exclude_null_values():
 def test_shared_ivt_can_export_from_multiple_threads():
     ivt = pyivt.open(_typed_fixture())
     with ThreadPoolExecutor(max_workers=4) as pool:
-        tables = list(pool.map(lambda _: ivt.to_arrow(), range(8)))
-    assert all(plain_table(table).equals(_expected_table()) for table in tables)
+        tables = list(pool.map(lambda _: ivt.to_arrow()[0], range(8)))
+    assert all(table["value"].equals(_expected_table()["value"]) for table in tables)
 
 
-def test_iterator_and_c_stream_own_source_after_ivt_is_released():
+def test_c_stream_owns_source_after_ivt_is_released():
     ivt = pyivt.open(_typed_fixture())
-    iterator = ivt.to_batches(batch_size=5)
-    reader = _stream_reader(ivt)
+    reader = stream_reader(ivt)
     del ivt
     gc.collect()
-    assert plain_table(pa.Table.from_batches(iterator)).equals(_expected_table())
     assert plain_table(reader.read_all()).equals(_expected_table())
     reader.close()
 
@@ -85,14 +68,12 @@ def test_iterator_and_c_stream_own_source_after_ivt_is_released():
 def test_early_release_and_independent_readers():
     ivt = pyivt.open(_typed_fixture())
     for _ in range(20):
-        reader = _stream_reader(ivt)
+        reader = stream_reader(ivt)
         assert reader.read_next_batch().num_rows == 12
         reader.close()
-    first, second = ivt.to_batches(batch_size=5), ivt.to_batches(batch_size=7)
-    assert next(first).num_rows == 5
-    assert next(second).num_rows == 6
-    assert sum(batch.num_rows for batch in first) == 7
-    assert sum(batch.num_rows for batch in second) == 6
+    with stream_reader(ivt) as first, stream_reader(ivt) as second:
+        assert next(first).num_rows == 12
+        assert next(second).num_rows == 12
     with pytest.raises(ValueError, match="requested_schema"):
         ivt.__arrow_c_stream__(pa.schema([]).__arrow_c_schema__())
 
@@ -101,26 +82,23 @@ def test_public_arrow_table_imports_c_stream_protocol():
     assert plain_table(pa.table(pyivt.open(_typed_fixture()))).equals(_expected_table())
 
 
-@pytest.mark.parametrize("method", ["to_arrow", "to_batches"])
-def test_preflight_is_catchable_and_reader_recovers(method):
+def test_preflight_is_catchable_and_reader_recovers():
     ivt = pyivt.open(_typed_fixture())
     with pytest.raises(MemoryError, match="max_memory_bytes=1"):
-        getattr(ivt, method)(max_memory_bytes=1)
-    assert ivt.to_arrow().num_rows == 12
+        ivt.to_arrow(max_memory_bytes=1)
+    assert ivt.to_arrow()[0].num_rows == 12
 
 
 def test_materialization_budget_does_not_prevent_streaming():
-    ivt = pyivt.open(cube((1000, 1000, 10)))
-    with pytest.raises(MemoryError, match="10000000 rows"):
-        ivt.to_arrow()
-    batches = ivt.to_batches(batch_size=100_000)
-    assert sum(batch.num_rows for batch in batches) == prod(ivt.layout.counts)
-
-
-@pytest.mark.parametrize("batch_size", [0, 2**31])
-def test_invalid_batch_size(batch_size):
-    with pytest.raises(ValueError, match="batch_size"):
-        pyivt.open(_typed_fixture()).to_batches(batch_size=batch_size)
+    ivt = pyivt.open(cube((2, 1000, 1000), label_fields=1))
+    with pytest.raises(MemoryError, match="2000000 rows"):
+        ivt.to_arrow(max_memory_bytes=1_000_000)
+    with stream_reader(ivt) as reader:
+        left, right = reader
+    assert left.num_rows == right.num_rows == 1_000_000
+    left_dictionary = left.column("axis_1_label_0").dictionary
+    right_dictionary = right.column("axis_1_label_0").dictionary
+    assert left_dictionary.buffers()[2].address == right_dictionary.buffers()[2].address
 
 
 def test_hostile_member_count_is_rejected_before_allocating_maps():
@@ -130,7 +108,7 @@ def test_hostile_member_count_is_rejected_before_allocating_maps():
     struct.pack_into("<I", data, matrix + 6, 100_000_000)
     ivt = pyivt.open(bytes(data))
     with pytest.raises(MemoryError, match="member map estimate"):
-        ivt.to_batches(batch_size=1)
+        stream_reader(ivt)
 
 
 def _populated_cube() -> bytes:
@@ -159,11 +137,9 @@ def _populated_cube() -> bytes:
     return bytes(data)
 
 
-@pytest.mark.parametrize("batch_size", [1, 7, 2047, 2050, 4097, 1_000_000])
-def test_ranges_preserve_values_across_windows_padding_and_outer_axis(batch_size):
+def test_stream_preserves_values_across_windows_padding_and_outer_axis():
     ivt = pyivt.open(_populated_cube())
-    batches = list(ivt.to_batches(batch_size=batch_size))
-    table = pa.Table.from_batches(batches)
+    table = expanded_table(ivt)
     assert table["value"].to_pylist() == list(map(float, range(3 * 2051 * 3)))
     for axis, slug in enumerate(ivt.layout.slugs):
         stride = prod(ivt.layout.counts[axis + 1 :])
@@ -172,16 +148,17 @@ def test_ranges_preserve_values_across_windows_padding_and_outer_axis(batch_size
         ]
 
 
-def test_later_corrupt_page_raises_and_terminates_iterator():
-    data = bytearray(_populated_cube())
+def test_later_corrupt_page_raises_and_terminates_stream():
+    data = bytearray(cube((2, 1000, 1000), label_fields=0))
     directory = struct.unpack_from("<I", data, 558)[0]
-    struct.pack_into("<I", data, directory + 8, len(data) + 100)
-    iterator = pyivt.open(bytes(data)).to_batches(batch_size=1536)
-    assert next(iterator).num_rows == 1536
-    with pytest.raises(ValueError, match="entry 1.*outside file"):
-        next(iterator)
-    with pytest.raises(StopIteration):
-        next(iterator)
+    # Each outer member occupies 512 directory slots, including padding.
+    struct.pack_into("<IHH", data, directory + 512 * 8, len(data) + 100, 8, 8)
+    with stream_reader(pyivt.open(bytes(data))) as reader:
+        assert next(reader).num_rows == 1_000_000
+        with pytest.raises(pa.ArrowException, match="entry 512.*outside file"):
+            next(reader)
+        with pytest.raises(StopIteration):
+            next(reader)
 
 
 def test_stream_crosses_noncontiguous_paged_directory_boundary():
@@ -206,7 +183,7 @@ def test_stream_crosses_noncontiguous_paged_directory_boundary():
     expected = {2047 * 2049 + 2048: 17.0, 2048 * 2049: 23.0}
     position = 0
     seen = {}
-    for batch in ivt.to_batches(batch_size=100_000):
+    for batch in stream_reader(ivt):
         for row in expected:
             if position <= row < position + batch.num_rows:
                 seen[row] = batch.column("value")[row - position].as_py()
@@ -220,6 +197,6 @@ def test_stream_crosses_noncontiguous_paged_directory_boundary():
 )
 def test_local_files_stream_to_same_logical_table(path):
     ivt = pyivt.open(path)
-    streamed = pa.Table.from_batches(ivt.to_batches(batch_size=8191))
+    streamed = expanded_table(ivt)
     assert streamed.num_rows == prod(ivt.layout.counts)
-    assert plain_table(streamed).equals(plain_table(ivt.to_arrow()))
+    assert streamed["value"].equals(ivt.to_arrow()[0]["value"])

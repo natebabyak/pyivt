@@ -320,12 +320,24 @@ fn missing_mode(data: &[u8]) -> Result<u16, String> {
     Ok(mode)
 }
 
+#[cfg(any(test, feature = "fuzzing"))]
 fn decode_page(
     data: &[u8],
     off: usize,
     _lay: &Layout,
     size: usize,
     mode: u16,
+) -> Result<PageCells, String> {
+    decode_page_impl(data, off, _lay, size, mode, true)
+}
+
+fn decode_page_impl(
+    data: &[u8],
+    off: usize,
+    _lay: &Layout,
+    size: usize,
+    mode: u16,
+    keep_notes: bool,
 ) -> Result<PageCells, String> {
     let raw = data
         .get(off..off.checked_add(size).ok_or("page size overflow")?)
@@ -355,7 +367,11 @@ fn decode_page(
     // Legacy masks record missingness without a legend reason (-1). Positive
     // codes are reserved for explicit reasons in extended page records.
     let mut codes = vec![0i16; PRES_BITS as usize];
-    let mut notes = vec![Vec::new(); PRES_BITS as usize];
+    let mut notes = if keep_notes {
+        vec![Vec::new(); PRES_BITS as usize]
+    } else {
+        Vec::new()
+    };
     let trailer = page.get(4 + PRES_BITS as usize * width..).unwrap_or(&[]);
     if page[0] & 0x20 != 0 {
         if trailer.is_empty() {
@@ -402,7 +418,9 @@ fn decode_page(
                             return Err("footnote cell outside page".into());
                         }
                         // Keep the recorded packed annotation reference intact.
-                        notes[cell].push(packed);
+                        if keep_notes {
+                            notes[cell].push(packed);
+                        }
                     }
                 }
                 value => return Err(format!("unknown extended page record {value}")),
@@ -468,6 +486,17 @@ fn directory_page(
     lay: &Layout,
     mode: u16,
 ) -> Result<PageCells, String> {
+    directory_page_impl(data, directory, index, lay, mode, true)
+}
+
+fn directory_page_impl(
+    data: &[u8],
+    directory: &MetadataDirectory,
+    index: usize,
+    lay: &Layout,
+    mode: u16,
+    keep_notes: bool,
+) -> Result<PageCells, String> {
     let context = |position: Option<usize>, reason: &str| {
         let position_text = position.map_or_else(|| "unresolved".into(), |p| p.to_string());
         let raw = position.and_then(|o| o.checked_add(8).and_then(|end| data.get(o..end)));
@@ -487,7 +516,7 @@ fn directory_page(
         .map_err(|err| context(None, &err.to_string()))?;
     let entry = &data[position..position + 8];
     if entry.iter().all(|&v| v == 0) {
-        return decode_page(&[2, 1, 0, 0], 0, lay, 4, mode);
+        return decode_page_impl(&[2, 1, 0, 0], 0, lay, 4, mode, keep_notes);
     }
     let target = usize::try_from(u32(entry, 0))
         .map_err(|_| context(Some(position), "page offset conversion overflow"))?;
@@ -504,7 +533,76 @@ fn directory_page(
     if target.checked_add(size).is_none_or(|end| end > data.len()) {
         return Err(context(Some(position), "page content outside file"));
     }
-    decode_page(data, target, lay, size, mode).map_err(|err| context(Some(position), &err))
+    decode_page_impl(data, target, lay, size, mode, keep_notes)
+        .map_err(|err| context(Some(position), &err))
+}
+
+/// Materialize only selected cells into the final value and validity buffers.
+/// The last decoded page is reused; sorted selections preserve native row order.
+pub fn decode_selected(
+    data: &[u8],
+    lay: &Layout,
+    choices: &[Vec<usize>],
+    selected_strides: &[usize],
+    rows: usize,
+) -> Result<arrow::array::Float64Array, String> {
+    let _profile = crate::profile::Stage::new("decode_values");
+    use arrow::array::BooleanBufferBuilder;
+    use arrow::buffer::{NullBuffer, ScalarBuffer};
+    let directory = MetadataDirectory::new(data, HDR_DIR_PTR)
+        .map_err(|e| format!("invalid data directory: {e}"))?;
+    if u16(data, HDR_DIR_PTR + 12) & 1 != 0 && u16(data, 20) != 4096 {
+        return Err(format!(
+            "invalid data directory: unsupported directory page size {}",
+            u16(data, 20)
+        ));
+    }
+    let capacity = u32(data, HDR_DIR_PTR + 4) as usize;
+    if directory.count > capacity {
+        return Err(format!("invalid data directory: expected_entry_count={}, allocated_capacity={capacity}; reason=entry count exceeds capacity", directory.count));
+    }
+    let mode = missing_mode(data)?;
+    let mut native_strides = vec![1usize; lay.n_dim];
+    for axis in (0..lay.n_dim - 1).rev() {
+        native_strides[axis] = native_strides[axis + 1] * lay.counts[axis + 1] as usize;
+    }
+    let mut values = reserved(rows)?;
+    let mut valid = BooleanBufferBuilder::new(rows);
+    let mut cached: Option<(usize, PageCells)> = None;
+    let axis = lay.straddle - 1;
+    let inner = native_strides[axis];
+    let mut coords = vec![0usize; lay.n_dim];
+    for row in 0..rows {
+        let mut native_row = 0usize;
+        for dim in 0..lay.n_dim {
+            coords[dim] = choices[dim][row / selected_strides[dim] % choices[dim].len()];
+            native_row += coords[dim] * native_strides[dim];
+        }
+        let window = coords[axis] / lay.ipc[0] as usize;
+        let mut index = window * lay.estride[0] as usize;
+        for (entry_axis, &dim) in lay.ent_idx.iter().enumerate().skip(1) {
+            index += coords[dim - 1] * lay.estride[entry_axis] as usize;
+        }
+        if cached
+            .as_ref()
+            .is_none_or(|(previous, _)| *previous != index)
+        {
+            cached = Some((
+                index,
+                directory_page_impl(data, &directory, index, lay, mode, false)?,
+            ));
+        }
+        let page = &cached.as_ref().unwrap().1;
+        let local = (coords[axis] % lay.ipc[0] as usize) * inner + native_row % inner;
+        let bit = lay.bit[local] as usize;
+        let published = page.statuses[bit] == 0;
+        valid.append(published);
+        values.push(if published { page.vals[bit] } else { 0.0 });
+    }
+    Ok(arrow::array::Float64Array::new(
+        ScalarBuffer::from(values),
+        Some(NullBuffer::new(valid.finish())),
+    ))
 }
 
 /// Dense row range in file dimension order. Only the value column uses f64.
@@ -541,6 +639,7 @@ pub fn decode_range(
     start: usize,
     end: usize,
 ) -> Result<CellBatch, String> {
+    let _profile = crate::profile::Stage::new("decode_rows");
     let total = row_count(lay)?;
     if start > end || end > total {
         return Err("cell batch range outside grid".into());

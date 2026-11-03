@@ -15,7 +15,7 @@ import pyarrow.compute as pc
 import pyarrow.parquet as pq
 import pyivt
 import pytest
-from arrow_helpers import plain_table
+from arrow_helpers import expanded_table, plain_table
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
@@ -148,7 +148,7 @@ def _assert_grid_and_member_alignment(ivt: pyivt.Ivt, table: pa.Table) -> None:
 @pytest.mark.parametrize(
     "ivt_path", sorted(DATA_DIR.glob("*.ivt")), ids=lambda path: path.name
 )
-def test_to_arrow_matches_expected(ivt_path: Path) -> None:
+def test_expanded_batches_match_expected(ivt_path: Path) -> None:
     expected_path = EXPECTED_DIR / ivt_path.with_suffix(".parquet").name
     if not expected_path.is_file():
         pytest.skip(
@@ -157,7 +157,7 @@ def test_to_arrow_matches_expected(ivt_path: Path) -> None:
         )
 
     ivt = pyivt.open(ivt_path)
-    actual = plain_table(ivt.to_arrow())
+    actual = plain_table(expanded_table(ivt))
     expected = pq.read_table(expected_path)
 
     assert actual.num_rows == expected.num_rows, "Row counts differ"
@@ -200,10 +200,10 @@ def test_to_arrow_matches_expected(ivt_path: Path) -> None:
 )
 def test_full_grid_and_repeatable_export(ivt_path: Path, tmp_path: Path) -> None:
     ivt = pyivt.open(ivt_path)
-    table = plain_table(ivt.to_arrow())
+    table = plain_table(expanded_table(ivt))
     _assert_grid_and_member_alignment(ivt, table)
-    assert table.equals(plain_table(ivt.to_arrow()))
-    assert table.equals(plain_table(pyivt.open(ivt_path.read_bytes()).to_arrow()))
+    assert table.equals(plain_table(expanded_table(ivt)))
+    assert table.equals(plain_table(expanded_table(pyivt.open(ivt_path.read_bytes()))))
     path = tmp_path / "full.parquet"
     pq.write_table(table, path)
     assert table.equals(pq.read_table(path))
@@ -237,7 +237,7 @@ def test_installed_demo_matches_beyond_csv_slice(filename: str) -> None:
         pytest.skip("Beyond CSV reference slice is not available")
     reference = pq.read_table(reference_path)
     ivt = pyivt.open(path)
-    table = plain_table(ivt.to_arrow())
+    table = plain_table(expanded_table(ivt))
     assert table.num_rows == prod(ivt.layout.counts)
     row_axis = next(
         slug

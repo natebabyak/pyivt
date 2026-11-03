@@ -2,7 +2,7 @@
 
 use pyo3::exceptions::{PyKeyError, PyMemoryError, PyOSError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyByteArray, PyBytes, PyString};
+use pyo3::types::{PyByteArray, PyBytes, PyList, PyString, PyTuple};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -477,8 +477,7 @@ impl IvtMetadata {
     }
 
     #[getter]
-    /// Descriptor reader used for this table: "axis_matrix". Unverified
-    /// compatibility scanners are disabled; unsupported descriptors raise errors.
+    /// Name of the descriptor reader, `"axis_matrix"`.
     fn descriptor_path(&self) -> &'static str {
         self.inner.lock().unwrap().desc().source
     }
@@ -518,7 +517,7 @@ impl IvtMetadata {
     ///
     /// Returns MissingValue entries linking numeric codes to symbols and
     /// localized descriptions, or an empty list if none are found. Raises
-    /// ValueError on loading errors. See Ivt.to_arrow for status column behavior.
+    /// ValueError on loading errors. Use the Arrow C stream for per-cell statuses.
     fn missing_values(&self) -> PyResult<Vec<MissingValue>> {
         let mut guard = self.inner.lock().unwrap();
         let vals = guard.missing_values().map_err(PyValueError::new_err)?;
@@ -549,7 +548,7 @@ pub struct PyLayout {
     /// Member counts in file dimension order; their product is the Arrow row count.
     #[pyo3(get)]
     pub counts: Vec<i64>,
-    /// Unique Arrow member-ID column names; the selected geography axis is 'geo'.
+    /// Unique dimension slugs for Arrow columns and member selection.
     #[pyo3(get)]
     pub slugs: Vec<String>,
     /// Number of dimensions; equals len(counts) and len(slugs).
@@ -587,49 +586,20 @@ fn export_error(error: String) -> PyErr {
     }
 }
 
-#[pyclass(module = "pyivt")]
-pub struct BatchIterator {
-    reader: Mutex<BatchReader>,
-}
-
-#[pymethods]
-impl BatchIterator {
-    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
-        slf
-    }
-
-    fn __next__<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyAny>>> {
-        let batch = py.allow_threads(|| self.reader.lock().unwrap().next());
-        let Some(batch) = batch else {
-            return Ok(None);
-        };
-        let batch = batch.map_err(|e| export_error(e.to_string()))?;
-        let schema = batch.schema();
-        let reader = RecordBatchIterator::new(vec![Ok(batch)], schema);
-        let capsule = stream_capsule(py, Box::new(reader))?;
-        let pa = py.import("pyarrow")?;
-        Ok(Some(
-            pa.getattr("RecordBatchReader")?
-                .call_method1("_import_from_c_capsule", (capsule,))?
-                .call_method0("read_next_batch")?,
-        ))
-    }
-}
-
 /// An opened Beyond 20/20 table with metadata and deferred cell decoding.
 ///
 /// Obtain an instance with pyivt.open(source); direct construction is not
 /// supported. Inspect metadata and layout without exporting the cell grid.
-/// to_batches() decodes bounded row ranges; to_arrow() caches Arrow batches
-/// for subsequent exports. No context manager or close() call
-/// is required. This reader does not modify the source file.
+/// The Arrow C stream decodes detailed row ranges. to_arrow() returns a compact
+/// table and members, caching Arrow buffers for subsequent exports. No context
+/// manager or close() call is required. This reader does not modify the source file.
 ///
 /// ```python
 /// import pyivt
 ///
 /// ivt = pyivt.open("table.ivt")
 /// title = ivt.metadata.title.en
-/// table = ivt.to_arrow()
+/// table, members = ivt.to_arrow()
 /// ```
 #[pyclass(name = "Ivt", module = "pyivt")]
 pub struct Ivt {
@@ -641,6 +611,8 @@ pub struct Ivt {
     path: Option<PathBuf>,
     cache: Mutex<Option<Vec<RecordBatch>>>,
     maps: Mutex<Option<Arc<TidySchema>>>,
+    member_fields: Mutex<Option<Py<PyAny>>>,
+    compact_cache: Mutex<Option<(Vec<Option<Vec<usize>>>, RecordBatch)>>,
 }
 
 #[pymethods]
@@ -657,22 +629,6 @@ impl Ivt {
         self.py_layout.clone()
     }
 
-    /// Iterate over bounded RecordBatches in Cartesian order. String member
-    /// fields share dictionary<int32, utf8> values; member IDs are int32.
-    /// Batches target one million rows and align to outer-axis slabs when possible.
-    /// Only the current batch is retained. MemoryError reports unsafe estimates.
-    #[pyo3(signature = (*, batch_size=1_000_000, max_memory_bytes=1_073_741_824))]
-    fn to_batches(
-        &self,
-        py: Python<'_>,
-        batch_size: usize,
-        max_memory_bytes: usize,
-    ) -> PyResult<BatchIterator> {
-        Ok(BatchIterator {
-            reader: Mutex::new(self.batch_reader(py, batch_size, max_memory_bytes)?),
-        })
-    }
-
     /// Arrow PyCapsule stream protocol. Each invocation owns an independent
     /// native reader; consumers can release it early without retaining batches.
     #[pyo3(signature = (requested_schema=None))]
@@ -686,20 +642,20 @@ impl Ivt {
                 "requested_schema is not supported; cast the exported stream explicitly",
             ));
         }
-        let reader = self.batch_reader(py, 1_000_000, 1_073_741_824)?;
+        let reader = self.batch_reader(py, 1_073_741_824)?;
         stream_capsule(py, Box::new(reader))
     }
 
     /// Materialize the batches as a chunked pyarrow.Table. Subsequent calls
-    /// share cached Arrow buffers. Use to_batches() to bound retained memory.
+    /// share cached Arrow buffers. Use the Arrow C stream to bound retained memory.
     /// The conservative pre-flight limit includes output and working buffers.
     #[pyo3(signature = (*, max_memory_bytes=2_147_483_648))]
-    fn to_arrow<'py>(
+    fn _legacy_to_arrow<'py>(
         &self,
         py: Python<'py>,
         max_memory_bytes: usize,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let reader = self.batch_reader(py, 1_000_000, max_memory_bytes)?;
+        let reader = self.batch_reader(py, max_memory_bytes)?;
         let fixed = reader
             .data
             .len()
@@ -730,10 +686,193 @@ impl Ivt {
                 schema,
             )),
         )?;
+        let _profile = crate::profile::Stage::new("arrow_table");
         py.import("pyarrow")?
             .getattr("RecordBatchReader")?
             .call_method1("_import_from_c_capsule", (capsule,))?
             .call_method0("read_all")
+    }
+
+    /// Materialize (table, members). select maps dimension slugs to native
+    /// integer member ordinals. Omitted dimensions retain rows but omit columns.
+    /// Dictionaries and rows follow native order, last dimension fastest.
+    #[pyo3(signature = (select=None, *, max_memory_bytes=2_147_483_648))]
+    fn to_arrow<'py>(
+        slf: Bound<'py, Self>,
+        py: Python<'py>,
+        select: Option<Bound<'py, PyAny>>,
+        max_memory_bytes: usize,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let prepare_profile = crate::profile::Stage::new("prepare_members");
+        let prepared = py.import("pyivt._export")?.getattr("prepare")?.call1((
+            slf.clone(),
+            select,
+            max_memory_bytes,
+        ))?;
+        let selection: Vec<Option<Vec<usize>>> = prepared.get_item(0)?.extract()?;
+        let labels: Vec<Vec<Option<String>>> = prepared.get_item(1)?.extract()?;
+        let members = prepared.get_item(2)?;
+        let table_id: String = members.getattr("table_id")?.extract()?;
+        let selection_id: String = members.getattr("selection_id")?.extract()?;
+        let metadata = std::collections::HashMap::from([
+            ("pyivt.table_id".into(), table_id),
+            ("pyivt.selection_id".into(), selection_id),
+            ("pyivt.members_schema_version".into(), "1".into()),
+        ]);
+        drop(prepare_profile);
+        let reader = slf.borrow();
+        let reader: &Self = &reader;
+        let data = reader.ensure_data().map_err(map_ivt_err)?;
+        let batch = py
+            .allow_threads(|| -> Result<RecordBatch, String> {
+                let mut cache = reader.compact_cache.lock().unwrap();
+                // Apply the budget even to a cached export.
+                if let Some((key, batch)) = cache.as_ref() {
+                    if key == &selection {
+                        preflight(
+                            0,
+                            0,
+                            batch
+                                .get_array_memory_size()
+                                .saturating_add(data.len().saturating_mul(3)),
+                            max_memory_bytes,
+                        )?;
+                        return Ok(batch.clone());
+                    }
+                }
+                // Release cached output before allocating a different selection.
+                *cache = None;
+                let batch = crate::compact::export(
+                    &data,
+                    &reader.layout,
+                    &selection,
+                    &labels,
+                    metadata,
+                    max_memory_bytes,
+                )?;
+                *cache = Some((selection, batch.clone()));
+                Ok(batch)
+            })
+            .map_err(export_error)?;
+        let schema = batch.schema();
+        let capsule = stream_capsule(
+            py,
+            Box::new(RecordBatchIterator::new(
+                vec![Ok(batch)].into_iter(),
+                schema,
+            )),
+        )?;
+        let _profile = crate::profile::Stage::new("arrow_table");
+        let table = py
+            .import("pyarrow")?
+            .getattr("RecordBatchReader")?
+            .call_method1("_import_from_c_capsule", (capsule,))?
+            .call_method0("read_all")?;
+        Ok(PyTuple::new(py, [table, members])?.into_any())
+    }
+
+    /// Member maps for the same selection accepted by to_arrow, without
+    /// decoding cells. The returned Members object supports JSON round trips.
+    #[pyo3(signature = (select=None, *, max_memory_bytes=2_147_483_648))]
+    fn members<'py>(
+        slf: Bound<'py, Self>,
+        py: Python<'py>,
+        select: Option<Bound<'py, PyAny>>,
+        max_memory_bytes: usize,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        py.import("pyivt._export")?
+            .getattr("prepare")?
+            .call1((slf, select, max_memory_bytes))?
+            .get_item(2)
+    }
+
+    /// Private member-only bridge. Dates cross as epoch days and are formatted
+    /// by the typed Python layer. The source digest uses bounded scratch space.
+    fn _member_fields<'py>(
+        &self,
+        py: Python<'py>,
+        max_memory_bytes: usize,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let size = if let Some(data) = self.data.lock().unwrap().as_ref() {
+            data.len()
+        } else {
+            std::fs::metadata(self.path.as_ref().unwrap())
+                .map_err(|e| PyOSError::new_err(e.to_string()))?
+                .len() as usize
+        };
+        let member_estimate = self.layout.counts.iter().fold(0usize, |n, &count| {
+            n.saturating_add((count as usize).saturating_mul(128))
+        });
+        preflight(
+            0,
+            0,
+            size.saturating_mul(4).saturating_add(member_estimate),
+            max_memory_bytes,
+        )
+        .map_err(export_error)?;
+        if let Some(fields) = self.member_fields.lock().unwrap().as_ref() {
+            return Ok(fields.bind(py).clone());
+        }
+        let data = py
+            .allow_threads(|| self.ensure_data())
+            .map_err(map_ivt_err)?;
+        let fields = py
+            .allow_threads(|| {
+                self.layout
+                    .counts
+                    .iter()
+                    .enumerate()
+                    .map(|(axis, &count)| {
+                        crate::members::read_typed_members(&data, axis, count as usize)
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .map_err(export_error)?;
+        let estimated = fields
+            .iter()
+            .flatten()
+            .map(|(_, values)| values.len().saturating_mul(128))
+            .sum::<usize>();
+        preflight(
+            0,
+            0,
+            size.saturating_mul(4).saturating_add(estimated),
+            max_memory_bytes,
+        )
+        .map_err(export_error)?;
+        let hasher = py.import("hashlib")?.getattr("sha256")?.call0()?;
+        for chunk in data.chunks(1_048_576) {
+            hasher.call_method1("update", (PyBytes::new(py, chunk),))?;
+        }
+        let digest = hasher.call_method0("hexdigest")?;
+        let axes = PyList::empty(py);
+        for axis in fields {
+            let converted = PyList::empty(py);
+            for (name, values) in axis {
+                use crate::members::MemberValues;
+                let (kind, values): (&str, Bound<'py, PyAny>) = match values {
+                    MemberValues::Utf8(v) => ("text", v.into_pyobject(py)?.into_any()),
+                    MemberValues::Int64(v) => ("integer", v.into_pyobject(py)?.into_any()),
+                    MemberValues::Float64(v) => ("float", v.into_pyobject(py)?.into_any()),
+                    MemberValues::Date32(v) => ("date", v.into_pyobject(py)?.into_any()),
+                };
+                converted.append((name, kind, values))?;
+            }
+            axes.append(converted)?;
+        }
+        let names: Vec<String> = parse_descriptor(&data)
+            .ok_or_else(|| PyValueError::new_err("missing dimension descriptors"))?
+            .dims
+            .into_iter()
+            .map(|d| d.name)
+            .collect();
+        let result = PyTuple::new(
+            py,
+            [digest, axes.into_any(), names.into_pyobject(py)?.into_any()],
+        )?
+        .into_any();
+        *self.member_fields.lock().unwrap() = Some(result.clone().unbind());
+        Ok(result)
     }
 }
 
@@ -783,17 +922,7 @@ fn resolve_source(_py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<OpenSou
 }
 
 impl Ivt {
-    fn batch_reader(
-        &self,
-        py: Python<'_>,
-        batch_size: usize,
-        limit: usize,
-    ) -> PyResult<BatchReader> {
-        if batch_size == 0 || batch_size > i32::MAX as usize {
-            return Err(PyValueError::new_err(
-                "batch_size must be between 1 and 2147483647",
-            ));
-        }
+    fn batch_reader(&self, py: Python<'_>, limit: usize) -> PyResult<BatchReader> {
         let file_len = if let Some(data) = self.data.lock().unwrap().as_ref() {
             data.len()
         } else {
@@ -828,7 +957,7 @@ impl Ivt {
                 Ok::<_, String>(Arc::clone(maps.as_ref().unwrap()))
             })
             .map_err(export_error)?;
-        BatchReader::new(data, self.layout.clone(), maps, batch_size, limit).map_err(export_error)
+        BatchReader::new(data, self.layout.clone(), maps, limit).map_err(export_error)
     }
 
     fn ensure_data(&self) -> Result<Arc<Vec<u8>>, IvtError> {
@@ -862,8 +991,8 @@ impl Ivt {
 /// ### Returns
 ///
 /// An `Ivt` reader exposing `metadata`, `layout`, and `to_arrow()`. Summary
-/// metadata and layout are parsed immediately; cell decoding waits until
-/// `to_arrow()`.
+/// metadata and layout are parsed immediately. Cell decoding happens during
+/// export.
 ///
 /// ### Raises
 ///
@@ -889,7 +1018,7 @@ impl Ivt {
 ///
 /// ivt = pyivt.open(Path("table.ivt"))
 /// title = ivt.metadata.title.en or ivt.metadata.title.fr
-/// table = ivt.to_arrow()
+/// table, members = ivt.to_arrow()
 /// in_memory = pyivt.open(BytesIO(Path("table.ivt").read_bytes()))
 /// ```
 #[pyfunction]
@@ -922,6 +1051,8 @@ pub fn open_ivt(py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<Ivt> {
                 path: Some(path),
                 cache: Mutex::new(None),
                 maps: Mutex::new(None),
+                member_fields: Mutex::new(None),
+                compact_cache: Mutex::new(None),
             })
         }
         OpenSource::Bytes(data) => {
@@ -951,6 +1082,8 @@ pub fn open_ivt(py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<Ivt> {
                 path: None,
                 cache: Mutex::new(None),
                 maps: Mutex::new(None),
+                member_fields: Mutex::new(None),
+                compact_cache: Mutex::new(None),
             })
         }
     }

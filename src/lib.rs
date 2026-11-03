@@ -1,5 +1,6 @@
 mod arrow_export;
 mod bytes;
+mod compact;
 mod decode;
 mod descriptor;
 mod error;
@@ -10,6 +11,7 @@ mod io;
 mod members;
 mod metadata;
 mod metadata_directory;
+mod profile;
 mod py;
 mod stream;
 #[cfg(test)]

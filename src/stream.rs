@@ -1,4 +1,4 @@
-//! Bounded native reader used by both Python batches and the Arrow C stream.
+//! Bounded native reader for the detailed Arrow export.
 
 use crate::decode::{decode_range, row_count, Layout};
 use crate::tidy::TidySchema;
@@ -30,7 +30,7 @@ pub fn preflight(
         .and_then(|n| n.checked_add(fixed));
     if estimated.is_none_or(|n| n > limit) {
         return Err(format!(
-            "memory estimate for {rows} rows exceeds max_memory_bytes={limit} (estimated {} bytes); use to_batches() with a smaller batch_size or increase max_memory_bytes",
+            "memory estimate for {rows} rows exceeds max_memory_bytes={limit} (estimated {} bytes)",
             estimated.map_or_else(|| "more than addressable memory".into(), |n| n.to_string())
         ));
     }
@@ -42,20 +42,17 @@ impl BatchReader {
         data: Arc<Vec<u8>>,
         layout: Layout,
         maps: Arc<TidySchema>,
-        requested: usize,
         limit: usize,
     ) -> Result<Self, String> {
-        if requested == 0 || requested > i32::MAX as usize {
-            return Err("batch_size must be between 1 and 2147483647".into());
-        }
+        const TARGET_ROWS: usize = 1_000_000;
         let total = row_count(&layout)?;
         // Prefer boundaries along the outermost dimension. Split an oversized
         // slab within that dimension so the target remains a real bound.
         let slab = total / layout.counts[0] as usize;
-        let batch_size = if slab <= requested {
-            requested / slab * slab
+        let batch_size = if slab <= TARGET_ROWS {
+            TARGET_ROWS / slab * slab
         } else {
-            requested
+            TARGET_ROWS
         };
         let fixed = data
             .len()

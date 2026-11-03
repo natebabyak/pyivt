@@ -21,10 +21,14 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # PyO3 links Rust tests against this interpreter's shared libpython.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-          python-version: "3.12"
 
       - name: Install package
         run: uv sync --group dev
@@ -49,7 +53,8 @@ jobs:
 
       - name: Install minimum supported Arrow
         if: matrix.pyarrow == '14.0.2'
-        run: uv pip install 'pyarrow==14.0.2' 'numpy<2'
+        # Use pandas 2.x with the NumPy 1.x required by Arrow 14.
+        run: uv pip install 'pyarrow==14.0.2' 'numpy<2' 'pandas>=2.2,<3'
 
       - name: Test
         run: uv run --no-sync pytest

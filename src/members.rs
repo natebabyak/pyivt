@@ -2,7 +2,7 @@
 //!
 //! Dimension-directory entry zero is a matrix of 34-byte field definitions.
 //! Each definition supplies its storage type and the directory entry containing
-//! its chunk index. No choice of member field depends on its label or contents.
+//! its chunk index. Field names do not determine how values are decoded.
 
 use crate::bytes::{latin1, u16, u32};
 use crate::header::{DIM_SLOT_STRIDE, HDR_DIM_SLOT0};
@@ -205,12 +205,12 @@ fn variable_strings(record: &[u8]) -> Result<Vec<Option<String>>, String> {
     Ok(values)
 }
 
-fn signed_numbers(record: &[u8]) -> Result<MemberValues, String> {
+fn numeric_members(record: &[u8], signed: bool) -> Result<MemberValues, String> {
     let width = (record[0] & 15) as usize;
     if record[1] != 1 {
         return Err("member numeric storage is not a vector".into());
     }
-    if width == 8 {
+    if signed && width == 8 {
         return Ok(MemberValues::Float64(
             record[4..]
                 .chunks_exact(width)
@@ -221,10 +221,13 @@ fn signed_numbers(record: &[u8]) -> Result<MemberValues, String> {
     let values = record[4..]
         .chunks_exact(width)
         .map(|scalar| {
-            let value = match width {
-                1 => scalar[0] as i8 as i64,
-                2 => i16::from_le_bytes(scalar.try_into().unwrap()) as i64,
-                4 => i32::from_le_bytes(scalar.try_into().unwrap()) as i64,
+            let value = match (signed, width) {
+                (true, 1) => i64::from(scalar[0] as i8),
+                (true, 2) => i64::from(i16::from_le_bytes(scalar.try_into().unwrap())),
+                (true, 4) => i64::from(i32::from_le_bytes(scalar.try_into().unwrap())),
+                (false, 1) => i64::from(scalar[0]),
+                (false, 2) => i64::from(u16(scalar, 0)),
+                (false, 4) => i64::from(u32(scalar, 0)),
                 _ => return Err("unsupported member numeric width".into()),
             };
             Ok(Some(value))
@@ -233,36 +236,60 @@ fn signed_numbers(record: &[u8]) -> Result<MemberValues, String> {
     Ok(MemberValues::Int64(values))
 }
 
-fn referenced_strings(dir: &Directory<'_>, record: &[u8]) -> Result<Vec<Option<String>>, String> {
+fn reference_ordinals(record: &[u8]) -> Result<MemberValues, String> {
     if record[0] & 15 != 4 || record[1] != 1 {
         return Err("member text references are not an integer vector".into());
     }
-    let mut expanded_bytes = 0usize;
-    record[4..]
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .map(|scalar| {
-            let index = u32(scalar, 0) as usize;
-            if index == 0 {
-                return Ok(None);
-            }
-            let Some(text) = dir.record(index)? else {
-                return Ok(None);
-            };
-            if text[0] & 15 != 1 || text[1] != 1 || text.len() < 5 {
-                return Err("referenced member text is not a byte vector".into());
-            }
-            // Individual note records begin with the native text-format byte.
-            expanded_bytes = expanded_bytes.saturating_add(text.len());
-            if expanded_bytes > MAX_MEMBER_MEMORY {
-                return Err(
-                    "referenced member text exceeds the 256 MiB memory safety limit".into(),
-                );
-            }
-            Ok(optional_text(&text[5..]))
-        })
-        .collect()
+    Ok(MemberValues::Int64(
+        record[4..]
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|scalar| match u32(scalar, 0) {
+                0 => None,
+                index => Some(i64::from(index)),
+            })
+            .collect(),
+    ))
+}
+
+/// Legacy 0x0304 fields can store member ordinals or note references. Resolve
+/// the whole field before choosing a type, since some ordinals may happen to
+/// point at note records. None means to keep the original integer values.
+fn referenced_strings(
+    dir: &Directory<'_>,
+    ordinals: &[Option<i64>],
+) -> Result<Option<MemberValues>, String> {
+    let mut values = Vec::with_capacity(ordinals.len());
+    let mut expanded_bytes = values.capacity().saturating_mul(24);
+    for ordinal in ordinals {
+        let Some(index) = ordinal.map(|index| index as usize) else {
+            values.push(None);
+            continue;
+        };
+        if index >= dir.entries {
+            return Ok(None);
+        }
+        let Some(block) = dir.block(index)? else {
+            values.push(None);
+            continue;
+        };
+        if block.len() >= 2 && (block[0] & 15 != 1 || block[1] != 1) {
+            return Ok(None);
+        }
+        let text = decompress_record(block)?;
+        // Individual note records begin with the native text-format byte.
+        let Some(bytes) = text.get(5..) else {
+            return Ok(None);
+        };
+        let value = optional_text(bytes);
+        expanded_bytes = expanded_bytes.saturating_add(value.as_ref().map_or(0, String::len));
+        if expanded_bytes > MAX_MEMBER_MEMORY {
+            return Err("referenced member text exceeds the 256 MiB memory safety limit".into());
+        }
+        values.push(value);
+    }
+    Ok(Some(MemberValues::Utf8(values)))
 }
 
 fn time_members(record: &[u8]) -> Result<MemberValues, String> {
@@ -389,8 +416,8 @@ pub fn read_typed_members(
                 0x0140 => fixed_strings(&record).map(MemberValues::Utf8),
                 0x0180 => time_members(&record),
                 0x0001 => variable_strings(&record).map(MemberValues::Utf8),
-                0x0304 => referenced_strings(&dir, &record).map(MemberValues::Utf8),
-                0x0302 => signed_numbers(&record),
+                0x0304 => reference_ordinals(&record),
+                0x0002 | 0x0302 => numeric_members(&record, kind == 0x0302),
                 _ => Err(format!("unsupported member field type 0x{kind:04x}")),
             }
             .map_err(|e| format!("dimension {dimension}, field {name}: {e}"))?;
@@ -414,7 +441,7 @@ pub fn read_typed_members(
             None => match kind {
                 0x0140 | 0x0001 | 0x0304 => MemberValues::Utf8(vec![None; count]),
                 0x0180 => MemberValues::Date32(vec![None; count]),
-                0x0302 => MemberValues::Int64(vec![None; count]),
+                0x0002 | 0x0302 => MemberValues::Int64(vec![None; count]),
                 _ => return Err(format!("unsupported member field type 0x{kind:04x}")),
             },
         };
@@ -425,6 +452,15 @@ pub fn read_typed_members(
             ));
         }
         values.truncate(count);
+        if kind == 0x0304 {
+            if let MemberValues::Int64(ordinals) = &values {
+                if let Some(text) = referenced_strings(&dir, ordinals)
+                    .map_err(|e| format!("dimension {dimension}, field {name}: {e}"))?
+                {
+                    values = text;
+                }
+            }
+        }
         expanded_bytes = expanded_bytes
             .saturating_add(values.memory_bytes())
             .saturating_add(time_serials.capacity().saturating_mul(16))
@@ -483,13 +519,13 @@ mod tests {
     #[test]
     fn numeric_attributes_do_not_pass_through_text() {
         let integer = [2, 1, 2, 0, 0xfe, 0xff, 42, 0];
-        let MemberValues::Int64(values) = signed_numbers(&integer).unwrap() else {
+        let MemberValues::Int64(values) = numeric_members(&integer, true).unwrap() else {
             panic!()
         };
         assert_eq!(values, [Some(-2), Some(42)]);
         let mut float = vec![8, 1, 1, 0];
         float.extend_from_slice(&1.25f64.to_le_bytes());
-        let MemberValues::Float64(values) = signed_numbers(&float).unwrap() else {
+        let MemberValues::Float64(values) = numeric_members(&float, true).unwrap() else {
             panic!()
         };
         assert_eq!(values, [Some(1.25)]);

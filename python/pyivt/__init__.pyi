@@ -1,8 +1,8 @@
 """Read Beyond 20/20 IVT metadata and export complete tables to Apache Arrow.
 
 Use `open(source)` with a local path, IVT bytes, or a binary file object.
-The returned `Ivt` exposes `metadata` and `layout` immediately and defers
-cell decoding until `to_arrow()`. Detailed metadata fields load on demand.
+Inspect `metadata` and `layout` without decoding cells. Detailed metadata
+fields load on demand.
 
 ```python
 import pyivt
@@ -11,14 +11,19 @@ ivt = pyivt.open("table.ivt")
 title = ivt.metadata.title.en or ivt.metadata.title.fr
 for note in ivt.metadata.footnotes:
     print(note.symbol, note.description.en)
-table = ivt.to_arrow()
+table, members = ivt.to_arrow()
 ```
 
 Metadata objects expose read-only attributes. Missing optional values and
-translations are represented by `None`. Arrow exports contain the full
-member grid, typed member fields, numeric values, statuses and raw annotations.
+translations are represented by `None`. Use `to_arrow()` for a compact
+table and member maps, or the Arrow C stream for detailed rows with statuses
+and footnotes.
 """
 
+from pyivt._members import DimensionMembers as DimensionMembers
+from pyivt._members import Member as Member
+from pyivt._members import Members as Members
+from pyivt._members import MemberValue as MemberValue
 from pyivt._native import (
     Dimension,
     Footnote,
@@ -35,6 +40,7 @@ from pyivt._types import DimensionType, Frequency
 
 __all__ = [
     "Dimension",
+    "DimensionMembers",
     "DimensionType",
     "Footnote",
     "Frequency",
@@ -44,6 +50,9 @@ __all__ = [
     "Layout",
     "LocalizedLabels",
     "LocalizedText",
+    "Member",
+    "MemberValue",
+    "Members",
     "MissingValue",
     "open",
 ]

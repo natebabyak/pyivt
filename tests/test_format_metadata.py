@@ -4,6 +4,7 @@ import struct
 from pathlib import Path
 
 import pyivt
+from arrow_helpers import stream_reader
 from test_typed_arrow import _typed_fixture
 
 from scripts.ivt_synthetic import cube
@@ -45,7 +46,8 @@ def test_census_geography_uid_comes_from_native_dguid_member_column():
     ivt = pyivt.open(Path(__file__).parent / "fixtures" / "98100018-paged.ivt")
     assert ivt.layout.geo_dim == 1
     actual = ivt.metadata.geographies.geo_uid
-    native = next(ivt.to_batches()).column("geo_dguid_en").to_pylist()
+    with stream_reader(ivt) as reader:
+        native = next(reader).column("geo_dguid_en").to_pylist()
     assert actual == native[::11]
     assert actual[0] == "2021A000224"
     assert any(value is None for value in actual)

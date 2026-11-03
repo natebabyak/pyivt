@@ -13,7 +13,7 @@ from pathlib import Path
 import pyarrow as pa
 import pyivt
 import pytest
-from arrow_helpers import plain_table
+from arrow_helpers import expanded_table, plain_table
 
 
 def _vector(width: int, payload: bytes) -> bytes:
@@ -65,7 +65,9 @@ def _typed_fixture() -> bytes:
             )
 
     def dimension(
-        axis: int, fields: list[tuple[str, int, bytes]], extra: tuple[bytes, ...] = ()
+        axis: int,
+        fields: list[tuple[str, int, bytes | tuple[bytes, ...]]],
+        extra: tuple[bytes, ...] = (),
     ) -> None:
         definitions = bytearray(struct.pack("<BBHH", 1, 2, len(fields), 34))
         records: list[bytes] = [b""]
@@ -78,7 +80,10 @@ def _typed_fixture() -> bytes:
             struct.pack_into("<H", row, 18, kind)
             struct.pack_into("<I", row, 26, len(records))
             definitions.extend(row)
-            records.extend([_vector(4, struct.pack("<I", len(records) + 1)), values])
+            chunks = (values,) if isinstance(values, bytes) else values
+            indices = range(len(records) + 1, len(records) + 1 + len(chunks))
+            records.append(_vector(4, struct.pack(f"<{len(chunks)}I", *indices)))
+            records.extend(chunks)
         records[0] = bytes(definitions)
         records.extend(extra)
         directory(824 + 14 * axis, records)
@@ -117,6 +122,7 @@ def _typed_fixture() -> bytes:
             ("English Desc", 0x0001, _text_members("Level", "")),
             ("ByteAttr", 0x0302, _vector(1, struct.pack("<bb", -3, 4))),
             ("LongAttr", 0x0302, _vector(4, struct.pack("<ii", -123456789, 987654321))),
+            ("Decimals", 0x0002, _vector(2, struct.pack("<HH", 0, 65535))),
         ],
     )
     dimension(
@@ -129,7 +135,14 @@ def _typed_fixture() -> bytes:
                 0x0180,
                 struct.pack("<BBHHIIIIII", 1, 2, 3, 8, 719469, 12, 730485, 999, 0, 7),
             ),
+            # A null, an ordinal colliding with a note, and a non-note target.
+            (
+                "Order",
+                0x0304,
+                tuple(_vector(4, struct.pack("<I", i)) for i in (0, 11, 1)),
+            ),
         ],
+        (_vector(1, b"\x01Note"),),
     )
 
     def legend_record(symbol: str, text: str) -> bytes:
@@ -209,6 +222,7 @@ def _expected_table() -> pa.Table:
             i64,
             [-123456789] * 3 + [987654321] * 3 + [-123456789] * 3 + [987654321] * 3,
         ),
+        ("measure_decimals", i64, [0, 0, 0, 65535, 65535, 65535] * 2),
         ("time", i64, [1, 2, 3] * 4),
         ("time_code", text, ["000", "001", "002"] * 4),
         ("time_english_desc", text, ["Epoch", "Leap day", "Undated"] * 4),
@@ -219,6 +233,7 @@ def _expected_table() -> pa.Table:
             pa.date32(),
             [date(1970, 1, 1), date(2000, 2, 29), None] * 4,
         ),
+        ("time_order", i64, [None, 11, 1] * 4),
         (
             "value",
             f64,
@@ -284,14 +299,14 @@ def test_all_dimensions_and_native_types_match_declared_result(
     assert ivt.layout.counts == [2, 2, 3]
     assert ivt.layout.slugs == ["geo", "measure", "time"]
     assert ivt.metadata.number_of_datapoints == 12
-    encoded = ivt.to_arrow()
+    encoded = expanded_table(ivt)
     assert encoded["geo"].type == pa.int32()
     assert encoded["geo_code"].type == pa.dictionary(pa.int32(), pa.string())
     actual = plain_table(encoded)
     expected = _expected_table()
-    assert actual.shape == expected.shape == (12, 24)
+    assert actual.shape == expected.shape == (12, 26)
     assert actual.schema.equals(expected.schema, check_metadata=True)
     for name in expected.column_names:
         assert actual[name].null_count == expected[name].null_count, name
         assert actual[name].equals(expected[name]), name
-    assert actual.equals(plain_table(ivt.to_arrow()))
+    assert actual.equals(plain_table(expanded_table(ivt)))
