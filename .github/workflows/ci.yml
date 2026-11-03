@@ -21,10 +21,14 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # PyO3 links Rust tests against this interpreter's shared libpython.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-          python-version: "3.12"
 
       - name: Install package
         run: uv sync --group dev
