@@ -7,20 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Removed
-
-- Removed `Ivt.to_batches()`. Use the Arrow C stream for detailed batches with the default batch size and memory budget.
-
-### Fixed
-
-- Read legacy member attributes in the 2011 National Household Survey profile. Unsigned integer attributes and ordinal fields stored with the note-reference type now export as integers.
-
 ## [0.0.6] - 2026-11-02
 
 ### Breaking changes
 
 - `Ivt.to_arrow(select=None)` returns `(table, members)`. The compact table contains one label dictionary per included dimension and nullable `value`; per-row member fields, statuses and annotations are removed from this table
 - Dictionary indices use the smallest unsigned type that fits the selected member count. Indices map to native numeric ordinals through the separate member maps; stored text codes retain leading zeros in member metadata
+- Removed `Ivt.to_batches()`. The Arrow C stream provides detailed batches with the default batch size and memory budget.
 
 ### Added
 
@@ -29,16 +22,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Members.to_pandas(table)` remaps duplicate or missing labels into valid pandas categoricals without expanding Python strings per row
 - Direct page-to-Arrow value buffers, concurrent value and dictionary-column construction, shared cached buffers and a bounded-memory profiling tool
 
+### Fixed
+
+- Read legacy member attributes in the 2011 National Household Survey profile. Unsigned integer attributes and ordinal fields stored with the note-reference type now export as integers.
+
 ### Migration
 
 - Replace `table = ivt.to_arrow()` with `table, members = ivt.to_arrow()`
 - Save `members.to_json(path)` alongside the Arrow table; `Member.code` is the native numeric ordinal and native text code fields remain in `Member.metadata`
-- Use the existing detailed `to_batches()` or C stream API for per-cell statuses, footnotes and expanded member fields. Their schema is unchanged
+- Read the Arrow C stream with `pyarrow.RecordBatchReader.from_stream(ivt)` for per-cell statuses, footnotes and expanded member fields. With PyArrow 14, use `pyarrow.RecordBatchReader._import_from_c_capsule(ivt.__arrow_c_stream__())`.
 - See `docs/benchmarks/compact-arrow.md` for measured performance and the private-file profiling command
 
 ### Other changes
 
-- Detailed `to_batches()` and Arrow C stream exports use bounded row ranges with shared, deduplicated string dictionaries and compact annotation buffers
+- The detailed Arrow C stream uses bounded row ranges with shared, deduplicated string dictionaries and compact annotation buffers
 - Descriptor parsing requires the native axis matrix and exposes `metadata.descriptor_path`; unverified prose scanners and demo-specific scoring are removed
 - Unsupported container versions 2 and 3 raise explicit errors for both path and byte sources; version 4 remains supported
 - Native axis kinds and language references determine time-series types and translations; arbitrary header text no longer supplies product IDs
@@ -159,7 +156,8 @@ First public release: Rust/PyO3 reader for Statistics Canada Beyond 20/20 `.ivt`
 - Demo IVT tests skip in CI unless Beyond sample files are linked locally
 - No CLI or catalogue download; write Parquet yourself via `pyarrow` / Polars / pandas
 
-[Unreleased]: https://github.com/natebabyak/pyivt/compare/v0.0.5...HEAD
+[Unreleased]: https://github.com/natebabyak/pyivt/compare/v0.0.6...HEAD
+[0.0.6]: https://github.com/natebabyak/pyivt/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/natebabyak/pyivt/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/natebabyak/pyivt/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/natebabyak/pyivt/compare/v0.0.2...v0.0.3
