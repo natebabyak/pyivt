@@ -16,7 +16,7 @@ table, members = ivt.to_arrow()
 
 Metadata objects expose read-only attributes. Missing optional values and
 translations are represented by `None`. Use `to_arrow()` for a compact
-table and member maps, or `to_batches()` for detailed rows with statuses
+table and member maps, or the Arrow C stream for detailed rows with statuses
 and footnotes.
 """
 

@@ -12,6 +12,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyivt
 import pytest
+from arrow_helpers import expanded_table
 from pyivt._members import validate_codes
 from test_streaming import _populated_cube
 from test_typed_arrow import _expected_table, _typed_fixture
@@ -223,7 +224,7 @@ def test_cached_buffers_threading_lifetime_and_budget():
 def test_corpus_values_labels_and_metadata_match_detailed_reader(path):
     ivt = pyivt.open(path)
     table, members = ivt.to_arrow()
-    detailed = pa.Table.from_batches(ivt.to_batches())
+    detailed = expanded_table(ivt)
     assert table.num_rows == prod(ivt.layout.counts)
     assert table["value"].equals(detailed["value"])
     for axis, dimension in enumerate(members.dimensions):

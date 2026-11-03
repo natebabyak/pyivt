@@ -122,23 +122,3 @@ import polars as pl
 
 polars_frame = pl.from_arrow(table)
 ```
-
-## Stream detailed batches
-
-Use `ivt.to_batches()` for native member IDs and fields, `value`, `status_code`, `symbol`, `status`, and `footnote_raw`. The iterator yields Arrow record batches for the full grid in file order.
-
-```python
-import pyarrow.parquet as pq
-
-batches = ivt.to_batches(batch_size=100_000)
-first = next(batches)
-with pq.ParquetWriter("detailed.parquet", first.schema) as writer:
-    writer.write_batch(first)
-    del first
-    for batch in batches:
-        writer.write_batch(batch)
-```
-
-`batch_size` limits rows per batch and defaults to 1,000,000. Consume batches as they arrive to keep memory bounded. `max_memory_bytes` controls the allocation estimate and defaults to 1 GiB.
-
-The reader also exposes the detailed schema through the Arrow C stream protocol. PyArrow versions with `RecordBatchReader.from_stream()` can open it with `pa.RecordBatchReader.from_stream(ivt)`.

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- Removed `Ivt.to_batches()`. Use the Arrow C stream for detailed batches with the default batch size and memory budget.
+
 ### Fixed
 
 - Read legacy member attributes in the 2011 National Household Survey profile. Unsigned integer attributes and ordinal fields stored with the note-reference type now export as integers.

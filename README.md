@@ -2,6 +2,8 @@
 
 Read Statistics Canada Beyond 20/20 (`.ivt`) files in Python. Inspect bilingual metadata and export data to Apache Arrow or Parquet.
 
+pyivt is unstable until version 0.1.0. Its public API and output schemas may change between earlier releases.
+
 ## Install
 
 ```sh
@@ -49,18 +51,9 @@ subset, subset_members = ivt.to_arrow({axis: [1]})
 
 Keys are dimension slugs and values are 1-based member codes. An omitted dimension keeps all its rows and leaves out its column. The export does not aggregate values.
 
-## Stream detailed rows
-
-```python
-for batch in ivt.to_batches(batch_size=100_000):
-    print(batch.num_rows)
-```
-
-Use batches for large exports or when you need per-cell statuses and footnotes.
-
 ## Documentation
 
-- [Usage guide](docs/usage.md) for metadata, member maps, pandas, Polars, and streaming to Parquet.
+- [Usage guide](docs/usage.md) for metadata, member maps, pandas, and Polars.
 - [Development guide](docs/development.md) for tests and benchmarks.
 
 ## License

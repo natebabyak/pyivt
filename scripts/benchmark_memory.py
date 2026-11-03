@@ -33,7 +33,7 @@ def worker(args):
     digest = hashlib.sha256()
     try:
         batches = (
-            ivt.to_batches()
+            pa.RecordBatchReader._import_from_c_capsule(ivt.__arrow_c_stream__())
             if args.mode == "stream"
             else ivt.to_arrow()[0].to_batches(max_chunksize=65536)
         )
@@ -62,7 +62,7 @@ def worker(args):
                 }
             )
         )
-    except (ValueError, MemoryError) as error:
+    except (ValueError, MemoryError, pa.ArrowException) as error:
         print(
             json.dumps(
                 {

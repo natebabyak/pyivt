@@ -15,6 +15,7 @@ import psutil
 
 
 def worker(path: Path, mode: str, memory: int) -> dict:
+    import pyarrow as pa
     import pyivt
 
     result = {"mode": mode}
@@ -25,7 +26,7 @@ def worker(path: Path, mode: str, memory: int) -> dict:
             counts=ivt.layout.counts, descriptor_path=ivt.metadata.descriptor_path
         )
         batches = (
-            ivt.to_batches(max_memory_bytes=memory)
+            pa.RecordBatchReader._import_from_c_capsule(ivt.__arrow_c_stream__())
             if mode == "stream"
             else ivt.to_arrow(max_memory_bytes=memory)[0].to_batches()
         )
@@ -35,7 +36,7 @@ def worker(path: Path, mode: str, memory: int) -> dict:
                 f"row count {rows} differs from dimension product {prod(ivt.layout.counts)}"
             )
         result.update(status="converted", rows=rows)
-    except (ValueError, MemoryError) as error:
+    except (ValueError, MemoryError, pa.ArrowException) as error:
         result.update(
             status="rejected", exception=type(error).__name__, message=str(error)
         )
@@ -141,7 +142,12 @@ def main():
         "--manifest", type=Path, default=Path("tests/corpus/heldout.json")
     )
     parser.add_argument("--data-dir", type=Path, default=Path(".cache/heldout"))
-    parser.add_argument("--max-memory-bytes", type=int, default=6 * 1024**3)
+    parser.add_argument(
+        "--max-memory-bytes",
+        type=int,
+        default=6 * 1024**3,
+        help="allocation estimate limit for table mode (stream mode uses 1 GiB)",
+    )
     parser.add_argument("--rss-cap-bytes", type=int, default=8 * 1024**3)
     parser.add_argument("--timeout", type=float, default=300)
     parser.add_argument(

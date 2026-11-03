@@ -9,7 +9,7 @@ table, members = ivt.to_arrow()
 ```
 """
 
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from os import PathLike
 from typing import Any, BinaryIO
 
@@ -326,7 +326,7 @@ class IvtMetadata:
 
         Returns MissingValue entries linking numeric codes to symbols and
         localized descriptions, or an empty list if none are found. Raises
-        ValueError on loading errors. Use Ivt.to_batches() for per-cell statuses.
+        ValueError on loading errors. Use the Arrow C stream for per-cell statuses.
         """
     def _loaded(self, name: str) -> bool:
         """Internal diagnostic: whether a named lazy metadata field is cached."""
@@ -366,9 +366,9 @@ class Ivt:
 
     Obtain an instance with pyivt.open(source); direct construction is not
     supported. Inspect metadata and layout without exporting the cell grid.
-    to_batches() decodes detailed row ranges; to_arrow() returns a compact table and members, caching Arrow buffers
-    for subsequent exports. No context manager or close() call
-    is required. This reader does not modify the source file.
+    The Arrow C stream decodes detailed row ranges. to_arrow() returns a compact
+    table and members, caching Arrow buffers for subsequent exports. No context
+    manager or close() call is required. This reader does not modify the source file.
 
     ```python
     import pyivt
@@ -384,21 +384,11 @@ class Ivt:
     @property
     def layout(self) -> Layout:
         """Snapshot of dimension counts, Arrow column slugs and IVT paging details."""
-    def to_batches(
-        self, *, batch_size: int = 1_000_000, max_memory_bytes: int = 1_073_741_824
-    ) -> Iterator[pa.RecordBatch]:
-        """Iterate over bounded batches in file dimension order.
-
-        Includes native member fields, values, statuses, and footnotes.
-        Member IDs are int32. Text fields use dictionary<int32, utf8>, with
-        member dictionaries shared across batches. Batches align to outer-axis
-        slabs where possible and never exceed batch_size. The iterator retains
-        the source and member maps, without caching decoded batches.
-        MemoryError reports an estimate exceeding max_memory_bytes; ValueError
-        reports malformed data. Release each batch to keep memory bounded.
-        """
     def __arrow_c_stream__(self, requested_schema: Any = None) -> Any:
-        """Export an independent Arrow C stream capsule; schema requests raise ValueError."""
+        """Export detailed batches in file order, including statuses and footnotes.
+
+        Each capsule owns an independent reader. Schema requests raise ValueError.
+        """
     def to_arrow(
         self,
         select: Mapping[str, Sequence[int]] | None = None,
