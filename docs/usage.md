@@ -49,24 +49,27 @@ for missing in meta.missing_values:
     print(missing.code, missing.symbol, missing.description.fr)
 ```
 
-`dimension.items` is the member count and `dimension.count` is an alias. `DimensionType` covers `"geographic"`, `"normal"`, and `"time_series"`. `Frequency` covers `"monthly"`, `"quarterly"`, `"semi_annual"`, and `"annual"`.
+`dimension.items` is the declared member count. `DimensionType` covers `"geographic"`, `"normal"`, and `"time_series"`. `Frequency` covers `"monthly"`, `"quarterly"`, `"semi_annual"`, and `"annual"`.
 
 ## Export a compact table
 
 ```python
-table, members = ivt.to_arrow()
+table = ivt.to_arrow()
+members = ivt.members()
 ```
 
-The table follows file dimension order, with the last dimension varying fastest. Each dimension column is a dictionary of display labels with unsigned indices. The `value` column is nullable `float64`. Missing-value statuses produce nulls, and published zeros remain zero.
+The table follows file dimension order, with the last dimension varying fastest. Each included dimension column stores native member codes directly, using the smallest unsigned type that fits the largest selected code. The `value` column is nullable `float64`. Missing-value statuses produce nulls, and published zeros remain zero.
 
 ### Select rows and dimension columns
 
-Pass a mapping from `ivt.layout.slugs` to sequences of numeric member codes. Use the 1-based `Member.code`, since stored text codes such as `"001"` belong to `Member.metadata`.
+Build a reusable `Selection` from dimension slugs and sequences of numeric member codes. Both methods also accept the mapping directly. Use the 1-based `Member.code`, since stored text codes such as `"001"` belong to `Member.metadata`.
 
 ```python
-axis = ivt.members().dimensions[0]
-select = {axis.name: [member.code for member in axis.members[:2]]}
-table, members = ivt.to_arrow(select)
+axis = ivt.layout.slugs[0]
+selection = pyivt.Selection({axis: [1]})
+selection.validate(ivt)
+table = ivt.to_arrow(selection)
+members = ivt.members(selection)
 ```
 
 | Selection | Result |
@@ -76,13 +79,13 @@ table, members = ivt.to_arrow(select)
 | A mapping with selected axes | Listed axes use the selected codes and appear as columns. Omitted axes retain all their rows and have no column. |
 | An empty code sequence for any axis | Zero rows |
 
-Selection preserves file order and does not aggregate rows. Unknown slugs and invalid or duplicate codes raise `ValueError`.
+Selection preserves file order and does not aggregate rows. Unknown slugs and invalid or duplicate codes raise `ValueError`. Use `Selection.to_json()` and `Selection.from_json()` to save and reuse the mapping.
 
-`to_arrow()` raises `MemoryError` when its estimated allocation exceeds `max_memory_bytes` (2 GiB by default). Use a smaller selection to reduce the size of the compact export.
+Compact export and member preparation apply an internal 2 GiB allocation estimate. A request over the limit raises `MemoryError`. A smaller selection reduces the size of the compact export.
 
 ### Work with member maps
 
-Call `ivt.members(select)` to retrieve the same member maps without decoding cells.
+Call `ivt.members(selection, language="en")` to read labels and native attributes without decoding cells. Use `language="fr"` for French. If a dimension has localized labels but lacks the requested translation, `members()` raises `ValueError` naming the axis. Unlabelled axes and missing individual labels use `None`. Time-series labels are ISO 8601 dates in either language.
 
 ```python
 for dimension in members.dimensions:
@@ -94,18 +97,9 @@ restored = pyivt.Members.read_json("data.members.json")
 restored.validate_table(table)
 ```
 
-`Members.from_json(text)` reads a JSON string. `validate_table()` checks that the table and member maps match in source, selection, and label dictionaries.
+`Members.from_json(text)` reads a JSON string. The JSON records the requested language, source SHA-256, selection fingerprint, and content checksum. `validate_table()` checks the source, projection, and member codes. Either language can be joined to the same numeric table.
 
-Labels may repeat or be null. Dictionary index `i` in a dimension column refers to `dimension.members[i]`, even when the selected member codes have gaps. Member metadata uses native field names, ISO date strings, and JSON scalars.
-
-Use Arrow IPC to preserve the dictionary layout when saving the table for use with `validate_table()`. Parquet readers may reconstruct the dictionaries.
-
-```python
-import pyarrow as pa
-
-with pa.ipc.new_file("data.arrow", table.schema) as writer:
-    writer.write_table(table)
-```
+Join each dimension column with `Member.code` to attach labels. Labels may repeat or be null. Member metadata preserves native field names, ISO date strings, and JSON scalars.
 
 ### Convert to pandas or Polars
 
@@ -122,3 +116,22 @@ import polars as pl
 
 polars_frame = pl.from_arrow(table)
 ```
+
+
+### Generate types for one table
+
+```python
+from pathlib import Path
+
+Path("table_types.py").write_text(pyivt.codegen(ivt), encoding="utf-8")
+```
+
+The generated module contains an `IntEnum` per axis, a `DimensionSlug` literal, `COLUMN_NAMES`, the source SHA-256 as `TABLE_ID`, and a typed `selection()` helper. `Ivt.to_arrow()` returns a standard `pyarrow.Table`. For a table with a `geo` axis and a member labelled Canada, the generated module can be used like this.
+
+```python
+from table_types import Geo, selection
+
+table = ivt.to_arrow(selection({"geo": [Geo.CANADA]}))
+```
+
+`codegen()` accepts an opened reader, any supported IVT source, a `Members` object, or members JSON as text or a `.json` path. It returns module text for the caller to save. The requested `language` determines the enum names when reading IVT. JSON uses its saved labels. Names are normalized to ASCII identifiers, with numeric suffixes for collisions and code-based names when a label is missing.

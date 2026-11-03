@@ -14,7 +14,7 @@ from pathlib import Path
 import psutil
 
 
-def worker(path: Path, mode: str, memory: int) -> dict:
+def worker(path: Path, mode: str) -> dict:
     import pyarrow as pa
     import pyivt
 
@@ -28,7 +28,7 @@ def worker(path: Path, mode: str, memory: int) -> dict:
         batches = (
             pa.RecordBatchReader._import_from_c_capsule(ivt.__arrow_c_stream__())
             if mode == "stream"
-            else ivt.to_arrow(max_memory_bytes=memory)[0].to_batches()
+            else ivt.to_arrow().to_batches()
         )
         rows = sum(batch.num_rows for batch in batches)
         if rows != prod(ivt.layout.counts):
@@ -44,7 +44,7 @@ def worker(path: Path, mode: str, memory: int) -> dict:
     return result
 
 
-def isolated(path: Path, mode: str, memory: int, cap: int, timeout: float) -> dict:
+def isolated(path: Path, mode: str, cap: int, timeout: float) -> dict:
     command = [
         sys.executable,
         "-m",
@@ -53,8 +53,6 @@ def isolated(path: Path, mode: str, memory: int, cap: int, timeout: float) -> di
         str(path),
         "--mode",
         mode,
-        "--max-memory-bytes",
-        str(memory),
     ]
     start = time.monotonic()
     peak = 0
@@ -107,7 +105,7 @@ def isolated(path: Path, mode: str, memory: int, cap: int, timeout: float) -> di
 
 
 def probe(
-    manifest: dict, directory: Path, *, memory: int, cap: int, timeout: float = 300
+    manifest: dict, directory: Path, *, cap: int, timeout: float = 300
 ) -> list[dict]:
     results = []
     for entry in manifest["files"]:
@@ -120,7 +118,7 @@ def probe(
         if actual != entry["sha256"]:
             raise ValueError(f"pinned hash differs for {path}")
         for mode in ["stream", "table"]:
-            result = isolated(path, mode, memory, cap, timeout)
+            result = isolated(path, mode, cap, timeout)
             result.update(sha256=entry["sha256"], bytes=path.stat().st_size)
             expected = entry.get("official_dimension_counts")
             if (
@@ -142,12 +140,6 @@ def main():
         "--manifest", type=Path, default=Path("tests/corpus/heldout.json")
     )
     parser.add_argument("--data-dir", type=Path, default=Path(".cache/heldout"))
-    parser.add_argument(
-        "--max-memory-bytes",
-        type=int,
-        default=6 * 1024**3,
-        help="allocation estimate limit for table mode (stream mode uses 1 GiB)",
-    )
     parser.add_argument("--rss-cap-bytes", type=int, default=8 * 1024**3)
     parser.add_argument("--timeout", type=float, default=300)
     parser.add_argument(
@@ -155,13 +147,12 @@ def main():
     )
     args = parser.parse_args()
     if args.worker:
-        print(json.dumps(worker(args.worker, args.mode, args.max_memory_bytes)))
+        print(json.dumps(worker(args.worker, args.mode)))
         return
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
     results = probe(
         manifest,
         args.data_dir,
-        memory=args.max_memory_bytes,
         cap=args.rss_cap_bytes,
         timeout=args.timeout,
     )

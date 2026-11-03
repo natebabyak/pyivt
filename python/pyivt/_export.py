@@ -1,74 +1,95 @@
-"""Selection and member preparation; row construction stays in Rust."""
+"""Prepare compact projections and localized member maps."""
 
-from collections.abc import Mapping, Sequence
-from datetime import date, timedelta
+from __future__ import annotations
 
-from pyivt._members import DimensionMembers, Member, Members, validate_codes
+from typing import TYPE_CHECKING, cast
+
+from pyivt._members import DimensionMembers, Language, Member, Members
+from pyivt._selection import SelectionInput, _projection_id, _selected_axes
+
+if TYPE_CHECKING:
+    from pyivt._native import Ivt, Layout
+
+_DISPLAY_NAMES = (("english desc",), ("desc français", "french desc"))
+_LOCALIZED_NAMES = frozenset(name for group in _DISPLAY_NAMES for name in group)
 
 
-def prepare(ivt, select, max_memory_bytes):
-    slugs, counts = ivt.layout.slugs, ivt.layout.counts
-    if select is not None:
-        if not isinstance(select, Mapping):
-            raise ValueError(
-                "select must map dimension slugs to lists of numeric member codes"
-            )
-        for name, codes in select.items():
-            if name not in slugs:
-                raise ValueError(
-                    f"unknown dimension {name!r}; expected one of {slugs!r}"
-                )
-            axis = slugs.index(name)
-            if not isinstance(codes, Sequence) or isinstance(codes, (str, bytes)):
-                raise ValueError(  # noqa: TRY004 -- selection errors use ValueError
-                    f"dimension {name}: member codes must be a sequence of integers"
-                )
-            if any(
-                type(c) is not int or not 1 <= c <= counts[axis] for c in codes
-            ) or len(set(codes)) != len(codes):
-                raise ValueError(
-                    f"dimension {name}: invalid or duplicate codes {codes!r}; expected 1..{counts[axis]}"
-                )
-    table_id, fields, dimension_labels = ivt._member_fields(max_memory_bytes)
-    dimensions, selection, labels = [], [], []
-    for axis, (slug, count) in enumerate(zip(slugs, counts, strict=True)):
-        if select is not None and slug not in select:
-            selection.append(None)
-            labels.append([])
+def prepare(
+    layout: Layout, selection: SelectionInput
+) -> tuple[list[tuple[bool, list[int] | None]], str]:
+    axes = _selected_axes(layout, selection)
+    projection_id = _projection_id(
+        [(slug, codes) for slug, codes in axes if codes is not None]
+    )
+    projection = [
+        (
+            codes is not None,
+            None if codes is None or len(codes) == count else [c - 1 for c in codes],
+        )
+        for (_, codes), count in zip(axes, layout.counts, strict=True)
+    ]
+    return projection, projection_id
+
+
+def prepare_members(ivt: Ivt, selection: SelectionInput, language: Language) -> Members:
+    if language not in ("en", "fr"):
+        raise ValueError(
+            f"unsupported member language {language!r}; expected 'en' or 'fr'"
+        )
+    axes = _selected_axes(ivt.layout, selection)
+    table_id, fields, display_fields = ivt._member_fields()
+    language_index = 0 if language == "en" else 1
+    dimensions = []
+    for axis, (slug, codes) in enumerate(axes):
+        if codes is None:
             continue
-        full_codes = list(range(1, count + 1))
-        first_code = validate_codes(full_codes, table_id, slug)
-        codes = full_codes if select is None else sorted(select[slug])
         axis_fields = fields[axis]
-        # Native display fields have stable names; preserve every field under
-        # its recorded name. A table without display fields uses its ordinal.
-        text_fields = [
-            name
-            for name, kind, _ in axis_fields
-            if kind == "text" and name.lower() != "code"
-        ]
-        display = next(
-            (name for name in ("English Desc", "French Desc") if name in text_fields),
-            text_fields[0] if text_fields else None,
-        )
-        lookup = {name: values for name, _, values in axis_fields}
-        members = []
-        for code in codes:
-            index = code - first_code
-            metadata = {}
-            for name, kind, values in axis_fields:
-                value = values[index]
-                metadata[name] = (
-                    (date(1970, 1, 1) + timedelta(days=value)).isoformat()
-                    if kind == "date" and value is not None
-                    else value
+        is_time, names, references = display_fields[axis]
+        labels = None
+        if is_time:
+            labels = next(
+                (values for _, kind, values in axis_fields if kind == "date"), None
+            )
+        else:
+            reference = references[language_index]
+            if reference is not None:
+                name, kind, values = axis_fields[reference]
+                if kind == "text" and name.casefold() not in {
+                    "code",
+                    *_DISPLAY_NAMES[1 - language_index],
+                }:
+                    labels = values
+            if labels is None:
+                lookup = {
+                    name.casefold(): values
+                    for name, kind, values in axis_fields
+                    if kind == "text" and name.casefold() in _LOCALIZED_NAMES
+                }
+                labels = next(
+                    (
+                        lookup[name]
+                        for name in _DISPLAY_NAMES[language_index]
+                        if name in lookup
+                    ),
+                    None,
                 )
-            label = lookup[display][index] if display else str(code)
-            members.append(Member(code, label, metadata))
-        dimensions.append(
-            DimensionMembers(slug, dimension_labels[axis], first_code, tuple(members))
+                if (
+                    labels is None
+                    and codes
+                    and (lookup or any(i is not None for i in references))
+                ):
+                    raise ValueError(
+                        f"dimension {slug}: member labels unavailable for language {language!r}"
+                    )
+        members = tuple(
+            Member(
+                code,
+                cast("str | None", labels[code - 1]) if labels is not None else None,
+                {name: values[code - 1] for name, _, values in axis_fields},
+            )
+            for code in codes
         )
-        selection.append([c - first_code for c in codes])
-        labels.append([m.label for m in members])
-    result = Members(table_id, tuple(dimensions))
-    return selection, labels, result
+        dimensions.append(
+            DimensionMembers(slug, names[language_index] or slug, 1, members)
+        )
+    return Members(table_id, tuple(dimensions), language=language)

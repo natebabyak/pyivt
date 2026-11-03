@@ -21,14 +21,15 @@ import pyivt
 ivt = pyivt.open("data.ivt")
 print(ivt.metadata.title.en or ivt.metadata.title.fr)
 
-table, members = ivt.to_arrow()
+table = ivt.to_arrow()
+members = ivt.members(language="en")
 pq.write_table(table, "data.parquet")
 members.to_json("data.members.json")
 ```
 
 `pyivt.open()` also accepts bytes or a binary file object. For a download, pass the response bytes.
 
-The table has one label column per dimension and a numeric `value` column. Keep the JSON with the export to retain native member codes and attributes.
+The table has one unsigned member-code column per dimension and a nullable `float64` value column. Keep the JSON with the export to retain localized labels and native attributes.
 
 ## Read metadata
 
@@ -46,10 +47,17 @@ Use `.en` or `.fr` for localized fields. Missing translations are `None`. You ca
 
 ```python
 axis = ivt.layout.slugs[0]
-subset, subset_members = ivt.to_arrow({axis: [1]})
+selection = pyivt.Selection({axis: [1]})
+subset = ivt.to_arrow(selection)
+subset_members = ivt.members(selection)
+subset_members.validate_table(subset)
 ```
 
 Keys are dimension slugs and values are 1-based member codes. An omitted dimension keeps all its rows and leaves out its column. The export does not aggregate values.
+
+## Generate typed member codes
+
+`pyivt.codegen("data.ivt")` returns Python source containing an `IntEnum` for each dimension and a typed selection helper. You can also pass saved members JSON. See the [codegen example](docs/usage.md#generate-types-for-one-table).
 
 ## Documentation
 

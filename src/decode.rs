@@ -542,7 +542,8 @@ fn directory_page_impl(
 pub fn decode_selected(
     data: &[u8],
     lay: &Layout,
-    choices: &[Vec<usize>],
+    choices: &[Option<Vec<usize>>],
+    selected_counts: &[usize],
     selected_strides: &[usize],
     rows: usize,
 ) -> Result<arrow::array::Float64Array, String> {
@@ -571,17 +572,32 @@ pub fn decode_selected(
     let mut cached: Option<(usize, PageCells)> = None;
     let axis = lay.straddle - 1;
     let inner = native_strides[axis];
+    let full_grid = choices.iter().all(Option::is_none);
     let mut coords = vec![0usize; lay.n_dim];
     for row in 0..rows {
-        let mut native_row = 0usize;
-        for dim in 0..lay.n_dim {
-            coords[dim] = choices[dim][row / selected_strides[dim] % choices[dim].len()];
-            native_row += coords[dim] * native_strides[dim];
-        }
-        let window = coords[axis] / lay.ipc[0] as usize;
+        let native_row = if full_grid {
+            row
+        } else {
+            let mut native_row = 0usize;
+            for dim in 0..lay.n_dim {
+                let index = row / selected_strides[dim] % selected_counts[dim];
+                coords[dim] = choices[dim].as_ref().map_or(index, |codes| codes[index]);
+                native_row += coords[dim] * native_strides[dim];
+            }
+            native_row
+        };
+        let coordinate = |dim: usize| {
+            if full_grid {
+                row / native_strides[dim] % selected_counts[dim]
+            } else {
+                coords[dim]
+            }
+        };
+        let axis_coord = coordinate(axis);
+        let window = axis_coord / lay.ipc[0] as usize;
         let mut index = window * lay.estride[0] as usize;
         for (entry_axis, &dim) in lay.ent_idx.iter().enumerate().skip(1) {
-            index += coords[dim - 1] * lay.estride[entry_axis] as usize;
+            index += coordinate(dim - 1) * lay.estride[entry_axis] as usize;
         }
         if cached
             .as_ref()
@@ -593,7 +609,7 @@ pub fn decode_selected(
             ));
         }
         let page = &cached.as_ref().unwrap().1;
-        let local = (coords[axis] % lay.ipc[0] as usize) * inner + native_row % inner;
+        let local = (axis_coord % lay.ipc[0] as usize) * inner + native_row % inner;
         let bit = lay.bit[local] as usize;
         let published = page.statuses[bit] == 0;
         valid.append(published);

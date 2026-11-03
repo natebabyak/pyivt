@@ -10,7 +10,9 @@ from typing_extensions import assert_type
 def check_metadata(ivt: pyivt.Ivt) -> None:
     assert_type(ivt.layout.geo_dim, int | None)
     assert_type(ivt.metadata.descriptor_path, str)
-    assert_type(ivt.to_arrow(), tuple[pa.Table, pyivt.Members])
+    assert_type(ivt.to_arrow(pyivt.Selection({"geo": [1]})), pa.Table)
+    assert_type(ivt.to_arrow({"geo": [1]}), pa.Table)
+    assert_type(pyivt.codegen(ivt), str)
     assert_type(ivt.members({"geo": [1]}), pyivt.Members)
     assert_type(ivt.members().dimensions, tuple[pyivt.DimensionMembers, ...])
     for dimension in ivt.members().dimensions:

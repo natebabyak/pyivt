@@ -9,13 +9,16 @@ from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, TypeAlias
+
+from pyivt._selection import _projection_id
 
 if TYPE_CHECKING:
     import pandas as pd
     import pyarrow as pa
 
 MemberValue = str | int | float | None
+Language: TypeAlias = Literal["en", "fr"]
 
 
 def _canonical(value: object) -> str:
@@ -26,21 +29,6 @@ def _canonical(value: object) -> str:
         separators=(",", ":"),
         allow_nan=False,
     )
-
-
-def validate_codes(codes: list[int], table: str, dimension: str) -> int:
-    """Verify a full native ordinal map and return its zero/one-based offset."""
-    if not codes or type(codes[0]) is not int or codes[0] not in (0, 1):
-        raise ValueError(
-            f"table {table}, dimension {dimension}: codes must start at 0 or 1; got {codes[:8]!r}"
-        )
-    first = codes[0]
-    for position, code in enumerate(codes):
-        if type(code) is not int or code != first + position:
-            raise ValueError(
-                f"table {table}, dimension {dimension}: codes must be non-negative, unique, sorted and dense; offending codes {codes[max(0, position - 1) : position + 2]!r}"
-            )
-    return first
 
 
 @dataclass(frozen=True)
@@ -71,7 +59,7 @@ class Member:
 
 @dataclass(frozen=True)
 class DimensionMembers:
-    """Selected members in native order; dictionary index i maps to members[i]."""
+    """Selected members in native code order."""
 
     name: str
     label: str
@@ -79,8 +67,10 @@ class DimensionMembers:
     members: tuple[Member, ...]
 
     def __post_init__(self) -> None:
-        if self.first_code not in (0, 1):
-            raise ValueError(f"dimension {self.name}: first_code must be 0 or 1")
+        if type(self.first_code) is not int or self.first_code < 0:
+            raise ValueError(
+                f"dimension {self.name}: first_code must be a non-negative integer"
+            )
         codes = [m.code for m in self.members]
         if any(c < self.first_code for c in codes) or any(
             a >= b for a, b in pairwise(codes)
@@ -101,8 +91,11 @@ class Members:
     table_id: str
     dimensions: tuple[DimensionMembers, ...]
     schema_version: Literal[1] = 1
+    language: Language | None = None
 
     def __post_init__(self) -> None:
+        if self.language not in (None, "en", "fr"):
+            raise ValueError(f"unsupported member language {self.language!r}")
         if self.schema_version != 1:
             raise ValueError(
                 f"unsupported members schema version {self.schema_version}"
@@ -117,6 +110,7 @@ class Members:
     def _payload(self) -> dict:
         return {
             "schema_version": self.schema_version,
+            **({"language": self.language} if self.language is not None else {}),
             "table_id": self.table_id,
             "dimensions": [
                 {
@@ -132,13 +126,26 @@ class Members:
             ],
         }
 
+    def _content_id(self) -> str:
+        return hashlib.sha256(_canonical(self._payload()).encode("utf-8")).hexdigest()
+
+    def _projection_id(self) -> str:
+        return _projection_id(
+            [(dim.name, tuple(m.code for m in dim.members)) for dim in self.dimensions]
+        )
+
     @property
     def selection_id(self) -> str:
-        return hashlib.sha256(_canonical(self._payload()).encode("utf-8")).hexdigest()
+        if self.language is None:
+            return self._content_id()
+        return self._projection_id()
 
     def to_json(self, path: str | Path | None = None) -> str:
         """Return JSON text, optionally writing it as UTF-8 to path."""
-        text = _canonical({**self._payload(), "selection_id": self.selection_id})
+        payload = {**self._payload(), "selection_id": self.selection_id}
+        if self.language is not None:
+            payload["content_id"] = self._content_id()
+        text = _canonical(payload)
         if path is not None:
             Path(path).write_text(text, encoding="utf-8")
         return text
@@ -163,9 +170,15 @@ class Members:
                     for d in data["dimensions"]
                 ),
                 data["schema_version"],
+                data.get("language"),
             )
             if data["selection_id"] != result.selection_id:
                 raise ValueError("members selection_id does not match its contents")
+            if (
+                result.language is not None
+                and data["content_id"] != result._content_id()
+            ):
+                raise ValueError("members content_id does not match its contents")
             return result
         except (KeyError, TypeError, AttributeError) as error:
             raise ValueError("invalid members JSON") from error
@@ -175,12 +188,14 @@ class Members:
         """Read member maps from a UTF-8 JSON file."""
         return cls.from_json(Path(path).read_text(encoding="utf-8"))
 
-    def validate_table(self, table: pa.Table) -> None:
-        """Raise ValueError if the source, selection, or dictionary differs."""
+    def _validate_association(self, table: pa.Table) -> bool:
         metadata = table.schema.metadata or {}
+        codes = metadata.get(b"pyivt.dimension_encoding") == b"codes"
         expected = {
             b"pyivt.table_id": self.table_id.encode(),
-            b"pyivt.selection_id": self.selection_id.encode(),
+            b"pyivt.selection_id": (
+                self._projection_id() if codes else self._content_id()
+            ).encode(),
             b"pyivt.members_schema_version": b"1",
         }
         if any(metadata.get(k) != v for k, v in expected.items()):
@@ -189,42 +204,79 @@ class Members:
             )
         if table.column_names != [d.name for d in self.dimensions] + ["value"]:
             raise ValueError("Arrow columns do not match the members dimensions")
-        for d in self.dimensions:
-            labels = [m.label for m in d.members]
-            for chunk in table[d.name].chunks:
+        return codes
+
+    def validate_table(self, table: pa.Table) -> None:
+        """Check the source, projection and dimension codes."""
+        import pyarrow as pa
+
+        codes = self._validate_association(table)
+        for dim in self.dimensions:
+            column = table[dim.name]
+            if codes:
+                if (
+                    pa.types.is_unsigned_integer(column.type)
+                    and not column.null_count
+                    and set(column.unique().to_pylist()).issubset(
+                        m.code for m in dim.members
+                    )
+                ):
+                    continue
+                raise ValueError(
+                    f"dimension {dim.name}: codes do not match the members"
+                )
+            labels = [m.label for m in dim.members]
+            for chunk in column.chunks:
                 if (
                     not hasattr(chunk, "dictionary")
                     or chunk.dictionary.to_pylist() != labels
                 ):
                     raise ValueError(
-                        f"dimension {d.name}: dictionary does not match the members"
+                        f"dimension {dim.name}: dictionary does not match the members"
                     )
 
     def to_pandas(self, table: pa.Table) -> pd.DataFrame:
-        """Convert labels to pandas categoricals, including duplicate/null labels.
-
-        pandas requires unique non-null categories. Remap only dictionary keys
-        and member-sized labels; no row-sized Python strings are constructed.
-        Native codes remain in this Members object.
-        """
+        """Join member labels to the table codes and return pandas categoricals."""
         import pandas as pd
         import pyarrow as pa
         import pyarrow.compute as pc
 
-        self.validate_table(table)
+        codes = self._validate_association(table)
+        if not codes:
+            self.validate_table(table)
         columns = {}
         for dimension in self.dimensions:
             categories = pd.Categorical([member.label for member in dimension.members])
             lookup = pa.array(categories.codes)
-            keys = pa.chunked_array(
-                [
-                    pc.take(lookup, chunk.indices)
-                    for chunk in table[dimension.name].chunks
-                ],
-                type=lookup.type,
-            )
+            column = table[dimension.name]
+            if codes:
+                if not pa.types.is_unsigned_integer(column.type):
+                    raise ValueError(
+                        f"dimension {dimension.name}: expected unsigned codes"
+                    )
+                try:
+                    member_codes = pa.array(
+                        [m.code for m in dimension.members], type=column.type
+                    )
+                except (OverflowError, pa.ArrowInvalid) as error:
+                    raise ValueError(
+                        f"dimension {dimension.name}: codes do not fit column type"
+                    ) from error
+                positions = pc.call_function(
+                    "index_in", [column], pc.SetLookupOptions(member_codes)
+                )
+                if positions.null_count:
+                    raise ValueError(
+                        f"dimension {dimension.name}: codes do not match the members"
+                    )
+                keys = pc.take(lookup, positions)
+            else:
+                keys = pa.chunked_array(
+                    [pc.take(lookup, chunk.indices) for chunk in column.chunks],
+                    type=lookup.type,
+                )
             columns[dimension.name] = pd.Categorical.from_codes(
-                keys.combine_chunks().to_numpy(), categories.categories
+                keys.to_numpy(), categories.categories
             )
         columns["value"] = table["value"].to_pandas()
         return pd.DataFrame(columns, copy=False)

@@ -62,9 +62,7 @@ def worker(args):
                 raise ValueError("legacy baseline has no selection API")
             table = ivt._legacy_to_arrow(max_memory_bytes=args.max_memory_bytes)
         else:
-            table, _members = ivt.to_arrow(
-                select, max_memory_bytes=args.max_memory_bytes
-            )
+            table = ivt.to_arrow(select)
         result = {
             "rows": table.num_rows,
             "columns": table.num_columns,
@@ -195,7 +193,12 @@ def main():
     )
     parser.add_argument("--cells", type=int, default=80_000_000)
     parser.add_argument("--fraction", type=float, default=1)
-    parser.add_argument("--max-memory-bytes", type=int, default=2_147_483_648)
+    parser.add_argument(
+        "--max-memory-bytes",
+        type=int,
+        default=2_147_483_648,
+        help="estimate budget for legacy mode",
+    )
     parser.add_argument("--rss-cap-bytes", type=int, default=2_000_000_000)
     parser.add_argument("--timeout", type=float, default=120)
     parser.add_argument("--output", type=Path)

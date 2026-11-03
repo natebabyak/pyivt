@@ -5,17 +5,18 @@ import pyivt
 
 ivt = pyivt.open("table.ivt")
 print(ivt.metadata.title.en)
-table, members = ivt.to_arrow()
+table = ivt.to_arrow()
+members = ivt.members()
 ```
 """
 
-from collections.abc import Mapping, Sequence
 from os import PathLike
 from typing import Any, BinaryIO
 
 import pyarrow as pa
 
-from pyivt._members import Members
+from pyivt._members import Language, Members, MemberValue
+from pyivt._selection import SelectionInput
 from pyivt._types import DimensionType, Frequency
 
 class LocalizedText:
@@ -102,9 +103,6 @@ class Dimension:
     @property
     def name(self) -> LocalizedText:
         """Localized short name; English falls back to the descriptor name."""
-    @property
-    def count(self) -> int:
-        """Alias for items, the declared number of members on this axis."""
     @property
     def items(self) -> int:
         """Declared number of members on this axis; member IDs run from 1 to items."""
@@ -367,7 +365,7 @@ class Ivt:
     Obtain an instance with pyivt.open(source); direct construction is not
     supported. Inspect metadata and layout without exporting the cell grid.
     The Arrow C stream decodes detailed row ranges. to_arrow() returns a compact
-    table and members, caching Arrow buffers for subsequent exports. No context
+    table, caching Arrow buffers for subsequent exports. No context
     manager or close() call is required. This reader does not modify the source file.
 
     ```python
@@ -375,7 +373,8 @@ class Ivt:
 
     ivt = pyivt.open("table.ivt")
     title = ivt.metadata.title.en
-    table, members = ivt.to_arrow()
+    table = ivt.to_arrow()
+    members = ivt.members()
     ```
     """
     @property
@@ -389,40 +388,34 @@ class Ivt:
 
         Each capsule owns an independent reader. Schema requests raise ValueError.
         """
-    def to_arrow(
-        self,
-        select: Mapping[str, Sequence[int]] | None = None,
-        *,
-        max_memory_bytes: int = 2_147_483_648,
-    ) -> tuple[pa.Table, Members]:
-        """Return a compact Arrow table and matching typed member maps.
+    def to_arrow(self, selection: SelectionInput = None) -> pa.Table:
+        """Return the selected grid as a PyArrow table of native codes and values.
 
-        Each included dimension has a dictionary of labels in native code
-        order, indexed by the smallest unsigned integer type that fits.
-        The only other column is nullable float64 value. select maps layout
-        slugs to native numeric ordinals (1-based), never stored text codes.
-        Codes are sorted into file order; duplicates and unknown codes raise
-        ValueError. Omitted dimensions retain their rows but omit their column
-        and members entry. An empty code list yields zero rows; {} projects
-        every dimension away and returns only value. No aggregation occurs.
+        Each included axis uses the smallest unsigned type that fits its
+        largest selected code. The value column is nullable float64. Codes
+        are native ordinals, and the last dimension varies fastest.
 
-        No selection exports the complete grid, last dimension fastest.
-        Selection happens before allocating row buffers. Repeated equivalent
-        exports share cached Arrow buffers. MemoryError reports an unsafe
-        allocation estimate, not an OS-enforced process memory limit.
+        Use Selection or a mapping of dimension slugs to codes. Omitted axes
+        still vary but produce no column, and an empty sequence yields zero
+        rows. None exports the full grid. Equivalent exports share buffers.
+        MemoryError may report the internal allocation safety limit.
         """
     def members(
-        self,
-        select: Mapping[str, Sequence[int]] | None = None,
-        *,
-        max_memory_bytes: int = 2_147_483_648,
+        self, selection: SelectionInput = None, *, language: Language = "en"
     ) -> Members:
-        """Return the same selected member maps without decoding any cells.
+        """Return localized member maps for the same selection without decoding cells.
 
-        Members.to_json/read_json preserve native attributes, source SHA-256,
-        schema version and selection identity. Members.validate_table checks
-        the association against an Arrow table.
+        Time-axis dates use ISO 8601. An unavailable requested translation
+        raises ValueError if the axis has localized labels. Unlabelled
+        axes and missing individual labels use None.
         """
+    def _member_fields(
+        self,
+    ) -> tuple[
+        str,
+        list[list[tuple[str, str, list[MemberValue]]]],
+        list[tuple[bool, tuple[str | None, str | None], tuple[int | None, int | None]]],
+    ]: ...
 
 def open(
     source: str | PathLike[str] | bytes | bytearray | memoryview | BinaryIO,
@@ -452,7 +445,7 @@ def open(
     ### Notes
 
     Paths use selective metadata reads. Keep the file available and unchanged:
-    the first to_arrow() reads its full contents, and lazy metadata properties
+    the first to_arrow() or members() call reads its full contents. Lazy metadata properties
     may read additional ranges. In-memory sources are copied when opened, so
     later changes to a bytearray do not affect the reader. This function does
     not fetch URLs or decompress archives. Exceptions raised by a supplied
@@ -467,7 +460,8 @@ def open(
 
     ivt = pyivt.open(Path("table.ivt"))
     title = ivt.metadata.title.en or ivt.metadata.title.fr
-    table, members = ivt.to_arrow()
+    table = ivt.to_arrow()
+    members = ivt.members()
     in_memory = pyivt.open(BytesIO(Path("table.ivt").read_bytes()))
     ```
     """
