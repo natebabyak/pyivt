@@ -477,8 +477,7 @@ impl IvtMetadata {
     }
 
     #[getter]
-    /// Descriptor reader used for this table: "axis_matrix". Unverified
-    /// compatibility scanners are disabled; unsupported descriptors raise errors.
+    /// Name of the descriptor reader, `"axis_matrix"`.
     fn descriptor_path(&self) -> &'static str {
         self.inner.lock().unwrap().desc().source
     }
@@ -518,7 +517,7 @@ impl IvtMetadata {
     ///
     /// Returns MissingValue entries linking numeric codes to symbols and
     /// localized descriptions, or an empty list if none are found. Raises
-    /// ValueError on loading errors. See Ivt.to_arrow for status column behavior.
+    /// ValueError on loading errors. Use Ivt.to_batches() for per-cell statuses.
     fn missing_values(&self) -> PyResult<Vec<MissingValue>> {
         let mut guard = self.inner.lock().unwrap();
         let vals = guard.missing_values().map_err(PyValueError::new_err)?;
@@ -549,7 +548,7 @@ pub struct PyLayout {
     /// Member counts in file dimension order; their product is the Arrow row count.
     #[pyo3(get)]
     pub counts: Vec<i64>,
-    /// Unique Arrow member-ID column names; the selected geography axis is 'geo'.
+    /// Unique dimension slugs for Arrow columns and member selection.
     #[pyo3(get)]
     pub slugs: Vec<String>,
     /// Number of dimensions; equals len(counts) and len(slugs).
@@ -659,8 +658,9 @@ impl Ivt {
         self.py_layout.clone()
     }
 
-    /// Iterate over bounded RecordBatches in Cartesian order. String member
-    /// fields share dictionary<int32, utf8> values; member IDs are int32.
+    /// Iterate over detailed RecordBatches with values, statuses and footnotes.
+    /// Rows follow Cartesian order. String member fields share
+    /// dictionary<int32, utf8> values. Member IDs are int32.
     /// Batches target one million rows and align to outer-axis slabs when possible.
     /// Only the current batch is retained. MemoryError reports unsafe estimates.
     #[pyo3(signature = (*, batch_size=1_000_000, max_memory_bytes=1_073_741_824))]
@@ -1047,8 +1047,8 @@ impl Ivt {
 /// ### Returns
 ///
 /// An `Ivt` reader exposing `metadata`, `layout`, and `to_arrow()`. Summary
-/// metadata and layout are parsed immediately; cell decoding waits until
-/// `to_arrow()`.
+/// metadata and layout are parsed immediately. Cell decoding happens during
+/// export.
 ///
 /// ### Raises
 ///

@@ -6,10 +6,8 @@ they include opening the source, member preparation, native construction and
 Arrow import. These are single runs, not statistically stable speedup claims.
 
 The synthetic input is a deterministic `1000 x 1000 x 80` IVT with eight text
-fields per dimension and zero data pages. It exercises grid expansion and
-metadata overhead, not realistic decompression. The private file reported in
-NAT-164/NAT-171 was unavailable; its hang has **not** been reproduced or resolved
-by measurement. No real 80M-row file or canivt comparison was run.
+fields per dimension and zero data pages. The results cover grid expansion and
+metadata overhead on this synthetic input.
 
 | Export | Rows | Wall time | Peak process-tree RSS | Arrow logical bytes |
 | --- | ---: | ---: | ---: | ---: |
@@ -53,17 +51,10 @@ The completed legacy stage totals before termination were 0.602 seconds for
 row decoding and 0.741 seconds for metadata attachment. These are partial
 measurements; no full legacy runtime or peak-memory result is claimed.
 
-The retained private `_legacy_to_arrow` diagnostic runs the branch's starting
-export algorithm for reproducible comparison. Profiling events are disabled
-unless `PYIVT_PROFILE` is set. Normal `to_arrow()` uses direct final value,
-validity and unsigned-key buffers, with no expanded member/status columns,
-full-size dimension ID intermediates, or full-grid footnote lists.
-
-Raw observations are stored in the adjacent `legacy-*.json` and
-`compact-*.json` files. The baseline is branch-start commit `ea428cc`; the Linear
-suspicion referenced an older implementation at `a064c84`. The branch already
-shared Arrow buffers and used bounded annotation buffers before this change,
-so those older suspected copies were not present in this baseline.
+The profiler's `compact` mode measures `to_arrow()`. Its `legacy` mode
+uses the private `_legacy_to_arrow()` diagnostic to reproduce the baseline
+from commit `ea428cc`. Raw observations are in the adjacent
+`legacy-*.json` and `compact-*.json` files.
 
 ## Profile a private file locally
 
@@ -79,15 +70,3 @@ Raise `--max-memory-bytes` only when an export should exceed the allocation
 estimate limit; separately set `--rss-cap-bytes` and `--timeout` for the worker
 watchdog. Output contains stage times and memory, not source values or member
 labels. File paths are included, so review reports before sharing.
-
-## Linear scope status
-
-- NAT-165/166/167/168/170: implemented code verification for native ordinals,
-  unsigned label dictionaries, selection, typed JSON member maps, consumer
-  conversion, caller migration, documentation and 0.1.0 version bump.
-- NAT-164/171: reproducible synthetic baseline, stage profiling, direct-buffer
-  implementation and 80M-row measurements complete; private-file reproduction
-  and real-file before/after measurements remain unverified. The measured
-  synthetic cost is row construction/metadata, with no unexplained hang to
-  justify opening a new investigation issue.
-- NAT-169 remains deferred as explicitly requested by its description.

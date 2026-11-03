@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-11-02
+### Fixed
+
+- Read legacy member attributes in the 2011 National Household Survey profile. Unsigned integer attributes and ordinal fields stored with the note-reference type now export as integers.
+
+## [0.0.6] - 2026-11-02
 
 ### Breaking changes
 

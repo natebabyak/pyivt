@@ -1,4 +1,9 @@
-# Bounded Arrow export measurements
+# Recorded detailed Arrow export measurements
+
+These results describe the detailed exporter at the commits listed below.
+Use the [usage guide](../usage.md#stream-detailed-batches) for the current
+streaming API and [compact Arrow measurements](compact-arrow.md) for profiling
+`to_arrow()`.
 
 Measured on Windows 11 x64, CPython 3.12.15, PyArrow 26, Rust release builds.
 Baseline: a064c84; canonical dictionary exporter: 2e0d33d. Raw records and
@@ -20,11 +25,9 @@ virtualenv launchers spawn a child), sampled every 10 ms; the parent is excluded
 Times include open/decode/export but exclude interpreter startup and fixture
 construction. Runs are single samples; short peaks can fall between RSS samples.
 
-The final `to_arrow()` materializes 1M rows at 0.091 GB in 0.047 seconds.
-Its default conservative 2 GiB estimate rejects 10M and 100M with `MemoryError`
-before decoding; their streams complete. The supplied limit controls an
-allocation estimate, not an OS reservation or an absolute process RSS cap.
-Release each batch as it is consumed.
+At commit `2e0d33d`, materializing the detailed export for 1M rows used
+0.091 GB in 0.047 seconds. The 2 GiB allocation estimate limit rejected the
+10M- and 100M-row materializations with `MemoryError`. Both streams completed.
 
 All 20 local IVTs have identical normalized complete-output SHA-256 hashes
 against a064c84. Normalization decodes dictionaries, widens member IDs, and
@@ -42,14 +45,13 @@ values changed. Tests normalize the intentional physical Arrow schema changes.
 The requested `/workspace/ivtcorpus/` is absent on this Windows host. The 66-file,
 8 GB acceptance run is **not verified** by these measurements.
 
-Reproduce from a release build with psutil installed:
+Measure streaming on the current checkout from a release build with
+`psutil` installed.
 
 ```shell
 python -m scripts.benchmark_memory --mode stream --cells 1000000
 python -m scripts.benchmark_memory --mode stream --cells 10000000
 python -m scripts.benchmark_memory --mode stream --cells 100000000
-python -m scripts.benchmark_memory --mode table --cells 10000000
-python -m scripts.benchmark_memory --mode table --path data/<sha256>.ivt --hash
 ```
 
 ## Frozen held-out results

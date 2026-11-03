@@ -300,7 +300,7 @@ class IvtMetadata:
         """
     @property
     def descriptor_path(self) -> str:
-        """Descriptor reader used for this table: axis_matrix. Unverified fallback is disabled."""
+        """Name of the descriptor reader, `"axis_matrix"`."""
     @property
     def geographies(self) -> Geographies:
         """Geography member lists, loaded on first access and cached.
@@ -326,7 +326,7 @@ class IvtMetadata:
 
         Returns MissingValue entries linking numeric codes to symbols and
         localized descriptions, or an empty list if none are found. Raises
-        ValueError on loading errors. See Ivt.to_arrow for status column behavior.
+        ValueError on loading errors. Use Ivt.to_batches() for per-cell statuses.
         """
     def _loaded(self, name: str) -> bool:
         """Internal diagnostic: whether a named lazy metadata field is cached."""
@@ -347,7 +347,7 @@ class Layout:
         """Member counts in file dimension order; their product is the Arrow row count."""
     @property
     def slugs(self) -> list[str]:
-        """Unique Arrow member-ID column names; the selected geography axis is 'geo'."""
+        """Unique dimension slugs for Arrow columns and member selection."""
     @property
     def n_dim(self) -> int:
         """Number of dimensions; equals len(counts) and len(slugs)."""
@@ -389,6 +389,7 @@ class Ivt:
     ) -> Iterator[pa.RecordBatch]:
         """Iterate over bounded batches in file dimension order.
 
+        Includes native member fields, values, statuses, and footnotes.
         Member IDs are int32. Text fields use dictionary<int32, utf8>, with
         member dictionaries shared across batches. Batches align to outer-axis
         slabs where possible and never exceed batch_size. The iterator retains
@@ -449,8 +450,8 @@ def open(
     ### Returns
 
     An `Ivt` reader exposing `metadata`, `layout`, and `to_arrow()`. Summary
-    metadata and layout are parsed immediately; cell decoding waits until
-    `to_arrow()`.
+    metadata and layout are parsed immediately. Cell decoding happens during
+    export.
 
     ### Raises
 
