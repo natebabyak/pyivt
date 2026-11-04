@@ -594,7 +594,7 @@ fn export_error(error: String) -> PyErr {
 /// ivt = pyivt.open("table.ivt")
 /// title = ivt.metadata.title.en
 /// table = ivt.to_arrow()
-/// members = ivt.members()
+/// members = ivt.to_member_tables()
 /// ```
 #[pyclass(name = "Ivt", module = "pyivt")]
 pub struct Ivt {
@@ -692,23 +692,26 @@ impl Ivt {
     /// Return a compact pyarrow.Table with native integer codes and nullable
     /// float64 values. Omitted dimensions retain their rows but omit columns.
     /// Rows follow file order, with the last dimension varying fastest.
-    #[pyo3(signature = (selection=None))]
+    /// Set embed_members=True to attach the selected member tables in schema metadata.
+    #[pyo3(signature = (selection=None, *, embed_members=false))]
     fn to_arrow<'py>(
-        &self,
+        slf: Bound<'py, Self>,
         py: Python<'py>,
         selection: Option<Bound<'py, PyAny>>,
+        embed_members: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let prepared = py
-            .import("pyivt._export")?
+        let this: &Self = &slf.borrow();
+        let export = py.import("pyivt._export")?;
+        let prepared = export
             .getattr("prepare")?
-            .call1((self.py_layout.clone(), selection))?;
+            .call1((this.py_layout.clone(), selection))?;
         let (projection, selection_id): (Vec<(bool, Option<Vec<usize>>)>, String) =
             prepared.extract()?;
-        let data = self.compact_data(py, 0)?;
-        let table_id = self.source_digest(py, &data)?;
+        let data = this.compact_data(py, 0)?;
+        let table_id = this.source_digest(py, &data)?;
         let batch = py
             .allow_threads(|| -> Result<RecordBatch, String> {
-                let mut cache = self.compact_cache.lock().unwrap();
+                let mut cache = this.compact_cache.lock().unwrap();
                 if let Some((key, batch)) = cache.as_ref() {
                     if key == &selection_id {
                         return Ok(batch.clone());
@@ -719,10 +722,9 @@ impl Ivt {
                 let metadata = std::collections::HashMap::from([
                     ("pyivt.table_id".into(), table_id),
                     ("pyivt.selection_id".into(), selection_id.clone()),
-                    ("pyivt.members_schema_version".into(), "1".into()),
                     ("pyivt.dimension_encoding".into(), "codes".into()),
                 ]);
-                let batch = crate::compact::export(&data, &self.layout, projection, metadata)?;
+                let batch = crate::compact::export(&data, &this.layout, projection, metadata)?;
                 *cache = Some((selection_id, batch.clone()));
                 Ok(batch)
             })
@@ -736,26 +738,37 @@ impl Ivt {
             )),
         )?;
         let _profile = crate::profile::Stage::new("arrow_table");
-        py.import("pyarrow")?
+        let table = py
+            .import("pyarrow")?
             .getattr("RecordBatchReader")?
             .call_method1("_import_from_c_capsule", (capsule,))?
-            .call_method0("read_all")
+            .call_method0("read_all")?;
+        drop(_profile);
+        if embed_members {
+            return export
+                .getattr("embed_member_tables")?
+                .call1((slf.clone(), table, prepared));
+        }
+        Ok(table)
     }
 
-    /// Return localized member maps for the selection without decoding cells.
-    #[pyo3(signature = (selection=None, *, language="en"))]
-    fn members<'py>(
+    /// Export typed Arrow lookup tables keyed by dimension slug, without decoding cells.
+    #[pyo3(signature = (selection=None))]
+    fn to_member_tables<'py>(
         slf: Bound<'py, Self>,
         py: Python<'py>,
         selection: Option<Bound<'py, PyAny>>,
-        language: &str,
     ) -> PyResult<Bound<'py, PyAny>> {
-        py.import("pyivt._export")?
-            .getattr("prepare_members")?
-            .call1((slf, selection, language))
+        let export = py.import("pyivt._export")?;
+        let prepared = export
+            .getattr("prepare")?
+            .call1((slf.borrow().py_layout.clone(), selection))?;
+        export
+            .getattr("build_member_tables")?
+            .call1((slf, prepared))
     }
 
-    /// Private member-only bridge with normalized ISO dates and display references.
+    /// Private member-only bridge with Date32 day offsets and display references.
     fn _member_fields<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         if let Some(fields) = self.member_fields.lock().unwrap().as_ref() {
             return Ok(fields.bind(py).clone());
@@ -813,13 +826,7 @@ impl Ivt {
                     MemberValues::Utf8(v) => ("text", v.into_pyobject(py)?.into_any()),
                     MemberValues::Int64(v) => ("integer", v.into_pyobject(py)?.into_any()),
                     MemberValues::Float64(v) => ("float", v.into_pyobject(py)?.into_any()),
-                    MemberValues::Date32(v) => {
-                        let dates: Vec<_> = v
-                            .into_iter()
-                            .map(|days| days.map(|day| crate::members::iso_date(day.into())))
-                            .collect();
-                        ("date", dates.into_pyobject(py)?.into_any())
-                    }
+                    MemberValues::Date32(v) => ("date", v.into_pyobject(py)?.into_any()),
                 };
                 converted.append((name, kind, values))?;
             }
@@ -1014,7 +1021,7 @@ impl Ivt {
 /// ivt = pyivt.open(Path("table.ivt"))
 /// title = ivt.metadata.title.en or ivt.metadata.title.fr
 /// table = ivt.to_arrow()
-/// members = ivt.members()
+/// members = ivt.to_member_tables()
 /// in_memory = pyivt.open(BytesIO(Path("table.ivt").read_bytes()))
 /// ```
 #[pyfunction]

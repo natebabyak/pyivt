@@ -84,7 +84,7 @@ def test_public_arrow_table_imports_c_stream_protocol():
 
 def test_public_memory_knob_removed():
     ivt = pyivt.open(_typed_fixture())
-    for method in (ivt.to_arrow, ivt.members):
+    for method in (ivt.to_arrow, ivt.to_member_tables):
         with pytest.raises(TypeError, match="max_memory_bytes"):
             method(max_memory_bytes=1)
     assert ivt.to_arrow().num_rows == 12

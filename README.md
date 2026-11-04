@@ -49,42 +49,44 @@ Use the slugs as Arrow column names and selection keys.
 import pyarrow.parquet as pq
 
 table = ivt.to_arrow()
-members = ivt.members(language="en")
-
 pq.write_table(table, "data.parquet")
-members.to_json("data.members.json")
+for slug, lookup in ivt.to_member_tables().items():
+    pq.write_table(lookup, f"data.{slug}.parquet")
 ```
 
-Keep the member JSON alongside the Parquet file for labels and native attributes. Join on `Member.code`.
+Each lookup has one row per native member code. Join the fact table's
+dimension column to the lookup's `code` column and select the attributes you need.
 
 ### Select a subset
 
 ```python
 selection = pyivt.Selection({ivt.layout.slugs[0]: [1]})
 subset = ivt.to_arrow(selection)
-subset_members = ivt.members(selection)
-subset_members.validate_table(subset)
+subset_members = ivt.to_member_tables(selection)
 ```
 
-Pass the same selection to both methods.
+Pass the same selection to both methods so their code types and subsets match.
 
-### Load member labels
+### Embed member tables in a single file
 
 ```python
-table = pq.read_table("data.parquet")
-members = pyivt.Members.read_json("data.members.json")
-members.validate_table(table)
+from base64 import b64decode
+
+import pyarrow as pa
+import pyarrow.parquet as pq
+
+pq.write_table(ivt.to_arrow(embed_members=True), "data.parquet")
+
+slug = ivt.layout.slugs[0]
+key = f"pyivt.members.v1.{slug}".encode()
+metadata = pq.read_schema("data.parquet").metadata
+with pa.ipc.open_file(b64decode(metadata[key])) as reader:
+    lookup = reader.read_all()
 ```
 
-With pandas installed, use `members.to_pandas(table)` for categorical labels. With Polars installed, `polars.from_arrow(table)` keeps the numeric codes.
-
-### Generate typed selections
-
-```python
-pyivt.generate_member_types("data.members.json", "table_types.py")
-```
-
-Use the generated enums and `selection()` helper to select members by name.
+Embedding leaves the fact columns unchanged. The lookup tables are stored as
+base64-encoded Arrow IPC files in schema metadata. Use separate Parquet
+lookups if your tools rewrite files without preserving custom metadata.
 
 ## API Reference
 
@@ -93,12 +95,13 @@ Use the generated enums and `selection()` helper to select members by name.
 ```python
 ivt = pyivt.open("data.ivt")
 table = ivt.to_arrow()
-members = ivt.members(language="en")
+members = ivt.to_member_tables()
 ```
 
 - `open()` returns an `Ivt`. It accepts a path, IVT bytes, a `bytearray`, an object with `__bytes__`, or a binary file object.
 - `to_arrow()` returns rows in file order with unsigned member codes and a nullable `float64` column named `value`.
-- `members()` reads labels and attributes without decoding cells. `Language` is `"en"` (default) or `"fr"`.
+- `to_member_tables()` returns a dictionary of PyArrow tables keyed by dimension slug, without decoding cells.
+- `to_arrow(embed_members=True)` attaches the corresponding lookup tables as schema metadata.
 - `ivt.__arrow_c_stream__()` returns an Arrow stream capsule. `pyivt.__version__` gives the package version.
 
 ### Selections
@@ -114,27 +117,11 @@ Both exports accept a `Selection` or a mapping from dimension slugs to 1-based c
 - `None` includes all rows and columns. `{}` includes all rows with only `value`.
 - Listed axes filter rows and appear as columns. Omitted axes keep all their members. An empty code list gives zero rows.
 
-### Member maps
+### Member lookup tables
 
-```python
-text = members.to_json()
-restored = pyivt.Members.from_json(text)
-restored.validate_table(table)
-```
-
-Pass a path to `to_json()` to write a file. Load it with `Members.read_json()`. Use `members.to_pandas(table)` for categorical labels.
-
-- `Members` has `table_id`, `selection_id`, `schema_version`, `language`, and `dimensions`.
-- `DimensionMembers` has `name` (slug), `label`, `first_code`, and `members`.
-- `Member` has `code`, `label`, and `metadata`. A `MemberValue` is a string, integer, float, or `None`.
-
-### Type generation
-
-```python
-pyivt.generate_member_types(text, "table_types.py")
-```
-
-Pass JSON text or a JSON file path. The module provides an enum per axis, `TABLE_ID`, `COLUMN_NAMES`, `DimensionSlug`, `SelectionCodes`, and `selection()`.
+- `code` contains 1-based native ordinals in file order. `label_en` and `label_fr` are nullable strings. Time-axis labels use ISO dates.
+- Native attributes use Arrow strings, integers, floats, or `date32` dates. Text codes retain leading zeros. Native fields that collide with lookup column names, such as `Code`, receive a `native_` prefix. Remaining name collisions receive numeric suffixes.
+- Both the fact table and lookup schemas carry `pyivt.table_id` and `pyivt.selection_id` for matching exports.
 
 ### Metadata and layout
 

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking changes
+
+- `Ivt.to_member_tables(selection)` replaces `Ivt.members()`, the custom member objects and their JSON sidecars, and the JSON-based `generate_member_types()` helper. It returns one typed Arrow lookup per included dimension, with both languages and native attributes.
+
+### Added
+
+- `Ivt.to_arrow(embed_members=True)` embeds the lookup tables in Arrow schema metadata. The fact columns stay compact.
+
 ## [0.0.7] - 2026-11-03
 
 ### Changed

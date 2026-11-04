@@ -6,7 +6,7 @@ import pyivt
 ivt = pyivt.open("table.ivt")
 print(ivt.metadata.title.en)
 table = ivt.to_arrow()
-members = ivt.members()
+members = ivt.to_member_tables()
 ```
 """
 
@@ -15,7 +15,6 @@ from typing import Any, BinaryIO
 
 import pyarrow as pa
 
-from pyivt._members import Language, Members, MemberValue
 from pyivt._selection import SelectionInput
 from pyivt._types import DimensionType, Frequency
 
@@ -374,7 +373,7 @@ class Ivt:
     ivt = pyivt.open("table.ivt")
     title = ivt.metadata.title.en
     table = ivt.to_arrow()
-    members = ivt.members()
+    members = ivt.to_member_tables()
     ```
     """
     @property
@@ -388,7 +387,9 @@ class Ivt:
 
         Each capsule owns an independent reader. Schema requests raise ValueError.
         """
-    def to_arrow(self, selection: SelectionInput = None) -> pa.Table:
+    def to_arrow(
+        self, selection: SelectionInput = None, *, embed_members: bool = False
+    ) -> pa.Table:
         """Return the selected grid as a PyArrow table of native codes and values.
 
         Each included axis uses the smallest unsigned type that fits its
@@ -399,21 +400,24 @@ class Ivt:
         still vary but produce no column, and an empty sequence yields zero
         rows. None exports the full grid. Equivalent exports share buffers.
         MemoryError may report the internal allocation safety limit.
-        """
-    def members(
-        self, selection: SelectionInput = None, *, language: Language = "en"
-    ) -> Members:
-        """Return localized member maps for the same selection without decoding cells.
 
-        Time-axis dates use ISO 8601. An unavailable requested translation
-        raises ValueError if the axis has localized labels. Unlabelled
-        axes and missing individual labels use None.
+        With embed_members=True, each selected lookup table is attached as
+        base64-encoded Arrow IPC file bytes under pyivt.members.v1.<slug> in
+        schema metadata. The columns and their types stay the same.
+        """
+    def to_member_tables(self, selection: SelectionInput = None) -> dict[str, pa.Table]:
+        """Return one typed Arrow lookup per included dimension, keyed by slug.
+
+        Join a fact table's dimension column to the lookup's code column.
+        Both use the same unsigned type when given the same selection.
+        Each lookup includes nullable label_en and label_fr plus the native
+        attributes. Native dates are Arrow date32. Cell data is not decoded.
         """
     def _member_fields(
         self,
     ) -> tuple[
         str,
-        list[list[tuple[str, str, list[MemberValue]]]],
+        list[list[tuple[str, str, list[str | int | float | None]]]],
         list[tuple[bool, tuple[str | None, str | None], tuple[int | None, int | None]]],
     ]: ...
 
@@ -445,7 +449,7 @@ def open(
     ### Notes
 
     Paths use selective metadata reads. Keep the file available and unchanged:
-    the first to_arrow() or members() call reads its full contents. Lazy metadata properties
+    the first to_arrow() or to_member_tables() call reads its full contents. Lazy metadata properties
     may read additional ranges. In-memory sources are copied when opened, so
     later changes to a bytearray do not affect the reader. This function does
     not fetch URLs or decompress archives. Exceptions raised by a supplied
@@ -461,7 +465,7 @@ def open(
     ivt = pyivt.open(Path("table.ivt"))
     title = ivt.metadata.title.en or ivt.metadata.title.fr
     table = ivt.to_arrow()
-    members = ivt.members()
+    members = ivt.to_member_tables()
     in_memory = pyivt.open(BytesIO(Path("table.ivt").read_bytes()))
     ```
     """
