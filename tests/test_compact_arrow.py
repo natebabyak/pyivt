@@ -1,19 +1,19 @@
 """Compact exports checked against independent native fixtures and CSV oracles."""
 
 import hashlib
-import json
 import struct
+from base64 import b64decode
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date
 from itertools import product
 from math import prod
 from pathlib import Path
 
 import pyarrow as pa
-import pyarrow.compute as pc
+import pyarrow.parquet as pq
 import pyivt
 import pytest
 from arrow_helpers import expanded_table
-from pyivt._members import validate_codes
 from test_streaming import _populated_cube
 from test_typed_arrow import _expected_table, _typed_fixture
 
@@ -23,60 +23,57 @@ from scripts.ivt_synthetic import cube
 def test_typed_result_members_and_identity(tmp_path):
     source = _typed_fixture()
     ivt = pyivt.open(source)
-    table, members = ivt.to_arrow()
+    table = ivt.to_arrow()
+    members = ivt.to_member_tables()
     assert table.column_names == ["geo", "measure", "time", "value"]
+    assert list(members) == table.column_names[:-1]
     assert table.num_rows == 12
     assert table["value"].equals(_expected_table()["value"])
-    assert members.table_id == hashlib.sha256(source).hexdigest()
-    for dim in members.dimensions:
-        array = table[dim.name].chunk(0)
-        assert array.type == pa.dictionary(pa.uint8(), pa.string())
-        assert array.dictionary.to_pylist() == [m.label for m in dim.members]
-        assert [m.code for m in dim.members] == list(range(1, len(dim.members) + 1))
-        assert dim.first_code == 1
-    assert members.dimensions[0].members[0].metadata["Code"] == "001"
-    assert members.dimensions[0].members[0].metadata["Rate"] == 1.25
-    assert members.dimensions[2].members[1].metadata["Timeseries"] == "2000-02-29"
-    assert ivt.members() == members
-    members.validate_table(table)
-    path = tmp_path / "members.json"
-    assert pyivt.Members.from_json(members.to_json(path)) == members
-    assert pyivt.Members.read_json(path) == members
-    with pytest.raises(TypeError):
-        members.dimensions[0].members[0].metadata["Code"] = "changed"
-    other, _ = pyivt.open(source.replace(b"West", b"Wast")).to_arrow()
-    with pytest.raises(ValueError, match="identifiers"):
-        members.validate_table(other)
-    subset, _ = ivt.to_arrow({"geo": [1]})
-    with pytest.raises(ValueError, match="selections"):
-        members.validate_table(subset)
-    altered = json.loads(members.to_json())
-    altered["dimensions"][0]["members"][0]["label"] = "changed"
-    with pytest.raises(ValueError, match="selection_id"):
-        pyivt.Members.from_json(json.dumps(altered))
-    altered["schema_version"] = 2
-    with pytest.raises(ValueError, match="version"):
-        pyivt.Members.from_json(json.dumps(altered))
+    assert (
+        table.schema.metadata[b"pyivt.table_id"]
+        == hashlib.sha256(source).hexdigest().encode()
+    )
+    for slug, lookup in members.items():
+        codes = table[slug].chunk(0)
+        assert lookup["code"].type == codes.type == pa.uint8()
+        assert lookup["code"].to_pylist() == sorted(codes.unique().to_pylist())
+        for key in (b"pyivt.table_id", b"pyivt.selection_id"):
+            assert lookup.schema.metadata[key] == table.schema.metadata[key]
+    assert members["geo"]["native_Code"][0].as_py() == "001"
+    assert members["geo"]["Rate"][0].as_py() == 1.25
+    assert members["time"]["Timeseries"].type == pa.date32()
+    assert members["time"]["Timeseries"][1].as_py() == date(2000, 2, 29)
+    assert ivt.to_member_tables() == members
+    path = tmp_path / "geo.parquet"
+    pq.write_table(members["geo"], path)
+    lookup = pq.read_table(path)
+    assert lookup.equals(members["geo"], check_metadata=True)
+    joined = table.join(lookup.select(["code", "native_Code"]), "geo", "code")
+    assert sorted(joined["native_Code"].to_pylist()) == ["001"] * 6 + ["09"] * 6
 
 
 def test_selection_matches_native_grid_and_preserves_order():
     ivt = pyivt.open(_typed_fixture())
-    full, all_members = ivt.to_arrow()
+    full = ivt.to_arrow()
+    all_members = ivt.to_member_tables()
     select = {"geo": [2], "measure": [2, 1], "time": [3, 1]}
-    table, members = ivt.to_arrow(select)
+    table = ivt.to_arrow(select)
+    members = ivt.to_member_tables(select)
     assert table["value"].to_pylist() == [3.5, -1000000000000.0, 1099511627776.5, 99.0]
-    assert table["time"].chunk(0).indices.to_pylist() == [0, 1, 0, 1]
-    assert [m.code for m in members.dimensions[2].members] == [1, 3]
-    assert members == ivt.members(select)
-    members.validate_table(table)
+    assert table["time"].to_pylist() == [1, 3, 1, 3]
+    assert members["time"]["code"].to_pylist() == [1, 3]
+    assert members == ivt.to_member_tables(select)
     complete = {
         slug: list(range(1, count + 1))
         for slug, count in zip(ivt.layout.slugs, ivt.layout.counts, strict=True)
     }
-    table, members = ivt.to_arrow(complete)
+    table = ivt.to_arrow(complete)
+    members = ivt.to_member_tables(complete)
     assert table.equals(full, check_metadata=True)
     assert members == all_members
-    projected, members = ivt.to_arrow({"measure": [2]})
+    selection = {"measure": [2]}
+    projected = ivt.to_arrow(selection)
+    members = ivt.to_member_tables(selection)
     assert projected.column_names == ["measure", "value"]
     assert projected.num_rows == 6  # Omitted geo/time axes still vary.
     assert projected["value"].to_pylist() == [
@@ -87,16 +84,20 @@ def test_selection_matches_native_grid_and_preserves_order():
         None,
         99.0,
     ]
-    assert [d.name for d in members.dimensions] == ["measure"]
-    projected, members = ivt.to_arrow({})
+    assert list(members) == ["measure"]
+    selection = {}
+    projected = ivt.to_arrow(selection)
+    members = ivt.to_member_tables(selection)
     assert projected.column_names == ["value"]
     assert projected["value"].equals(full["value"])
-    assert members.dimensions == ()
-    empty, members = ivt.to_arrow({"geo": []})
+    assert members == {}
+    selection = {"geo": []}
+    empty = ivt.to_arrow(selection)
+    members = ivt.to_member_tables(selection)
     assert empty.num_rows == 0
     assert empty.column_names == ["geo", "value"]
-    assert members.dimensions[0].members == ()
-    members.validate_table(empty)
+    assert members["geo"].num_rows == 0
+    assert members["geo"].schema == all_members["geo"].schema
 
 
 @pytest.mark.parametrize(
@@ -116,46 +117,38 @@ def test_selection_matches_native_grid_and_preserves_order():
 )
 def test_selection_errors_identify_dimension(select, reason):
     ivt = pyivt.open(_typed_fixture())
-    for method in [ivt.to_arrow, ivt.members]:
+    for method in [ivt.to_arrow, ivt.to_member_tables]:
         with pytest.raises(ValueError, match=reason):
             method(select)
 
 
-@pytest.mark.parametrize("codes, offset", [([0, 1, 2], 0), ([1, 2, 3], 1)])
-def test_dense_codes(codes, offset):
-    assert validate_codes(codes, "table", "axis") == offset
-
-
-@pytest.mark.parametrize(
-    "codes", [[1, 3], [1, 1], [-1, 0], [2, 1], [2, 3], [0, 1.0], [False, 1]]
-)
-def test_invalid_full_codes_name_table_dimension_and_codes(codes):
-    with pytest.raises(ValueError, match="table T, dimension D:.*codes"):
-        validate_codes(codes, "T", "D")
-
-
 @pytest.mark.parametrize(
     "count, kind",
-    [(256, pa.uint8()), (257, pa.uint16()), (65536, pa.uint16()), (65537, pa.uint32())],
+    [(255, pa.uint8()), (256, pa.uint16()), (65535, pa.uint16()), (65536, pa.uint32())],
 )
-def test_smallest_unsigned_dictionary_type(count, kind):
-    # No member fields: ordinal labels still give a complete dictionary.
-    table, _ = pyivt.open(cube((count, 1), label_fields=0)).to_arrow()
-    assert table["axis_0"].type.index_type == kind
-    assert table["axis_0"].chunk(0).indices[-1].as_py() == count - 1
+def test_smallest_unsigned_code_type(count, kind):
+    ivt = pyivt.open(cube((count, 1), label_fields=0))
+    table = ivt.to_arrow()
+    assert table["axis_0"].type == kind
+    assert table["axis_0"][-1].as_py() == count
+    selected = ivt.to_arrow({"axis_0": [count]})
+    assert selected["axis_0"].type == kind
+    assert selected["axis_0"].to_pylist() == [count]
+    members = ivt.to_member_tables({"axis_0": [count]})
+    assert members["axis_0"]["code"].type == kind
+    assert ivt.to_arrow({"axis_0": [1]})["axis_0"].type == pa.uint8()
 
 
 def test_selected_page_windows_and_projection_match_independent_values():
     ivt = pyivt.open(_populated_cube())
     select = {"axis_0": [3, 1], "axis_1": [1, 512, 513, 2049, 2051], "axis_2": [3, 1]}
-    table, members = ivt.to_arrow(select)
+    table = ivt.to_arrow(select)
     coords = product(
         sorted(select["axis_0"]), sorted(select["axis_1"]), sorted(select["axis_2"])
     )
     assert table["value"].to_pylist() == [
         float(((a - 1) * 2051 + b - 1) * 3 + c - 1) for a, b, c in coords
     ]
-    members.validate_table(table)
 
 
 def test_selection_does_not_decode_unselected_corrupt_pages():
@@ -163,56 +156,80 @@ def test_selection_does_not_decode_unselected_corrupt_pages():
     directory = struct.unpack_from("<I", source, 558)[0]
     struct.pack_into("<I", source, directory + 8, len(source) + 100)
     ivt = pyivt.open(bytes(source))
-    table, members = ivt.to_arrow({"axis_0": [1], "axis_1": [1], "axis_2": [1]})
+    selection = {"axis_0": [1], "axis_1": [1], "axis_2": [1]}
+    table = ivt.to_arrow(selection)
+    members = ivt.to_member_tables(selection)
     assert table["value"].to_pylist() == [0.0]
-    members.validate_table(table)
+    assert all(lookup["code"].to_pylist() == [1] for lookup in members.values())
     with pytest.raises(ValueError, match="entry 1.*outside file"):
         ivt.to_arrow()
 
 
-def test_ipc_round_trip_keeps_member_association(tmp_path):
-    table, members = pyivt.open(_typed_fixture()).to_arrow({"geo": [2], "time": [1, 3]})
-    path = tmp_path / "selected.arrow"
+def test_embedded_member_tables_round_trip_without_extra_columns(tmp_path):
+    ivt = pyivt.open(_typed_fixture())
+    selection = pyivt.Selection({"geo": [2], "time": [1, 3]})
+    compact = ivt.to_arrow(selection)
+    table = ivt.to_arrow(selection, embed_members=True)
+    members = ivt.to_member_tables(selection)
+    assert table.equals(compact)
+    assert (
+        table["value"].chunk(0).buffers()[1].address
+        == compact["value"].chunk(0).buffers()[1].address
+    )
+    keys = {f"pyivt.members.v1.{slug}".encode() for slug in members}
+    assert table.schema.metadata.keys() - compact.schema.metadata.keys() == keys
+    assert ivt.to_arrow(selection).equals(compact, check_metadata=True)
+
+    parquet = tmp_path / "selected.parquet"
+    pq.write_table(table, parquet)
+    assert pq.read_metadata(parquet).num_columns == len(compact.column_names)
+    parquet_table = pq.read_table(parquet)
+
+    arrow = tmp_path / "selected.arrow"
     with (
-        pa.OSFile(str(path), "wb") as sink,
+        pa.OSFile(str(arrow), "wb") as sink,
         pa.ipc.new_file(sink, table.schema) as writer,
     ):
         writer.write_table(table)
-    with pa.ipc.open_file(path) as reader:
-        restored = reader.read_all()
-    assert restored.equals(table, check_metadata=True)
-    pyivt.Members.from_json(members.to_json()).validate_table(restored)
+    with pa.ipc.open_file(arrow) as reader:
+        ipc_table = reader.read_all()
+
+    for restored in (parquet_table, ipc_table):
+        assert restored.equals(table, check_metadata=True)
+        for slug, lookup in members.items():
+            encoded = restored.schema.metadata[f"pyivt.members.v1.{slug}".encode()]
+            with pa.ipc.open_file(b64decode(encoded)) as reader:
+                assert reader.read_all().equals(lookup, check_metadata=True)
 
 
 def test_selection_precedes_row_allocation_and_members_do_not_decode():
-    data = cube((1000, 1000, 80))
+    data = cube((1000, 1000, 250), label_fields=0)
     ivt = pyivt.open(data)
     with pytest.raises(MemoryError):
-        ivt.to_arrow(max_memory_bytes=100_000_000)
+        ivt.to_arrow()
     select = {"axis_0": [1], "axis_1": [1], "axis_2": [1]}
-    table, members = ivt.to_arrow(select, max_memory_bytes=20_000_000)
+    table = ivt.to_arrow(select)
+    members = ivt.to_member_tables(select)
     assert table.num_rows == 1
-    assert members == ivt.members(select)
+    assert members == ivt.to_member_tables(select)
     broken = bytearray(_typed_fixture())
     broken[558:562] = (len(broken) + 100).to_bytes(4, "little")
     ivt = pyivt.open(bytes(broken))
-    assert len(ivt.members().dimensions) == 3
+    assert len(ivt.to_member_tables()) == 3
     with pytest.raises(ValueError, match="directory"):
         ivt.to_arrow()
 
 
-def test_cached_buffers_threading_lifetime_and_budget():
+def test_cached_buffers_threading_and_lifetime():
     ivt = pyivt.open(_typed_fixture())
-    first, _ = ivt.to_arrow()
+    first = ivt.to_arrow()
     with ThreadPoolExecutor(max_workers=4) as pool:
-        tables = list(pool.map(lambda _: ivt.to_arrow()[0], range(8)))
+        tables = list(pool.map(lambda _: ivt.to_arrow(), range(8)))
     assert all(t.equals(first) for t in tables)
     assert (
         first["value"].chunk(0).buffers()[1].address
         == tables[0]["value"].chunk(0).buffers()[1].address
     )
-    with pytest.raises(MemoryError):
-        ivt.to_arrow(max_memory_bytes=1)
     ivt = None
     assert first["value"].equals(_expected_table()["value"])
 
@@ -223,50 +240,106 @@ def test_cached_buffers_threading_lifetime_and_budget():
 )
 def test_corpus_values_labels_and_metadata_match_detailed_reader(path):
     ivt = pyivt.open(path)
-    table, members = ivt.to_arrow()
+    table = ivt.to_arrow()
+    members = ivt.to_member_tables()
     detailed = expanded_table(ivt)
     assert table.num_rows == prod(ivt.layout.counts)
     assert table["value"].equals(detailed["value"])
-    for axis, dimension in enumerate(members.dimensions):
-        array = table[dimension.name].chunk(0)
+    for axis, (slug, lookup) in enumerate(members.items()):
+        array = table[slug].chunk(0)
         stride = prod(ivt.layout.counts[axis + 1 :])
-        assert array.indices.to_pylist() == [
-            r // stride % len(dimension.members) for r in range(table.num_rows)
+        assert array.to_pylist() == [
+            r // stride % lookup.num_rows + 1 for r in range(table.num_rows)
         ]
         labels = ivt.metadata.dimensions[axis].members.en
         if labels is not None:
-            assert [m.label for m in dimension.members] == labels
-    members.validate_table(table)
+            assert [label or "" for label in lookup["label_en"].to_pylist()] == labels
 
 
-def test_polars_categoricals_and_duplicate_missing_labels():
+def test_polars_retains_unsigned_codes():
     pl = pytest.importorskip("polars")
-    for source in [
-        _typed_fixture(),
-        cube((2, 3), 1).replace(b"member 0001", b"member 0000"),
-    ]:
-        table, _ = pyivt.open(source).to_arrow()
-        frame = pl.from_arrow(table)
-        for name in table.column_names[:-1]:
-            assert frame.schema[name] == pl.Categorical
+    table = pyivt.open(_typed_fixture()).to_arrow()
+    frame = pl.from_arrow(table)
+    for name in table.column_names[:-1]:
+        assert frame.schema[name] == pl.UInt8
+        assert frame[name].to_list() == table[name].to_pylist()
+
+
+def test_selection_round_trips_and_shares_equivalent_buffers():
+    ivt = pyivt.open(_typed_fixture())
+    mapping = {"time": [3, 1], "geo": [2]}
+    selection = pyivt.Selection(mapping)
+    mapping["time"].append(2)
+    equivalent = pyivt.Selection.from_json(selection.to_json())
+    assert (
+        equivalent
+        == selection
+        == pyivt.Selection.from_dict({"geo": [2], "time": [1, 3]})
+    )
+    assert hash(equivalent) == hash(selection)
+    assert equivalent.selection_id == selection.selection_id
+    selection.validate(ivt)
+    with pytest.raises(ValueError, match="geo"):
+        pyivt.Selection({"geo": [3]}).validate(ivt)
+
+    table = ivt.to_arrow(selection)
+    rebuilt = ivt.to_arrow(equivalent.to_dict())
+    assert (
+        table["geo"].chunk(0).buffers()[1].address
+        == rebuilt["geo"].chunk(0).buffers()[1].address
+    )
+    members = ivt.to_member_tables(equivalent)
+    for lookup in members.values():
+        assert (
+            lookup.schema.metadata[b"pyivt.selection_id"]
+            == selection.selection_id.encode()
+        )
+
+
+def test_bilingual_geography_and_gender_are_joined_to_same_codes():
+    ivt = pyivt.open(Path("tests/fixtures/heldout/98100036.ivt"))
+    selected = {
+        slug: [1, 2]
+        for slug in ivt.layout.slugs
+        if slug == "geo" or slug.startswith("gender")
+    }
+    table = ivt.to_arrow(selected)
+    for slug, lookup in ivt.to_member_tables(selected).items():
+        assert lookup["code"].to_pylist() == sorted(table[slug].unique().to_pylist())
+        metadata = ivt.metadata.dimensions[ivt.layout.slugs.index(slug)]
+        for language in ("en", "fr"):
             assert (
-                frame[name].cast(pl.String).to_list()
-                == pc.dictionary_decode(table[name]).to_pylist()
+                lookup[f"label_{language}"].to_pylist()
+                == metadata.members[language][:2]
             )
 
 
-def test_pandas_categoricals():
-    pd = pytest.importorskip("pandas")
-    for source in [
-        cube((2, 3), 1),
-        _typed_fixture(),
-        cube((2, 3), 1).replace(b"member 0001", b"member 0000"),
-    ]:
-        table, members = pyivt.open(source).to_arrow()
-        frame = members.to_pandas(table)
-        for name in table.column_names[:-1]:
-            assert isinstance(frame[name].dtype, pd.CategoricalDtype)
-            assert (
-                frame[name].astype(object).where(frame[name].notna(), None).tolist()
-                == table[name].to_pylist()
-            )
+def test_missing_translation_is_nullable():
+    ivt = pyivt.open(_typed_fixture())
+    measure = ivt.to_member_tables()["measure"]
+    assert measure["label_fr"].type == pa.string()
+    assert measure["label_fr"].null_count == measure.num_rows
+
+
+@pytest.mark.parametrize(
+    "rate, frequency",
+    [
+        (1, "annual"),
+        (2, "semi_annual"),
+        (4, "quarterly"),
+        (12, "monthly"),
+    ],
+)
+def test_time_series_member_labels_follow_dates_in_both_languages(rate, frequency):
+    ivt = pyivt.open(_typed_fixture(rate=rate))
+    assert ivt.metadata.frequency == frequency
+    table = ivt.to_arrow({"time": [1, 2, 3]})
+    assert table["time"].to_pylist() == [1, 2, 3] * 4
+    time = ivt.to_member_tables({"time": [1, 2, 3]})["time"]
+    assert time["Timeseries"].to_pylist() == [date(1970, 1, 1), date(2000, 2, 29), None]
+    for language in ("en", "fr"):
+        assert time[f"label_{language}"].to_pylist() == [
+            "1970-01-01",
+            "2000-02-29",
+            None,
+        ]

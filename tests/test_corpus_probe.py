@@ -27,7 +27,6 @@ def test_probe_converts_both_paths_and_checks_official_counts(tmp_path):
     results = probe(
         {"files": [{"sha256": sha, "official_dimension_counts": [2, 3, 4]}]},
         tmp_path,
-        memory=1024**3,
         cap=2 * 1024**3,
     )
     assert [row["mode"] for row in results] == ["stream", "table"]
@@ -35,7 +34,6 @@ def test_probe_converts_both_paths_and_checks_official_counts(tmp_path):
     wrong = probe(
         {"files": [{"sha256": sha, "official_dimension_counts": [2, 4, 3]}]},
         tmp_path,
-        memory=1024**3,
         cap=2 * 1024**3,
     )
     assert all(row["status"] == "dimension_mismatch" for row in wrong)
@@ -45,4 +43,4 @@ def test_probe_fails_before_launch_when_hash_is_wrong(tmp_path):
     sha = "a" * 64
     (tmp_path / f"{sha}.ivt").write_bytes(b"wrong file")
     with pytest.raises(ValueError, match="pinned hash differs"):
-        probe({"files": [{"sha256": sha}]}, tmp_path, memory=1024**3, cap=2 * 1024**3)
+        probe({"files": [{"sha256": sha}]}, tmp_path, cap=2 * 1024**3)

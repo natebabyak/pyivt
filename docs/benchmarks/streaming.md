@@ -1,7 +1,7 @@
 # Recorded detailed Arrow export measurements
 
 These results describe the detailed exporter at the commits listed below.
-Use the [usage guide](../usage.md#stream-detailed-batches) for the current
+Use the [API reference](../../README.md#opening-and-exporting) for the current
 streaming API and [compact Arrow measurements](compact-arrow.md) for profiling
 `to_arrow()`.
 

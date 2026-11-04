@@ -51,7 +51,7 @@ The completed legacy stage totals before termination were 0.602 seconds for
 row decoding and 0.741 seconds for metadata attachment. These are partial
 measurements; no full legacy runtime or peak-memory result is claimed.
 
-The profiler's `compact` mode measures `to_arrow()`. Its `legacy` mode
+The profiler's `compact` mode measures `to_arrow()`. Starting with v0.0.7, this measures numeric code columns and excludes the separate `members()` call. The measurements above use v0.0.6. Its `legacy` mode
 uses the private `_legacy_to_arrow()` diagnostic to reproduce the baseline
 from commit `ea428cc`. Raw observations are in the adjacent
 `legacy-*.json` and `compact-*.json` files.
@@ -66,7 +66,7 @@ python -m scripts.profile_arrow --path 'C:\private\table.ivt' --mode legacy --ou
 
 For explicit codes, put a mapping such as `{"geo": [1, 3]}` in `selection.json`
 and pass `--select selection.json`. Use the actual slugs from `ivt.layout.slugs`.
-Raise `--max-memory-bytes` only when an export should exceed the allocation
+For legacy mode, raise `--max-memory-bytes` only when an export should exceed the allocation
 estimate limit; separately set `--rss-cap-bytes` and `--timeout` for the worker
 watchdog. Output contains stage times and memory, not source values or member
 labels. File paths are included, so review reports before sharing.

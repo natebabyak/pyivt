@@ -11,16 +11,16 @@ ivt = pyivt.open("table.ivt")
 title = ivt.metadata.title.en or ivt.metadata.title.fr
 for note in ivt.metadata.footnotes:
     print(note.symbol, note.description.en)
-table, members = ivt.to_arrow()
+table = ivt.to_arrow()
+members = ivt.to_member_tables()
 ```
 
 Metadata objects expose read-only attributes. Missing optional values and
 translations are represented by `None`. Use `to_arrow()` for a compact
-table and member maps, or the Arrow C stream for detailed rows with statuses
-and footnotes.
+table, `to_member_tables()` for typed dimension lookups, or the Arrow C stream
+for rows with statuses and footnotes.
 """
 
-from pyivt._members import DimensionMembers, Member, Members, MemberValue
 from pyivt._native import (
     Dimension,
     Footnote,
@@ -33,11 +33,11 @@ from pyivt._native import (
     MissingValue,
     open,
 )
+from pyivt._selection import Selection
 from pyivt._types import DimensionType, Frequency
 
 __all__ = [
     "Dimension",
-    "DimensionMembers",
     "DimensionType",
     "Footnote",
     "Frequency",
@@ -47,11 +47,9 @@ __all__ = [
     "Layout",
     "LocalizedLabels",
     "LocalizedText",
-    "Member",
-    "MemberValue",
-    "Members",
     "MissingValue",
+    "Selection",
     "open",
 ]
 
-__version__ = "0.0.6"
+__version__ = "0.0.7"

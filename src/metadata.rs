@@ -519,6 +519,7 @@ fn dimension_summary_rows(data: &[u8], slot_index: usize) -> Option<Vec<u8>> {
         || decoded.len() < 6
         || u16(&decoded, 4) != 86
         || !(1..=32).contains(&u16(&decoded, 2))
+        || decoded.len() < 6 + 86 * u16(&decoded, 2) as usize
     {
         return None;
     }
@@ -550,6 +551,30 @@ fn dim_title(
         (None, None)
     };
     (name_en, name_fr, description_en, description_fr)
+}
+
+/// The native summary rows supply the localized dimension titles and display
+/// field references. Field indices refer to the original member definitions.
+pub(crate) fn member_display(
+    data: &[u8],
+    axis: usize,
+    positions: &[usize],
+) -> ([Option<String>; 2], [Option<usize>; 2]) {
+    let (en, fr, _, _) = dim_title(data, axis);
+    let references = dimension_summary_rows(data, axis).map_or([None, None], |rows| {
+        std::array::from_fn(|lang| {
+            let start = 6 + 86 * lang;
+            let row = rows.get(start..start + 86)?;
+            positions.get(u16(row, 18) as usize).copied()
+        })
+    });
+    (
+        [
+            en.filter(|name| !name.is_empty()),
+            fr.filter(|name| !name.is_empty()),
+        ],
+        references,
+    )
 }
 
 fn dim_dir_labels(

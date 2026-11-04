@@ -42,6 +42,10 @@ jobs:
       - name: Type check public API
         run: uv run ty check python tests/typing
 
+      - name: Install codegen type checkers
+        if: matrix.pyarrow == 'latest'
+        run: uv pip install mypy==2.4.1 pyright==1.1.414
+
       - name: Download fixtures
         run: uv run python scripts/download_test_inputs.py --manifest tests/corpus/training.json
 

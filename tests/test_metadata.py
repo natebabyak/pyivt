@@ -195,8 +195,9 @@ def test_open_bytes_defers_decode(demo_ivt):
 def test_to_arrow_row_count(demo_ivt):
     ivt = open_ivt(demo_ivt.path)
     expected = _load_expect(demo_ivt)
-    table, members = ivt.to_arrow()
-    members.validate_table(table)
+    table = ivt.to_arrow()
+    members = ivt.to_member_tables()
+    assert list(members) == table.column_names[:-1]
     assert table.num_rows == expected["number_of_datapoints"]
     assert table.num_rows == prod(ivt.layout.counts)
     assert "value" in table.column_names
@@ -266,7 +267,7 @@ def test_metadata_localized_access(demo_ivt):
         )
         assert dimension.name.en is not None
         assert dimension.type in ("geographic", "normal", "time_series")
-        assert dimension.items == dimension.count
+        assert not hasattr(dimension, "count")
         with pytest.raises(AttributeError):
             dimension.items = 0
         assert not hasattr(dimension, "type_label")
@@ -335,7 +336,7 @@ def test_paged_metadata_directory_matches_flat(slot, tmp_path):
     for source in (changed_path, bytes(data)):
         ivt = open_ivt(source)
         assert snapshot_comparable(ivt.metadata, changed_path) == expected
-        assert ivt.to_arrow()[0].equals(open_ivt(original).to_arrow()[0])
+        assert ivt.to_arrow().equals(open_ivt(original).to_arrow())
 
 
 @pytest.fixture

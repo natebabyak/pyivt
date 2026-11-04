@@ -376,6 +376,17 @@ pub fn read_typed_members(
     dimension: usize,
     count: usize,
 ) -> Result<Vec<(String, MemberValues)>, String> {
+    read_typed_members_with_positions(data, dimension, count).map(|(fields, _)| fields)
+}
+
+type TypedFields = Vec<(String, MemberValues)>;
+
+/// Track the original field positions alongside the additional date attributes.
+pub(crate) fn read_typed_members_with_positions(
+    data: &[u8],
+    dimension: usize,
+    count: usize,
+) -> Result<(TypedFields, Vec<usize>), String> {
     let dir = Directory::new(data, dimension)?;
     let definitions = dir.record(0)?.ok_or("missing member field definitions")?;
     if definitions[0] & 15 != 1 || definitions[1] != 2 || u16(&definitions, 4) != 34 {
@@ -390,6 +401,7 @@ pub fn read_typed_members(
         return Err("member map estimate exceeds the 256 MiB memory safety limit".into());
     }
     let mut fields = Vec::new();
+    let mut positions = Vec::with_capacity(field_count);
     let mut expanded_bytes = 0usize;
     for field in definitions[6..].as_chunks::<34>().0 {
         let name_len = field[0] as usize;
@@ -474,9 +486,10 @@ pub fn read_typed_members(
             fields.push((format!("{name}_serial"), MemberValues::Int64(time_serials)));
             fields.push((format!("{name}_aux"), MemberValues::Int64(time_aux)));
         }
+        positions.push(fields.len());
         fields.push((name, values));
     }
-    Ok(fields)
+    Ok((fields, positions))
 }
 
 #[cfg(test)]

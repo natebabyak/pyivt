@@ -39,7 +39,9 @@ def _codes(*values: str) -> bytes:
     )
 
 
-def _typed_fixture() -> bytes:
+def _typed_fixture(
+    *, rate: int = 0, geography_labels: tuple[str, str] = ("  East – Coast", "West")
+) -> bytes:
     """Three axes (2 x 2 x 3), all fields, one extended double data component."""
     data = bytearray(1024)
     data[:24] = bytes.fromhex(
@@ -97,6 +99,7 @@ def _typed_fixture() -> bytes:
         axis_matrix.extend(row)
     settings = bytearray(32)
     struct.pack_into("<H", settings, 2, 3)  # Native missing-value policy.
+    struct.pack_into("<H", settings, 6, rate)
     directory(544, [b"", bytes(axis_matrix), _vector(1, bytes(settings))])
 
     # A text-reference field can point at a note or retain a null member ordinal.

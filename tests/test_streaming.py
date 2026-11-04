@@ -24,12 +24,12 @@ def test_stream_matches_independently_declared_typed_result():
     assert table.schema.field("geo_code").type == pa.dictionary(pa.int32(), pa.string())
     assert table["measure_english_desc"].null_count == 6
     assert table["symbol"].null_count == 9
-    assert ivt.to_arrow()[0]["value"].equals(_expected_table()["value"])
+    assert ivt.to_arrow()["value"].equals(_expected_table()["value"])
 
 
 def test_cached_exports_share_buffers():
     ivt = pyivt.open(_typed_fixture())
-    first, second = ivt.to_arrow()[0], ivt.to_arrow()[0]
+    first, second = ivt.to_arrow(), ivt.to_arrow()
     assert (
         first["value"].chunk(0).buffers()[1].address
         == second["value"].chunk(0).buffers()[1].address
@@ -52,7 +52,7 @@ def test_dictionary_categories_dedupe_members_and_exclude_null_values():
 def test_shared_ivt_can_export_from_multiple_threads():
     ivt = pyivt.open(_typed_fixture())
     with ThreadPoolExecutor(max_workers=4) as pool:
-        tables = list(pool.map(lambda _: ivt.to_arrow()[0], range(8)))
+        tables = list(pool.map(lambda _: ivt.to_arrow(), range(8)))
     assert all(table["value"].equals(_expected_table()["value"]) for table in tables)
 
 
@@ -82,17 +82,16 @@ def test_public_arrow_table_imports_c_stream_protocol():
     assert plain_table(pa.table(pyivt.open(_typed_fixture()))).equals(_expected_table())
 
 
-def test_preflight_is_catchable_and_reader_recovers():
+def test_public_memory_knob_removed():
     ivt = pyivt.open(_typed_fixture())
-    with pytest.raises(MemoryError, match="max_memory_bytes=1"):
-        ivt.to_arrow(max_memory_bytes=1)
-    assert ivt.to_arrow()[0].num_rows == 12
+    for method in (ivt.to_arrow, ivt.to_member_tables):
+        with pytest.raises(TypeError, match="max_memory_bytes"):
+            method(max_memory_bytes=1)
+    assert ivt.to_arrow().num_rows == 12
 
 
-def test_materialization_budget_does_not_prevent_streaming():
+def test_streaming_large_table_keeps_dictionary_buffers_shared():
     ivt = pyivt.open(cube((2, 1000, 1000), label_fields=1))
-    with pytest.raises(MemoryError, match="2000000 rows"):
-        ivt.to_arrow(max_memory_bytes=1_000_000)
     with stream_reader(ivt) as reader:
         left, right = reader
     assert left.num_rows == right.num_rows == 1_000_000
@@ -199,4 +198,4 @@ def test_local_files_stream_to_same_logical_table(path):
     ivt = pyivt.open(path)
     streamed = expanded_table(ivt)
     assert streamed.num_rows == prod(ivt.layout.counts)
-    assert streamed["value"].equals(ivt.to_arrow()[0]["value"])
+    assert streamed["value"].equals(ivt.to_arrow()["value"])
