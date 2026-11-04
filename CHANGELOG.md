@@ -7,36 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Breaking changes
-
-- `Ivt.to_member_tables(selection)` replaces `Ivt.members()`, the custom member objects and their JSON sidecars, and the JSON-based `generate_member_types()` helper. It returns one typed Arrow lookup per included dimension, with both languages and native attributes.
-
-### Added
-
-- `Ivt.to_arrow(embed_members=True)` embeds the lookup tables in Arrow schema metadata. The fact columns stay compact.
-
 ## [0.0.7] - 2026-11-03
 
-### Changed
+### Breaking changes
 
-- `Ivt.to_arrow(selection)` returns a PyArrow table with native member codes in minimal-width unsigned columns. Read localized labels and attributes separately with `Ivt.members(selection, language="en")`.
+- `Ivt.to_arrow(selection)` returns a PyArrow table with native member codes in minimal-width unsigned columns, replacing the `(table, members)` tuple.
+- `Ivt.to_member_tables(selection)` replaces `Ivt.members()` and the custom member objects and JSON sidecars. It returns one typed Arrow lookup per included dimension, with English and French labels and native attributes.
 - Removed `Dimension.count`. Use `Dimension.items` for the declared member count.
 - Removed the public `max_memory_bytes` argument. Compact exports and member preparation use an internal 2 GiB allocation estimate.
 
 ### Added
 
 - Immutable, hashable `Selection` with validation, JSON round trips, and shared Arrow buffers for equivalent selections. Plain mappings remain accepted.
-- `pyivt.generate_member_types(source, output_path)` writes a Python module with per-dimension enums, column names, and a typed selection helper from Members JSON text or a file.
+- `Ivt.to_arrow(embed_members=True)` embeds the lookup tables as base64-encoded Arrow IPC files in Arrow schema metadata. The fact columns stay compact.
 
 ### Fixed
 
-- `members()` uses the requested English or French display field and reports unavailable translations.
-- Time-series members use ISO 8601 dates as display labels.
+- Time-series member labels use ISO 8601 dates.
 
 ### Migration
 
-- Replace `table, members = ivt.to_arrow(sel)` with `table = ivt.to_arrow(sel)` and `members = ivt.members(sel)`.
-- Join labels using `Member.code` or call `members.to_pandas(table)` for categorical labels.
+- Replace `table, members = ivt.to_arrow(sel)` with `table = ivt.to_arrow(sel)` and `members = ivt.to_member_tables(sel)`.
+- Join each fact dimension column to its lookup's `code` column; use `label_en`, `label_fr`, and native attribute columns for labels and metadata.
+- Save lookups as separate Arrow or Parquet tables, or use `embed_members=True` to keep them with the fact table.
+- Replace the removed JSON-based `generate_member_types()` helper and member classes with the Arrow lookup tables.
 
 ## [0.0.6] - 2026-11-02
 
@@ -187,7 +181,8 @@ First public release: Rust/PyO3 reader for Statistics Canada Beyond 20/20 `.ivt`
 - Demo IVT tests skip in CI unless Beyond sample files are linked locally
 - No CLI or catalogue download; write Parquet yourself via `pyarrow` / Polars / pandas
 
-[Unreleased]: https://github.com/natebabyak/pyivt/compare/v0.0.6...HEAD
+[Unreleased]: https://github.com/natebabyak/pyivt/compare/v0.0.7...HEAD
+[0.0.7]: https://github.com/natebabyak/pyivt/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/natebabyak/pyivt/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/natebabyak/pyivt/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/natebabyak/pyivt/compare/v0.0.3...v0.0.4
