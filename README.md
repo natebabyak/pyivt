@@ -57,7 +57,7 @@ Keys are dimension slugs and values are 1-based member codes. An omitted dimensi
 
 ## Generate typed member codes
 
-`pyivt.codegen("data.ivt")` returns Python source containing an `IntEnum` for each dimension and a typed selection helper. You can also pass saved members JSON. See the [codegen example](docs/usage.md#generate-types-for-one-table).
+`pyivt.generate_member_types("members.json", "table_types.py")` writes a Python module containing an `IntEnum` for each dimension and a typed selection helper. See the [member type generation example](docs/usage.md#generate-types-for-one-table).
 
 ## Documentation
 

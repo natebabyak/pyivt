@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Immutable, hashable `Selection` with validation, JSON round trips, and shared Arrow buffers for equivalent selections. Plain mappings remain accepted.
-- `pyivt.codegen(source)` returns a Python module with per-dimension enums, column names, and a typed selection helper. It accepts IVT sources and saved member maps.
+- `pyivt.generate_member_types(source, output_path)` writes a Python module with per-dimension enums, column names, and a typed selection helper from Members JSON text or a file.
 
 ### Fixed
 

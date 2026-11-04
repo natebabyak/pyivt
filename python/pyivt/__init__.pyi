@@ -21,7 +21,7 @@ table, members() for localized labels, or the Arrow C stream for rows with statu
 and footnotes.
 """
 
-from pyivt._codegen import codegen as codegen
+from pyivt._member_types import generate_member_types as generate_member_types
 from pyivt._members import DimensionMembers as DimensionMembers
 from pyivt._members import Language as Language
 from pyivt._members import Member as Member
@@ -60,7 +60,7 @@ __all__ = [
     "Members",
     "MissingValue",
     "Selection",
-    "codegen",
+    "generate_member_types",
     "open",
 ]
 

@@ -121,9 +121,8 @@ polars_frame = pl.from_arrow(table)
 ### Generate types for one table
 
 ```python
-from pathlib import Path
-
-Path("table_types.py").write_text(pyivt.codegen(ivt), encoding="utf-8")
+ivt.members(language="en").to_json("members.json")
+pyivt.generate_member_types("members.json", "table_types.py")
 ```
 
 The generated module contains an `IntEnum` per axis, a `DimensionSlug` literal, `COLUMN_NAMES`, the source SHA-256 as `TABLE_ID`, and a typed `selection()` helper. `Ivt.to_arrow()` returns a standard `pyarrow.Table`. For a table with a `geo` axis and a member labelled Canada, the generated module can be used like this.
@@ -134,4 +133,4 @@ from table_types import Geo, selection
 table = ivt.to_arrow(selection({"geo": [Geo.CANADA]}))
 ```
 
-`codegen()` accepts an opened reader, any supported IVT source, a `Members` object, or members JSON as text or a `.json` path. It returns module text for the caller to save. The requested `language` determines the enum names when reading IVT. JSON uses its saved labels. Names are normalized to ASCII identifiers, with numeric suffixes for collisions and code-based names when a label is missing.
+`generate_member_types()` accepts Members JSON text or a path to a Members JSON file. It writes the generated module to the supplied output path. Enum names use the labels in the JSON. Names are normalized to ASCII identifiers, with numeric suffixes for collisions and code-based names when a label is missing.

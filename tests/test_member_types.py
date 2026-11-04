@@ -5,7 +5,6 @@ import json
 import os
 import subprocess
 import sys
-from io import BytesIO
 from pathlib import Path
 from types import ModuleType
 
@@ -14,23 +13,25 @@ import pytest
 from test_typed_arrow import _typed_fixture
 
 
-def load_generated(text):
+def load_generated(path):
     module = ModuleType("generated")
-    exec(compile(text, "generated.py", "exec"), module.__dict__)  # noqa: S102
+    exec(compile(path.read_text(encoding="utf-8"), str(path), "exec"), module.__dict__)  # noqa: S102
     return module
 
 
-def test_codegen_ivt_members_and_json_are_equivalent(tmp_path):
+def test_generate_member_types_from_json_text_and_path(tmp_path):
     source = _typed_fixture()
     ivt = pyivt.open(source)
     member_path = tmp_path / "members.json"
     members = ivt.members()
     members.to_json(member_path)
-    before = set(tmp_path.iterdir())
-    generated = pyivt.codegen(BytesIO(source))
-    assert generated == pyivt.codegen(ivt) == pyivt.codegen(members)
-    assert generated == pyivt.codegen(member_path) == pyivt.codegen(members.to_json())
-    assert set(tmp_path.iterdir()) == before
+    generated = tmp_path / "generated.py"
+    from_text = tmp_path / "from_text.py"
+    pyivt.generate_member_types(member_path, generated)
+    pyivt.generate_member_types(members.to_json(), from_text)
+    assert generated.read_bytes() == from_text.read_bytes()
+    pyivt.generate_member_types(str(member_path), str(from_text))
+    assert generated.read_bytes() == from_text.read_bytes()
 
     module = load_generated(generated)
     assert module.TABLE_ID == members.table_id
@@ -44,7 +45,7 @@ def test_codegen_ivt_members_and_json_are_equivalent(tmp_path):
         module.selection({"unknown": [module.Geo.WEST]})
 
 
-def test_codegen_handles_collisions_keywords_and_empty_axes():
+def test_generate_member_types_handles_collisions_keywords_and_empty_axes(tmp_path):
     members = pyivt.Members(
         "0" * 64,
         (
@@ -64,7 +65,9 @@ def test_codegen_handles_collisions_keywords_and_empty_axes():
         ),
         language="fr",
     )
-    module = load_generated(pyivt.codegen(members))
+    generated = tmp_path / "generated.py"
+    pyivt.generate_member_types(members.to_json(), generated)
+    module = load_generated(generated)
     assert list(module.None_2.__members__) == [
         "A",
         "A_2",
@@ -77,24 +80,37 @@ def test_codegen_handles_collisions_keywords_and_empty_axes():
     assert module.FooBar is not module.FooBar_2
     assert module.selection({"foo-bar": []}).to_dict() == {"foo-bar": []}
     empty = pyivt.Members("0" * 64, ())
-    assert load_generated(pyivt.codegen(empty)).selection({}) == pyivt.Selection({})
+    pyivt.generate_member_types(empty.to_json(), generated)
+    assert load_generated(generated).selection({}) == pyivt.Selection({})
 
 
-def test_codegen_uses_requested_language():
-    source = Path("tests/fixtures/heldout/98100036.ivt")
-    french = pyivt.codegen(source, language="fr")
-    assert french != pyivt.codegen(source)
-    assert [item.value for item in load_generated(french).Geo] == [
-        member.code
-        for member in pyivt.open(source).members(language="fr").dimensions[0].members
+def test_generate_member_types_uses_saved_labels(tmp_path):
+    ivt = pyivt.open(Path("tests/fixtures/heldout/98100036.ivt"))
+    french = ivt.members(language="fr")
+    generated = tmp_path / "generated.py"
+    pyivt.generate_member_types(french.to_json(), generated)
+    french_enum = load_generated(generated).Geo
+    pyivt.generate_member_types(ivt.members(language="en").to_json(), generated)
+    assert list(french_enum.__members__) != list(
+        load_generated(generated).Geo.__members__
+    )
+    assert [item.value for item in french_enum] == [
+        member.code for member in french.dimensions[0].members
     ]
+
+
+def test_generate_member_types_rejects_invalid_members_json(tmp_path):
+    generated = tmp_path / "generated.py"
+    with pytest.raises(ValueError, match="invalid members JSON"):
+        pyivt.generate_member_types("{}", generated)
+    assert not generated.exists()
 
 
 @pytest.mark.parametrize("checker", ["ty", "mypy", "pyright"])
 def test_generated_selection_type_contract(checker, tmp_path):
     python_source = Path(__file__).resolve().parents[1] / "python"
-    (tmp_path / "generated.py").write_text(
-        pyivt.codegen(_typed_fixture()), encoding="utf-8"
+    pyivt.generate_member_types(
+        pyivt.open(_typed_fixture()).members().to_json(), tmp_path / "generated.py"
     )
     (tmp_path / "pyrightconfig.json").write_text(
         json.dumps({"extraPaths": [str(python_source)]}), encoding="utf-8"
