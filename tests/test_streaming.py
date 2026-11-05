@@ -75,17 +75,17 @@ def test_early_release_and_independent_readers():
         assert next(first).num_rows == 12
         assert next(second).num_rows == 12
     with pytest.raises(ValueError, match="requested_schema"):
-        ivt.__arrow_c_stream__(pa.schema([]).__arrow_c_schema__())
+        ivt._arrow_c_stream(pa.schema([]).__arrow_c_schema__())
 
 
-def test_public_arrow_table_imports_c_stream_protocol():
-    assert plain_table(pa.table(pyivt.open(_typed_fixture()))).equals(_expected_table())
+def test_reader_does_not_expose_the_arrow_stream_protocol():
+    assert not hasattr(pyivt.open(_typed_fixture()), "__arrow_c_stream__")
 
 
 def test_public_memory_knob_removed():
     ivt = pyivt.open(_typed_fixture())
-    for method in (ivt.to_arrow, ivt.to_member_tables):
-        with pytest.raises(TypeError, match="max_memory_bytes"):
+    for method in (ivt.to_arrow, ivt.members):
+        with pytest.raises(ValueError, match="max_memory_bytes"):
             method(max_memory_bytes=1)
     assert ivt.to_arrow().num_rows == 12
 
@@ -140,10 +140,11 @@ def test_stream_preserves_values_across_windows_padding_and_outer_axis():
     ivt = pyivt.open(_populated_cube())
     table = expanded_table(ivt)
     assert table["value"].to_pylist() == list(map(float, range(3 * 2051 * 3)))
-    for axis, slug in enumerate(ivt.layout.slugs):
-        stride = prod(ivt.layout.counts[axis + 1 :])
+    for axis, slug in enumerate(ivt._layout.slugs):
+        stride = prod(ivt._layout.counts[axis + 1 :])
         assert table[slug].to_pylist() == [
-            row // stride % ivt.layout.counts[axis] + 1 for row in range(table.num_rows)
+            row // stride % ivt._layout.counts[axis] + 1
+            for row in range(table.num_rows)
         ]
 
 
@@ -197,5 +198,5 @@ def test_stream_crosses_noncontiguous_paged_directory_boundary():
 def test_local_files_stream_to_same_logical_table(path):
     ivt = pyivt.open(path)
     streamed = expanded_table(ivt)
-    assert streamed.num_rows == prod(ivt.layout.counts)
+    assert streamed.num_rows == prod(ivt._layout.counts)
     assert streamed["value"].equals(ivt.to_arrow()["value"])

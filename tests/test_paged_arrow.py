@@ -92,8 +92,8 @@ def _official_csv_table() -> pa.Table:
 
 def test_paged_arrow_matches_complete_official_csv() -> None:
     ivt = pyivt.open(IVT_PATH)
-    assert ivt.layout.slugs == ["geo", "population_and"]
-    assert ivt.layout.counts == [105, 11]
+    assert ivt._layout.slugs == ["geo", "population_and"]
+    assert ivt._layout.counts == [105, 11]
     assert ivt.metadata.number_of_datapoints == 1155
     actual = plain_table(expanded_table(ivt))
     expected = _official_csv_table()

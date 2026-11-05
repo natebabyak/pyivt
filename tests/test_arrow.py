@@ -5,10 +5,8 @@ import hashlib
 import math
 import os
 import re
-from collections.abc import Callable
 from math import prod
 from pathlib import Path
-from typing import cast
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -59,7 +57,7 @@ def _canivt_projection(ivt: pyivt.Ivt) -> dict[str, str]:
     axes = [
         (slug, dimension)
         for slug, dimension in zip(
-            ivt.layout.slugs, ivt.metadata.dimensions, strict=True
+            ivt._layout.slugs, ivt.metadata.dimensions, strict=True
         )
         if slug != "geo"
     ]
@@ -84,8 +82,8 @@ def _canivt_projection(ivt: pyivt.Ivt) -> dict[str, str]:
 
 def _assert_grid_and_member_alignment(ivt: pyivt.Ivt, table: pa.Table) -> None:
     """Every coordinate occurs once, with all fields attached to its own axis."""
-    slugs, counts = ivt.layout.slugs, ivt.layout.counts
-    assert len(slugs) == len(counts) == ivt.layout.n_dim
+    slugs, counts = ivt._layout.slugs, ivt._layout.counts
+    assert len(slugs) == len(counts) == ivt._layout.n_dim
     assert table.num_rows == prod(counts)
     assert len(table.column_names) == len(set(table.column_names))
     assert table.column_names[-5:] == [
@@ -179,7 +177,7 @@ def test_expanded_batches_match_expected(ivt_path: Path) -> None:
             # matching an unrelated null column. Keep the pinned deficiency
             # explicit and validate this field against StatCan's official CSV.
             assert reference.null_count == expected.num_rows
-            assert ivt.layout.counts == [105, 11]
+            assert ivt._layout.counts == [105, 11]
             reference = _official_98100018_dguids()
         column = actual[target]
         if name == "geo_name":
@@ -215,9 +213,8 @@ def test_full_grid_and_repeatable_export(ivt_path: Path, tmp_path: Path) -> None
         writer.write_table(table)
     with pa.ipc.open_file(arrow_path) as reader:
         assert table.equals(reader.read_all())
-    with pytest.raises(TypeError):
-        # Broaden this call only: the test deliberately violates the public signature.
-        cast("Callable[..., pa.Table]", ivt.to_arrow)(complete=False)
+    with pytest.raises(ValueError, match="unknown dimension .complete."):
+        ivt.to_arrow(complete=False)
 
 
 @pytest.mark.parametrize(
@@ -238,20 +235,20 @@ def test_installed_demo_matches_beyond_csv_slice(filename: str) -> None:
     reference = pq.read_table(reference_path)
     ivt = pyivt.open(path)
     table = plain_table(expanded_table(ivt))
-    assert table.num_rows == prod(ivt.layout.counts)
+    assert table.num_rows == prod(ivt._layout.counts)
     row_axis = next(
         slug
-        for slug, count in zip(ivt.layout.slugs, ivt.layout.counts, strict=True)
+        for slug, count in zip(ivt._layout.slugs, ivt._layout.counts, strict=True)
         if count == reference.num_rows
     )
     date_field = next(
         field.name for field in table.schema if pa.types.is_date(field.type)
     )
     time_axis = next(
-        slug for slug in ivt.layout.slugs if date_field.startswith(slug + "_")
+        slug for slug in ivt._layout.slugs if date_field.startswith(slug + "_")
     )
     mask = pa.array([True] * table.num_rows)
-    for slug in ivt.layout.slugs:
+    for slug in ivt._layout.slugs:
         if slug not in (row_axis, time_axis):
             matches = pc.call_function("equal", [table[slug], pa.scalar(1)])
             mask = pc.call_function("and", [mask, matches])

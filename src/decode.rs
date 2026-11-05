@@ -143,6 +143,7 @@ pub fn build_layout_with_geo(dims: &[DimDesc], gd: Option<usize>) -> Result<Layo
         "status",
         "footnote_raw",
         "geo",
+        "language",
     ]
     .into_iter()
     .map(str::to_owned)
@@ -865,6 +866,7 @@ mod tests {
             dim("Value"),
             dim("Status code"),
             dim("Geo 2"),
+            dim("Language"),
         ])
         .unwrap();
         assert_eq!(
@@ -874,6 +876,7 @@ mod tests {
         for reserved in ["value", "status_code", "symbol", "status", "footnote_raw"] {
             assert!(!layout.slugs.iter().any(|slug| slug == reserved));
         }
+        assert_eq!(layout.slugs.last().unwrap(), "language_2");
         let mut invalid = dim("Items");
         invalid.count = 0;
         assert!(build_layout(&[invalid]).is_err());

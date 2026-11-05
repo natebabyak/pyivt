@@ -6,16 +6,15 @@ import pyivt
 ivt = pyivt.open("table.ivt")
 print(ivt.metadata.title.en)
 table = ivt.to_arrow()
-members = ivt.to_member_tables()
+members = ivt.members()
 ```
 """
 
 from os import PathLike
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, Literal
 
 import pyarrow as pa
 
-from pyivt._selection import SelectionInput
 from pyivt._types import DimensionType, Frequency
 
 class LocalizedText:
@@ -85,11 +84,9 @@ class Dimension:
     """One table axis, obtained from IvtMetadata.dimensions in file order.
 
     All attributes are read-only. Member label lists, when available, follow
-    member ID order: position 0 describes member ID 1. Labels may retain leading
+    file order. Labels may retain leading
     spaces used by Beyond 20/20 to express hierarchy. None means unavailable.
-    Use Ivt.layout.slugs for the corresponding Arrow column names; display names
-    in this object need not match those column names. Instances come from the
-    reader and cannot be constructed directly.
+    Use the slug as the Arrow column name and selection keyword.
 
     ```python
     for dim in ivt.metadata.dimensions:
@@ -103,8 +100,11 @@ class Dimension:
     def name(self) -> LocalizedText:
         """Localized short name; English falls back to the descriptor name."""
     @property
+    def slug(self) -> str:
+        """Dimension key for Arrow columns and selection."""
+    @property
     def items(self) -> int:
-        """Declared number of members on this axis; member IDs run from 1 to items."""
+        """Declared number of members on this axis; items is the axis size."""
     @property
     def type(self) -> DimensionType:
         """Axis classification: `"geographic"`, `"normal"`, or `"time_series"`.
@@ -122,9 +122,6 @@ class Dimension:
     @property
     def notes(self) -> LocalizedText:
         """Localized dimension notes with normalized whitespace; blank notes are None."""
-    @property
-    def ordinal(self) -> list[int] | None:
-        """Optional member ordering information. Currently always None."""
 
 class Footnote:
     """One annotation legend entry with English and French descriptions.
@@ -149,15 +146,6 @@ class Footnote:
     @property
     def description(self) -> LocalizedText:
         """Localized annotation description; either translation may be `None`."""
-    @property
-    def scope(self) -> str | None:
-        """Optional scope of the annotation. Currently always None."""
-    @property
-    def dimension(self) -> str | None:
-        """Optional dimension association. Currently always None."""
-    @property
-    def member_id(self) -> int | None:
-        """Optional member association. Currently always None."""
 
 class MissingValue:
     """A missing-value or status legend entry from IvtMetadata.missing_values.
@@ -293,16 +281,12 @@ class IvtMetadata:
 
         Returns a list of Dimension snapshots with member labels and notes.
         Raises ValueError if the required metadata cannot be loaded or parsed.
-        Position i corresponds to Ivt.layout.counts[i] and Ivt.layout.slugs[i].
         """
-    @property
-    def descriptor_path(self) -> str:
-        """Name of the descriptor reader, `"axis_matrix"`."""
     @property
     def geographies(self) -> Geographies:
         """Geography member lists, loaded on first access and cached.
 
-        Returns Geographies for the axis selected by Ivt.layout.geo_dim.
+        Returns Geographies for the axis selected by the geographic dimension.
         Unavailable fields are None. Raises ValueError on metadata loading errors.
         """
     @property
@@ -330,8 +314,8 @@ class IvtMetadata:
     def _io_metrics(self) -> tuple[int, int, int, bool]:
         """Internal: bytes read / read ops during metadata I/O (for benchmarks)."""
 
-class Layout:
-    """Read-only decoding layout, obtained from Ivt.layout.
+class _Layout:
+    """Read-only decoding layout, obtained from Ivt._layout.
 
     counts and slugs follow file dimension order and describe the exported grid.
     geo_dim and straddle are one-based dimension indices; subtract 1 before
@@ -361,11 +345,9 @@ class Layout:
 class Ivt:
     """An opened Beyond 20/20 table with metadata and deferred cell decoding.
 
-    Obtain an instance with pyivt.open(source); direct construction is not
-    supported. Inspect metadata and layout without exporting the cell grid.
-    The Arrow C stream decodes detailed row ranges. to_arrow() returns a compact
-    table, caching Arrow buffers for subsequent exports. No context
-    manager or close() call is required. This reader does not modify the source file.
+    Open a reader with pyivt.open(source). Metadata and member lookups are
+    available without decoding cells. to_arrow() caches Arrow buffers for
+    equivalent exports. The reader does not modify the source file.
 
     ```python
     import pyivt
@@ -373,48 +355,40 @@ class Ivt:
     ivt = pyivt.open("table.ivt")
     title = ivt.metadata.title.en
     table = ivt.to_arrow()
-    members = ivt.to_member_tables()
+    members = ivt.members()
     ```
     """
     @property
     def metadata(self) -> IvtMetadata:
         """Shared metadata object; detailed member and legend fields load on demand."""
     @property
-    def layout(self) -> Layout:
+    def _layout(self) -> _Layout:
         """Snapshot of dimension counts, Arrow column slugs and IVT paging details."""
-    def __arrow_c_stream__(self, requested_schema: Any = None) -> Any:
+    def _arrow_c_stream(self, requested_schema: Any = None) -> Any:
         """Export detailed batches in file order, including statuses and footnotes.
 
         Each capsule owns an independent reader. Schema requests raise ValueError.
         """
-    def to_arrow(
-        self, selection: SelectionInput = None, *, embed_members: bool = False
-    ) -> pa.Table:
-        """Return the selected grid as a PyArrow table of native codes and values.
+    def to_arrow(self, /, **dims: object) -> pa.Table:
+        """Return a PyArrow table of native codes and nullable float64 values.
 
-        Each included axis uses the smallest unsigned type that fits its
-        largest selected code. The value column is nullable float64. Codes
-        are native ordinals, and the last dimension varies fastest.
-
-        Use Selection or a mapping of dimension slugs to codes. Omitted axes
-        still vary but produce no column, and an empty sequence yields zero
-        rows. None exports the full grid. Equivalent exports share buffers.
-        MemoryError may report the internal allocation safety limit.
-
-        With embed_members=True, each selected lookup table is attached as
-        base64-encoded Arrow IPC file bytes under pyivt.members.v1.<slug> in
-        schema metadata. The columns and their types stay the same.
+        Pass dimension slugs as keywords. An integer fixes a dimension and
+        drops its column. A list of integers keeps the column and limits its
+        rows. Omitted dimensions include all members. An empty list gives zero
+        rows. Invalid slugs and codes raise ValueError before decoding.
         """
-    def to_member_tables(self, selection: SelectionInput = None) -> dict[str, pa.Table]:
-        """Return one typed Arrow lookup per included dimension, keyed by slug.
+    def members(
+        self, /, *, language: Literal["en", "fr"] = "en", **dims: object
+    ) -> dict[str, pa.Table]:
+        """Return Arrow member lookups keyed by dimension slug.
 
-        Join a fact table's dimension column to the lookup's code column.
-        Both use the same unsigned type when given the same selection.
-        Each lookup includes nullable label_en and label_fr plus the native
-        attributes. Native dates are Arrow date32. Cell data is not decoded.
+        The same keyword arguments select the same codes as to_arrow().
+        Each retained dimension has a lookup with unsigned code, nullable
+        label in the requested language, and native attributes. No cells
+        are decoded.
         """
     def _member_fields(
-        self,
+        self, *, code_only: bool = False
     ) -> tuple[
         str,
         list[list[tuple[str, str, list[str | int | float | None]]]],
@@ -436,8 +410,8 @@ def open(
 
     ### Returns
 
-    An `Ivt` reader exposing `metadata`, `layout`, and `to_arrow()`. Summary
-    metadata and layout are parsed immediately. Cell decoding happens during
+    An `Ivt` reader exposing `metadata`, `members()`, and `to_arrow()`. Summary
+    metadata is parsed immediately. Cell decoding happens during
     export.
 
     ### Raises
@@ -449,7 +423,7 @@ def open(
     ### Notes
 
     Paths use selective metadata reads. Keep the file available and unchanged:
-    the first to_arrow() or to_member_tables() call reads its full contents. Lazy metadata properties
+    the first to_arrow() or members() call reads its full contents. Lazy metadata properties
     may read additional ranges. In-memory sources are copied when opened, so
     later changes to a bytearray do not affect the reader. This function does
     not fetch URLs or decompress archives. Exceptions raised by a supplied
@@ -465,7 +439,7 @@ def open(
     ivt = pyivt.open(Path("table.ivt"))
     title = ivt.metadata.title.en or ivt.metadata.title.fr
     table = ivt.to_arrow()
-    members = ivt.to_member_tables()
+    members = ivt.members()
     in_memory = pyivt.open(BytesIO(Path("table.ivt").read_bytes()))
     ```
     """

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `pyivt codegen INPUT.ivt --output OUTPUT.py` generates dimension enums and a `Dimensions` typed dictionary for one table.
+- `Dimension.slug` exposes the dimension key used by Arrow and keyword selection.
+- Development type checks resolve PyArrow return types through `pyarrow-stubs`.
+
+### Migration
+
+- Replace `Selection` and positional selection mappings with dimension keywords. Pass an integer to fix a dimension and drop its column, or a list to retain the column. Omitted dimensions retain every member and their columns.
+- Replace `to_member_tables()` with `members()`. Use `members(language="fr")` for French values in the `label` column. Write lookup tables separately when migrating from `embed_members=True`.
+- Use native integer codes in place of one-based positions. Axes without a native `Code` field still use one-based positions. Non-integer and duplicate native codes raise `ValueError`.
+- Use `Dimension.slug` and `Dimension.items` in place of public `Layout` fields. `descriptor_path`, the always-empty dimension and footnote fields, and the `DimensionType` and `Frequency` exports were removed.
+- Pass `ivt.to_arrow()` to Arrow consumers in place of the reader's Arrow stream protocol. Selection IDs and JSON round trips were removed with `Selection`.
+
 ## [0.0.7] - 2026-11-03
 
 ### Breaking changes

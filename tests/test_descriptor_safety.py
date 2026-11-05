@@ -67,11 +67,11 @@ def test_malformed_matrix_is_rejected_without_scanning_notes(
         pyivt.open(path if source == "path" else bytes(data))
 
 
-def test_descriptor_path_is_exposed_and_names_do_not_affect_counts():
+def test_descriptor_names_do_not_affect_counts():
     data = bytearray(cube((2, 121)))
     matrix = _matrix(data)
     data[matrix + 18 : matrix + 36] = b"Census year (2)".ljust(18, b"\0")
     ivt = pyivt.open(bytes(data))
-    assert ivt.metadata.descriptor_path == "axis_matrix"
-    assert ivt.layout.counts == [2, 121]
+    assert not hasattr(ivt.metadata, "descriptor_path")
+    assert ivt._layout.counts == [2, 121]
     assert ivt.metadata.number_of_datapoints == 242

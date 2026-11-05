@@ -8,6 +8,9 @@ use std::sync::Arc;
 
 pub const MEMORY_LIMIT: usize = 2_147_483_648;
 
+pub type Positions = (bool, Option<Vec<usize>>);
+pub type AxisProjection = (bool, Option<Vec<usize>>, Option<Vec<u64>>);
+
 fn code_bytes(max_code: u64) -> usize {
     if u8::try_from(max_code).is_ok() {
         1
@@ -23,36 +26,45 @@ fn code_bytes(max_code: u64) -> usize {
 pub fn export(
     data: &[u8],
     layout: &Layout,
-    selection: Vec<(bool, Option<Vec<usize>>)>,
+    selection: Vec<AxisProjection>,
     metadata: HashMap<String, String>,
 ) -> Result<RecordBatch, String> {
     if selection.len() != layout.n_dim {
         return Err("selection does not match the layout".into());
     }
-    let (included, choices): (Vec<_>, Vec<_>) = selection.into_iter().unzip();
+    let mut choices = Vec::with_capacity(layout.n_dim);
+    let mut native_codes = Vec::with_capacity(layout.n_dim);
     let mut counts = Vec::with_capacity(layout.n_dim);
     let mut widths = Vec::with_capacity(layout.n_dim);
-    for (axis, selected) in choices.iter().enumerate() {
+    for (axis, (included, selected, codes)) in selection.into_iter().enumerate() {
         let count = layout.counts[axis] as usize;
-        let (len, max_code) = if let Some(codes) = selected {
-            if codes.last().is_some_and(|&code| code >= count)
-                || codes.windows(2).any(|pair| pair[0] >= pair[1])
+        let (len, ordinal_max) = if let Some(indices) = &selected {
+            if indices.last().is_some_and(|&index| index >= count)
+                || indices.windows(2).any(|pair| pair[0] >= pair[1])
             {
                 return Err(format!(
-                    "dimension {}: invalid or unsorted member codes",
+                    "dimension {}: invalid or unsorted member positions",
                     layout.slugs[axis]
                 ));
             }
-            (codes.len(), codes.last().map_or(0, |&code| code as u64 + 1))
+            (
+                indices.len(),
+                indices.last().map_or(0, |&index| index as u64 + 1),
+            )
         } else {
             (count, count as u64)
         };
         counts.push(len);
-        widths.push(if included[axis] {
+        widths.push(if included {
+            let max_code = codes.as_ref().map_or(ordinal_max, |codes| {
+                codes.iter().copied().max().unwrap_or(0)
+            });
             code_bytes(max_code)
         } else {
             0
         });
+        choices.push(selected);
+        native_codes.push(codes);
     }
     let mut strides = vec![1usize; layout.n_dim];
     let mut rows = 1usize;
@@ -81,7 +93,7 @@ pub fn export(
             scope.spawn(|| decode_selected(data, layout, &choices, &counts, &strides, rows));
         let columns_profile = crate::profile::Stage::new("build_dimension_columns");
         for axis in 0..layout.n_dim {
-            if !included[axis] {
+            if widths[axis] == 0 {
                 continue;
             }
             let count = counts[axis];
@@ -94,8 +106,11 @@ pub fn export(
                         .map_err(|_| "memory allocation failed for member codes")?;
                     codes.extend((0..rows).map(|row| {
                         let index = row / stride % count;
-                        let ordinal = choices[axis].as_ref().map_or(index, |c| c[index]);
-                        (ordinal + 1) as $native
+                        let code = match &native_codes[axis] {
+                            Some(codes) => codes[index],
+                            None => choices[axis].as_ref().map_or(index, |c| c[index]) as u64 + 1,
+                        };
+                        code as $native
                     }));
                     Arc::new(<$array>::from(codes)) as ArrayRef
                 }};

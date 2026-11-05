@@ -22,18 +22,17 @@ def worker(path: Path, mode: str) -> dict:
     start = time.perf_counter()
     try:
         ivt = pyivt.open(path)
-        result.update(
-            counts=ivt.layout.counts, descriptor_path=ivt.metadata.descriptor_path
-        )
+        counts = ivt._layout.counts
+        result.update(counts=counts)
         batches = (
-            pa.RecordBatchReader._import_from_c_capsule(ivt.__arrow_c_stream__())
+            pa.RecordBatchReader._import_from_c_capsule(ivt._arrow_c_stream())
             if mode == "stream"
             else ivt.to_arrow().to_batches()
         )
         rows = sum(batch.num_rows for batch in batches)
-        if rows != prod(ivt.layout.counts):
+        if rows != prod(counts):
             raise AssertionError(
-                f"row count {rows} differs from dimension product {prod(ivt.layout.counts)}"
+                f"row count {rows} differs from dimension product {prod(counts)}"
             )
         result.update(status="converted", rows=rows)
     except (ValueError, MemoryError, pa.ArrowException) as error:

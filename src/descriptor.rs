@@ -22,7 +22,6 @@ pub struct Descriptor {
     #[allow(dead_code)]
     pub offset: u32,
     pub dims: Vec<DimDesc>,
-    pub source: &'static str,
     pub geo_dim: Option<usize>,
 }
 
@@ -84,7 +83,6 @@ pub fn structured_descriptor(data: &[u8]) -> Option<Descriptor> {
     Some(Descriptor {
         offset,
         dims,
-        source: "axis_matrix",
         geo_dim,
     })
 }

@@ -38,12 +38,9 @@ def worker(args):
     ivt = pyivt.open(source)
     select = json.loads(args.select.read_text()) if args.select else None
     if args.fraction < 1:
-        select = {
-            slug: list(range(1, count + 1))
-            for slug, count in zip(ivt.layout.slugs, ivt.layout.counts, strict=True)
-        }
-        first = ivt.layout.slugs[0]
-        select[first] = select[first][: ceil(ivt.layout.counts[0] * args.fraction)]
+        first = ivt.metadata.dimensions[0]
+        codes = ivt.members()[first.slug]["code"].to_pylist()
+        select = {first.slug: codes[: ceil(first.items * args.fraction)]}
     print(
         json.dumps(
             {
@@ -62,7 +59,7 @@ def worker(args):
                 raise ValueError("legacy baseline has no selection API")
             table = ivt._legacy_to_arrow(max_memory_bytes=args.max_memory_bytes)
         else:
-            table = ivt.to_arrow(select)
+            table = ivt.to_arrow(**(select or {}))
         result = {
             "rows": table.num_rows,
             "columns": table.num_columns,
