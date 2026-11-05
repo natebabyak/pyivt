@@ -4,10 +4,7 @@ import pyarrow as pa
 
 
 def stream_reader(ivt) -> pa.RecordBatchReader:
-    # PyArrow 14 supports capsules but predates the public from_stream helper.
-    if hasattr(pa.RecordBatchReader, "from_stream"):
-        return pa.RecordBatchReader.from_stream(ivt)
-    return pa.RecordBatchReader._import_from_c_capsule(ivt.__arrow_c_stream__())
+    return pa.RecordBatchReader._import_from_c_capsule(ivt._arrow_c_stream())
 
 
 def expanded_table(ivt) -> pa.Table:

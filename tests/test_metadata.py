@@ -189,17 +189,17 @@ def test_metadata_lazy_fields(demo_ivt):
 def test_open_bytes_defers_decode(demo_ivt):
     expect = _load_expect(demo_ivt)
     ivt = open_ivt(demo_ivt.path.read_bytes())
-    assert len(ivt.layout.counts) == len(expect["dimensions"])
+    assert len(ivt._layout.counts) == len(expect["dimensions"])
 
 
 def test_to_arrow_row_count(demo_ivt):
     ivt = open_ivt(demo_ivt.path)
     expected = _load_expect(demo_ivt)
     table = ivt.to_arrow()
-    members = ivt.to_member_tables()
+    members = ivt.members()
     assert list(members) == table.column_names[:-1]
     assert table.num_rows == expected["number_of_datapoints"]
-    assert table.num_rows == prod(ivt.layout.counts)
+    assert table.num_rows == prod(ivt._layout.counts)
     assert "value" in table.column_names
 
 

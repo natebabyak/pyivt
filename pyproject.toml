@@ -32,6 +32,9 @@ dependencies = [
   "pyarrow>=14",
 ]
 
+[project.scripts]
+pyivt = "pyivt.cli:main"
+
 [project.urls]
 Changelog = "https://github.com/natebabyak/pyivt/blob/main/CHANGELOG.md"
 Homepage = "https://github.com/natebabyak/pyivt"
@@ -44,6 +47,7 @@ dev = [
   "maturin>=1.0,<2.0",
   "polars>=2.0",
   "pandas>=2.2",
+  "pyarrow-stubs>=20.0.0.20260819",
   "pyperclip>=1.0",
   "pytest>=9.0",
   "psutil>=5.9",

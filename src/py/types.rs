@@ -2,11 +2,12 @@
 
 use pyo3::exceptions::{PyKeyError, PyMemoryError, PyOSError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyByteArray, PyBytes, PyList, PyString, PyTuple};
+use pyo3::types::{PyByteArray, PyBytes, PyDict, PyList, PyString, PyTuple};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::arrow_export::stream_capsule;
+use crate::compact::{AxisProjection, Positions};
 use crate::decode::{build_layout_with_geo, Layout};
 use crate::descriptor::parse_descriptor;
 use crate::error::IvtError;
@@ -121,11 +122,9 @@ impl LocalizedLabels {
 /// One table axis, obtained from IvtMetadata.dimensions in file order.
 ///
 /// All attributes are read-only. Member label lists, when available, follow
-/// member ID order: position 0 describes member ID 1. Labels may retain leading
+/// file order. Labels may retain leading
 /// spaces used by Beyond 20/20 to express hierarchy. None means unavailable.
-/// Use Ivt.layout.slugs for the corresponding Arrow column names; display names
-/// in this object need not match those column names. Instances come from the
-/// reader and cannot be constructed directly.
+/// Use the slug as the Arrow column name and selection keyword.
 ///
 /// ```python
 /// for dim in ivt.metadata.dimensions:
@@ -139,7 +138,10 @@ pub struct Dimension {
     /// Localized short name; English falls back to the descriptor name.
     #[pyo3(get)]
     pub name: LocalizedText,
-    /// Declared number of members on this axis; member IDs run from 1 to items.
+    /// Dimension key for Arrow columns and selection.
+    #[pyo3(get)]
+    pub slug: String,
+    /// Declared number of members on this axis.
     #[pyo3(get)]
     pub items: i64,
     /// Axis classification: `"geographic"`, `"normal"`, or `"time_series"`.
@@ -158,14 +160,12 @@ pub struct Dimension {
     /// Localized dimension notes with normalized whitespace; blank notes are None.
     #[pyo3(get)]
     pub notes: LocalizedText,
-    /// Optional member ordering information. Currently always None.
-    #[pyo3(get)]
-    pub ordinal: Option<Vec<i64>>,
 }
 
-impl From<CoreDimension> for Dimension {
-    fn from(d: CoreDimension) -> Self {
+impl Dimension {
+    fn from_core(d: CoreDimension, slug: String) -> Self {
         Self {
+            slug,
             name: LocalizedText {
                 en: Some(d.name_en),
                 fr: d.name_fr,
@@ -184,7 +184,6 @@ impl From<CoreDimension> for Dimension {
                 en: d.notes_en,
                 fr: d.notes_fr,
             },
-            ordinal: d.ordinal,
         }
     }
 }
@@ -219,15 +218,6 @@ pub struct Footnote {
     /// Localized annotation description; either translation may be `None`.
     #[pyo3(get)]
     pub description: LocalizedText,
-    /// Optional scope of the annotation. Currently always None.
-    #[pyo3(get)]
-    pub scope: Option<String>,
-    /// Optional dimension association. Currently always None.
-    #[pyo3(get)]
-    pub dimension: Option<String>,
-    /// Optional member association. Currently always None.
-    #[pyo3(get)]
-    pub member_id: Option<i64>,
 }
 
 impl From<CoreFootnote> for Footnote {
@@ -236,9 +226,6 @@ impl From<CoreFootnote> for Footnote {
             symbol: f.symbol,
             number: f.number,
             description: f.description.into(),
-            scope: f.scope,
-            dimension: f.dimension,
-            member_id: f.member_id,
         }
     }
 }
@@ -353,6 +340,7 @@ impl Geographies {
 #[pyclass(name = "IvtMetadata", module = "pyivt")]
 pub struct IvtMetadata {
     inner: Mutex<CoreMeta>,
+    slugs: Vec<String>,
 }
 
 #[pymethods]
@@ -463,23 +451,21 @@ impl IvtMetadata {
     ///
     /// Returns a list of Dimension snapshots with member labels and notes.
     /// Raises ValueError if the required metadata cannot be loaded or parsed.
-    /// Position i corresponds to Ivt.layout.counts[i] and Ivt.layout.slugs[i].
     fn dimensions(&self) -> PyResult<Vec<Dimension>> {
         let mut guard = self.inner.lock().unwrap();
         let dims = guard.dimensions().map_err(PyValueError::new_err)?;
-        Ok(dims.iter().cloned().map(Dimension::from).collect())
-    }
-
-    #[getter]
-    /// Name of the descriptor reader, `"axis_matrix"`.
-    fn descriptor_path(&self) -> &'static str {
-        self.inner.lock().unwrap().desc().source
+        Ok(dims
+            .iter()
+            .cloned()
+            .zip(self.slugs.iter().cloned())
+            .map(|(dimension, slug)| Dimension::from_core(dimension, slug))
+            .collect())
     }
 
     #[getter]
     /// Geography member lists, loaded on first access and cached.
     ///
-    /// Returns Geographies for the axis selected by Ivt.layout.geo_dim.
+    /// Returns Geographies for the axis selected by the geographic dimension.
     /// Unavailable fields are None. Raises ValueError on metadata loading errors.
     fn geographies(&self) -> PyResult<Geographies> {
         let mut guard = self.inner.lock().unwrap();
@@ -530,13 +516,13 @@ impl IvtMetadata {
     }
 }
 
-/// Read-only decoding layout, obtained from Ivt.layout.
+/// Read-only decoding layout, obtained from Ivt._layout.
 ///
 /// counts and slugs follow file dimension order and describe the exported grid.
 /// geo_dim and straddle are one-based dimension indices; subtract 1 before
 /// indexing a Python list. Paging fields describe IVT storage, not Arrow record
 /// batches. List attributes are copies. Instances cannot be constructed directly.
-#[pyclass(name = "Layout", module = "pyivt")]
+#[pyclass(name = "_Layout", module = "pyivt._native")]
 #[derive(Clone)]
 pub struct PyLayout {
     /// Member counts in file dimension order; their product is the Arrow row count.
@@ -583,9 +569,8 @@ fn export_error(error: String) -> PyErr {
 /// An opened Beyond 20/20 table with metadata and deferred cell decoding.
 ///
 /// Obtain an instance with pyivt.open(source); direct construction is not
-/// supported. Inspect metadata and layout without exporting the cell grid.
-/// The Arrow C stream decodes detailed row ranges. to_arrow() returns a compact
-/// table, caching Arrow buffers for subsequent exports. No context
+/// supported. Inspect metadata and members without decoding cells.
+/// to_arrow() returns a compact table, caching buffers for equivalent exports. No context
 /// manager or close() call is required. This reader does not modify the source file.
 ///
 /// ```python
@@ -594,7 +579,7 @@ fn export_error(error: String) -> PyErr {
 /// ivt = pyivt.open("table.ivt")
 /// title = ivt.metadata.title.en
 /// table = ivt.to_arrow()
-/// members = ivt.to_member_tables()
+/// members = ivt.members()
 /// ```
 #[pyclass(name = "Ivt", module = "pyivt")]
 pub struct Ivt {
@@ -606,9 +591,10 @@ pub struct Ivt {
     path: Option<PathBuf>,
     cache: Mutex<Option<Vec<RecordBatch>>>,
     maps: Mutex<Option<Arc<TidySchema>>>,
+    code_fields: Mutex<Option<Py<PyAny>>>,
     member_fields: Mutex<Option<Py<PyAny>>>,
     source_digest: Mutex<Option<String>>,
-    compact_cache: Mutex<Option<(String, RecordBatch)>>,
+    compact_cache: Mutex<Option<(Vec<Positions>, RecordBatch)>>,
 }
 
 #[pymethods]
@@ -621,14 +607,14 @@ impl Ivt {
 
     #[getter]
     /// Snapshot of dimension counts, Arrow column slugs and IVT paging details.
-    fn layout(&self) -> PyLayout {
+    fn _layout(&self) -> PyLayout {
         self.py_layout.clone()
     }
 
     /// Arrow PyCapsule stream protocol. Each invocation owns an independent
     /// native reader; consumers can release it early without retaining batches.
     #[pyo3(signature = (requested_schema=None))]
-    fn __arrow_c_stream__<'py>(
+    fn _arrow_c_stream<'py>(
         &self,
         py: Python<'py>,
         requested_schema: Option<Bound<'py, PyAny>>,
@@ -689,31 +675,30 @@ impl Ivt {
             .call_method0("read_all")
     }
 
-    /// Return a compact pyarrow.Table with native integer codes and nullable
-    /// float64 values. Omitted dimensions retain their rows but omit columns.
-    /// Rows follow file order, with the last dimension varying fastest.
-    /// Set embed_members=True to attach the selected member tables in schema metadata.
-    #[pyo3(signature = (selection=None, *, embed_members=false))]
+    /// Export native member codes and nullable float64 values in file order.
+    #[pyo3(signature = (**dims))]
     fn to_arrow<'py>(
         slf: Bound<'py, Self>,
         py: Python<'py>,
-        selection: Option<Bound<'py, PyAny>>,
-        embed_members: bool,
+        dims: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let this: &Self = &slf.borrow();
-        let export = py.import("pyivt._export")?;
-        let prepared = export
+        let projection: Vec<AxisProjection> = py
+            .import("pyivt._export")?
             .getattr("prepare")?
-            .call1((this.py_layout.clone(), selection))?;
-        let (projection, selection_id): (Vec<(bool, Option<Vec<usize>>)>, String) =
-            prepared.extract()?;
+            .call1((&slf, dims.unwrap_or_else(|| PyDict::new(py))))?
+            .extract()?;
+        let key: Vec<Positions> = projection
+            .iter()
+            .map(|(included, indices, _)| (*included, indices.clone()))
+            .collect();
         let data = this.compact_data(py, 0)?;
         let table_id = this.source_digest(py, &data)?;
         let batch = py
             .allow_threads(|| -> Result<RecordBatch, String> {
                 let mut cache = this.compact_cache.lock().unwrap();
-                if let Some((key, batch)) = cache.as_ref() {
-                    if key == &selection_id {
+                if let Some((cached_key, batch)) = cache.as_ref() {
+                    if cached_key == &key {
                         return Ok(batch.clone());
                     }
                 }
@@ -721,11 +706,10 @@ impl Ivt {
                 *cache = None;
                 let metadata = std::collections::HashMap::from([
                     ("pyivt.table_id".into(), table_id),
-                    ("pyivt.selection_id".into(), selection_id.clone()),
                     ("pyivt.dimension_encoding".into(), "codes".into()),
                 ]);
                 let batch = crate::compact::export(&data, &this.layout, projection, metadata)?;
-                *cache = Some((selection_id, batch.clone()));
+                *cache = Some((key, batch.clone()));
                 Ok(batch)
             })
             .map_err(export_error)?;
@@ -738,39 +722,41 @@ impl Ivt {
             )),
         )?;
         let _profile = crate::profile::Stage::new("arrow_table");
-        let table = py
-            .import("pyarrow")?
+        py.import("pyarrow")?
             .getattr("RecordBatchReader")?
             .call_method1("_import_from_c_capsule", (capsule,))?
-            .call_method0("read_all")?;
-        drop(_profile);
-        if embed_members {
-            return export
-                .getattr("embed_member_tables")?
-                .call1((slf.clone(), table, prepared));
-        }
-        Ok(table)
+            .call_method0("read_all")
     }
 
-    /// Export typed Arrow lookup tables keyed by dimension slug, without decoding cells.
-    #[pyo3(signature = (selection=None))]
-    fn to_member_tables<'py>(
+    /// Export member lookup tables keyed by dimension slug, without decoding cells.
+    #[pyo3(signature = (*, language="en", **dims))]
+    fn members<'py>(
         slf: Bound<'py, Self>,
         py: Python<'py>,
-        selection: Option<Bound<'py, PyAny>>,
+        language: &str,
+        dims: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, PyAny>> {
+        if !matches!(language, "en" | "fr") {
+            return Err(PyValueError::new_err("language must be 'en' or 'fr'"));
+        }
         let export = py.import("pyivt._export")?;
         let prepared = export
             .getattr("prepare")?
-            .call1((slf.borrow().py_layout.clone(), selection))?;
+            .call1((&slf, dims.unwrap_or_else(|| PyDict::new(py))))?;
         export
             .getattr("build_member_tables")?
-            .call1((slf, prepared))
+            .call1((slf, prepared, language))
     }
 
     /// Private member-only bridge with Date32 day offsets and display references.
-    fn _member_fields<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        if let Some(fields) = self.member_fields.lock().unwrap().as_ref() {
+    #[pyo3(signature = (*, code_only=false))]
+    fn _member_fields<'py>(&self, py: Python<'py>, code_only: bool) -> PyResult<Bound<'py, PyAny>> {
+        let cache = if code_only {
+            &self.code_fields
+        } else {
+            &self.member_fields
+        };
+        if let Some(fields) = cache.lock().unwrap().as_ref() {
             return Ok(fields.bind(py).clone());
         }
         let member_estimate = self.layout.counts.iter().fold(0usize, |n, &count| {
@@ -795,13 +781,20 @@ impl Ivt {
                     .iter()
                     .enumerate()
                     .map(|(axis, &count)| {
-                        let (fields, positions) =
+                        let (fields, positions) = if code_only {
+                            crate::members::read_code_field(&data, axis, count as usize)?
+                        } else {
                             crate::members::read_typed_members_with_positions(
                                 &data,
                                 axis,
                                 count as usize,
-                            )?;
-                        let (names, references) = metadata::member_display(&data, axis, &positions);
+                            )?
+                        };
+                        let (names, references) = if code_only {
+                            ([None, None], [None, None])
+                        } else {
+                            metadata::member_display(&data, axis, &positions)
+                        };
                         Ok::<_, String>((fields, (axis_kinds[axis], names, references)))
                     })
                     .collect::<Result<Vec<_>, _>>()
@@ -841,7 +834,7 @@ impl Ivt {
             ],
         )?
         .into_any();
-        *self.member_fields.lock().unwrap() = Some(result.clone().unbind());
+        *cache.lock().unwrap() = Some(result.clone().unbind());
         Ok(result)
     }
 }
@@ -992,9 +985,8 @@ impl Ivt {
 ///
 /// ### Returns
 ///
-/// An `Ivt` reader exposing `metadata`, `layout`, and `to_arrow()`. Summary
-/// metadata and layout are parsed immediately. Cell decoding happens during
-/// export.
+/// An `Ivt` reader exposing `metadata`, `members()`, and `to_arrow()`.
+/// Summary metadata is parsed immediately. Cells are decoded by `to_arrow()`.
 ///
 /// ### Raises
 ///
@@ -1021,7 +1013,7 @@ impl Ivt {
 /// ivt = pyivt.open(Path("table.ivt"))
 /// title = ivt.metadata.title.en or ivt.metadata.title.fr
 /// table = ivt.to_arrow()
-/// members = ivt.to_member_tables()
+/// members = ivt.members()
 /// in_memory = pyivt.open(BytesIO(Path("table.ivt").read_bytes()))
 /// ```
 #[pyfunction]
@@ -1044,6 +1036,7 @@ pub fn open_ivt(py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<Ivt> {
                 py,
                 IvtMetadata {
                     inner: Mutex::new(meta),
+                    slugs: layout.slugs.clone(),
                 },
             )?;
             Ok(Ivt {
@@ -1054,6 +1047,7 @@ pub fn open_ivt(py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<Ivt> {
                 path: Some(path),
                 cache: Mutex::new(None),
                 maps: Mutex::new(None),
+                code_fields: Mutex::new(None),
                 member_fields: Mutex::new(None),
                 source_digest: Mutex::new(None),
                 compact_cache: Mutex::new(None),
@@ -1076,6 +1070,7 @@ pub fn open_ivt(py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<Ivt> {
                 py,
                 IvtMetadata {
                     inner: Mutex::new(meta),
+                    slugs: layout.slugs.clone(),
                 },
             )?;
             Ok(Ivt {
@@ -1086,6 +1081,7 @@ pub fn open_ivt(py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<Ivt> {
                 path: None,
                 cache: Mutex::new(None),
                 maps: Mutex::new(None),
+                code_fields: Mutex::new(None),
                 member_fields: Mutex::new(None),
                 source_digest: Mutex::new(None),
                 compact_cache: Mutex::new(None),

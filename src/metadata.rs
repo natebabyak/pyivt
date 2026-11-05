@@ -84,7 +84,6 @@ pub struct Dimension {
     /// Dimension-level notes referenced by the summary language rows.
     pub notes_en: Option<String>,
     pub notes_fr: Option<String>,
-    pub ordinal: Option<Vec<i64>>,
 }
 
 #[derive(Debug, Clone)]
@@ -93,9 +92,6 @@ pub struct Footnote {
     pub symbol: String,
     pub number: i64,
     pub description: LocalizedText,
-    pub scope: Option<String>,
-    pub dimension: Option<String>,
-    pub member_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -730,9 +726,6 @@ fn footnotes(data: &[u8]) -> Vec<Footnote> {
             symbol,
             number: row.code.unwrap_or(0),
             description: row.description,
-            scope: None,
-            dimension: None,
-            member_id: None,
         });
     }
     out
@@ -936,7 +929,6 @@ pub fn build_dimensions(data: &[u8], desc: &Descriptor) -> Vec<Dimension> {
             members_fr,
             notes_en,
             notes_fr,
-            ordinal: None,
         });
     }
     dims

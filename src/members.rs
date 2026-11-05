@@ -387,12 +387,43 @@ pub(crate) fn read_typed_members_with_positions(
     dimension: usize,
     count: usize,
 ) -> Result<(TypedFields, Vec<usize>), String> {
+    read_fields(data, dimension, count, false)
+}
+
+pub(crate) fn read_code_field(
+    data: &[u8],
+    dimension: usize,
+    count: usize,
+) -> Result<(TypedFields, Vec<usize>), String> {
+    read_fields(data, dimension, count, true)
+}
+
+fn read_fields(
+    data: &[u8],
+    dimension: usize,
+    count: usize,
+    code_only: bool,
+) -> Result<(TypedFields, Vec<usize>), String> {
+    let slot = dimension
+        .checked_mul(DIM_SLOT_STRIDE)
+        .and_then(|offset| HDR_DIM_SLOT0.checked_add(offset))
+        .ok_or("dimension slot overflow")?;
+    if data
+        .get(slot..slot + DIM_SLOT_STRIDE)
+        .is_some_and(|slot| slot.iter().all(|&byte| byte == 0))
+    {
+        return Ok((Vec::new(), Vec::new()));
+    }
     let dir = Directory::new(data, dimension)?;
     let definitions = dir.record(0)?.ok_or("missing member field definitions")?;
     if definitions[0] & 15 != 1 || definitions[1] != 2 || u16(&definitions, 4) != 34 {
         return Err("unsupported member field definition layout".into());
     }
-    let field_count = definitions[6..].len() / 34;
+    let field_count = if code_only {
+        1
+    } else {
+        definitions[6..].len() / 34
+    };
     if count
         .checked_mul(field_count)
         .and_then(|n| n.checked_mul(32))
@@ -409,6 +440,9 @@ pub(crate) fn read_typed_members_with_positions(
             return Err("member field name exceeds its definition".into());
         }
         let name = latin1(&field[1..1 + name_len]);
+        if code_only && !name.eq_ignore_ascii_case("code") {
+            continue;
+        }
         let kind = u16(field, 18);
         let entry = u32(field, 26) as usize;
         let mut values: Option<MemberValues> = None;

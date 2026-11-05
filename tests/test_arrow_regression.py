@@ -41,7 +41,7 @@ def test_naics234_matches_complete_independent_export() -> None:
     ivt = pyivt.open(ivt_path)
     actual = expanded_table(ivt)
     expected = pq.read_table(reference_path)
-    assert actual.num_rows == expected.num_rows == prod(ivt.layout.counts)
+    assert actual.num_rows == expected.num_rows == prod(ivt._layout.counts)
     assert actual.num_columns == expected.num_columns
     assert actual.schema.equals(expected.schema, check_metadata=False), (
         f"Schema differs:\nactual: {actual.schema}\nexpected: {expected.schema}"

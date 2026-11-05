@@ -40,7 +40,12 @@ def _codes(*values: str) -> bytes:
 
 
 def _typed_fixture(
-    *, rate: int = 0, geography_labels: tuple[str, str] = ("  East – Coast", "West")
+    *,
+    rate: int = 0,
+    geography_labels: tuple[str, str] = ("  East – Coast", "West"),
+    geography_codes: tuple[str, str] = ("001", "09"),
+    measure_name: str = "Measure",
+    measure_sort: tuple[int, int] | None = None,
 ) -> bytes:
     """Three axes (2 x 2 x 3), all fields, one extended double data component."""
     data = bytearray(1024)
@@ -91,7 +96,7 @@ def _typed_fixture(
         directory(824 + 14 * axis, records)
 
     axis_matrix = bytearray(struct.pack("<BBHH", 1, 2, 3, 82))
-    for name, count, kind in [("Region", 2, 1), ("Measure", 2, 0), ("Time", 3, 2)]:
+    for name, count, kind in [("Region", 2, 1), (measure_name, 2, 0), ("Time", 3, 2)]:
         row = bytearray(82)
         struct.pack_into("<I", row, 0, count)
         struct.pack_into("<H", row, 6, kind)
@@ -108,8 +113,8 @@ def _typed_fixture(
     dimension(
         0,
         [
-            ("Code", 0x0140, _codes("001", "09")),
-            ("English Desc", 0x0001, _text_members("  East – Coast", "West")),
+            ("Code", 0x0140, _codes(*geography_codes)),
+            ("English Desc", 0x0001, _text_members(*geography_labels)),
             ("French Desc", 0x0001, _text_members("  Québec – Est", "Ouest")),
             ("Small", 0x0302, _vector(2, struct.pack("<hh", -32768, 42))),
             ("Large", 0x0302, _vector(4, struct.pack("<ii", -2000000000, 2000000000))),
@@ -118,16 +123,18 @@ def _typed_fixture(
         ],
         (_vector(1, b"\x01Caf\xe9"),),
     )
-    dimension(
-        1,
-        [
-            ("Code", 0x0140, _codes("01", "02")),
-            ("English Desc", 0x0001, _text_members("Level", "")),
-            ("ByteAttr", 0x0302, _vector(1, struct.pack("<bb", -3, 4))),
-            ("LongAttr", 0x0302, _vector(4, struct.pack("<ii", -123456789, 987654321))),
-            ("Decimals", 0x0002, _vector(2, struct.pack("<HH", 0, 65535))),
-        ],
-    )
+    measure_fields = [
+        ("Code", 0x0140, _codes("01", "02")),
+        ("English Desc", 0x0001, _text_members("Level", "")),
+        ("ByteAttr", 0x0302, _vector(1, struct.pack("<bb", -3, 4))),
+        ("LongAttr", 0x0302, _vector(4, struct.pack("<ii", -123456789, 987654321))),
+        ("Decimals", 0x0002, _vector(2, struct.pack("<HH", 0, 65535))),
+    ]
+    if measure_sort is not None:
+        measure_fields.append(
+            ("Sort", 0x0002, _vector(2, struct.pack("<HH", *measure_sort)))
+        )
+    dimension(1, measure_fields)
     dimension(
         2,
         [
@@ -299,8 +306,8 @@ def test_all_dimensions_and_native_types_match_declared_result(
     path = tmp_path / "typed.ivt"
     path.write_bytes(data)
     ivt = pyivt.open(data if source_kind == "bytes" else path)
-    assert ivt.layout.counts == [2, 2, 3]
-    assert ivt.layout.slugs == ["geo", "measure", "time"]
+    assert ivt._layout.counts == [2, 2, 3]
+    assert ivt._layout.slugs == ["geo", "measure", "time"]
     assert ivt.metadata.number_of_datapoints == 12
     encoded = expanded_table(ivt)
     assert encoded["geo"].type == pa.int32()

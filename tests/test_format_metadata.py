@@ -17,8 +17,8 @@ def test_date_name_does_not_make_a_normal_axis_time_series():
     data[matrix + 18 : matrix + 36] = b"Time Period".ljust(18, b"\0")
     ivt = pyivt.open(bytes(data))
     assert ivt.metadata.dimensions[0].type == "normal"
-    assert ivt.layout.geo_dim is None
-    assert ivt.layout.slugs == ["time_period", "axis_1"]
+    assert ivt._layout.geo_dim is None
+    assert ivt._layout.slugs == ["time_period", "axis_1"]
     assert ivt.metadata.geographies.member_id == []
 
 
@@ -44,7 +44,7 @@ def test_arbitrary_header_text_cannot_supply_product_or_language():
 
 def test_census_geography_uid_comes_from_native_dguid_member_column():
     ivt = pyivt.open(Path(__file__).parent / "fixtures" / "98100018-paged.ivt")
-    assert ivt.layout.geo_dim == 1
+    assert ivt._layout.geo_dim == 1
     actual = ivt.metadata.geographies.geo_uid
     with stream_reader(ivt) as reader:
         native = next(reader).column("geo_dguid_en").to_pylist()

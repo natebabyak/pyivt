@@ -33,7 +33,7 @@ def worker(args):
     digest = hashlib.sha256()
     try:
         batches = (
-            pa.RecordBatchReader._import_from_c_capsule(ivt.__arrow_c_stream__())
+            pa.RecordBatchReader._import_from_c_capsule(ivt._arrow_c_stream())
             if args.mode == "stream"
             else ivt.to_arrow().to_batches(max_chunksize=65536)
         )
