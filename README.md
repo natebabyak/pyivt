@@ -68,6 +68,7 @@ subset_members = ivt.members(**selection)
 ```
 
 Pass the same dimension keywords to both methods so their code types and subsets match.
+Codes are the members' 1-based positions in the file.
 An integer fixes a dimension at one member and drops its column. A list retains
 the column and filters its rows. Omitted dimensions retain all members and
 their columns. An empty list selects zero rows.
@@ -79,8 +80,10 @@ pyivt codegen data.ivt --output dimensions.py
 ```
 
 The generated module contains one `IntEnum` per dimension and a `Dimensions`
-typed dictionary for selection keywords. Use enum members as codes when calling
-`to_arrow()` or `members()`. Add `--language fr` to use French labels for enum names.
+typed dictionary for selection keywords. Enum values are 1-based member positions.
+Use enum members as codes when calling `to_arrow()` or `members()`.
+`NATIVE_CODES[slug][member]` gives the original code as text, or `None` if it
+is missing. Add `--language fr` to use French labels for enum names.
 
 ## API Reference
 
@@ -93,10 +96,10 @@ typed dictionary for selection keywords. Use enum members as codes when calling
 
 ### Member lookup tables
 
-- `code` contains native integer codes in file order. Axes without a native `Code` field use one-based positions. Invalid or duplicate native codes raise `ValueError`.
+- `code` contains 1-based member positions in file order. Each dimension uses the smallest unsigned integer type that can hold its full member count, including in slices.
 - `label` is a nullable string in English by default. Use `members(language="fr")` for French labels. Time-axis labels use ISO dates.
-- Native attributes use Arrow strings, integers, floats, or `date32` dates. Text fields retain their original values. Native fields that collide with lookup column names, such as `Code`, receive a `native_` prefix. Remaining name collisions receive numeric suffixes.
-- Both the fact table and lookup schemas carry `pyivt.table_id` to identify the source table.
+- Native attributes use Arrow strings, integers, floats, or `date32` dates. The native `Code` field, when present, is a separate text column (typically `native_Code`) and preserves leading zeros and duplicate values. Missing values are null. Native fields that collide with lookup column names receive a `native_` prefix. Remaining name collisions receive numeric suffixes.
+- Both the fact table and lookup schemas carry `pyivt.table_id` to identify the source table and `pyivt.dimension_encoding` set to `one_based_index`.
 
 ### Metadata
 

@@ -37,16 +37,18 @@ def _tool(name):
     return str(bundled) if bundled.is_file() else shutil.which(name)
 
 
-def test_codegen_writes_deterministic_ruff_clean_types(tmp_path):
+@pytest.mark.parametrize(
+    "stored_codes",
+    [("0007", "INNC"), ("INNC", "INNC"), ('A"B', "A'B"), ("00", "")],
+)
+def test_codegen_writes_deterministic_ruff_clean_types(tmp_path, stored_codes):
     source, output = tmp_path / "table.ivt", tmp_path / "table_types.py"
-    data = _typed_fixture(
-        geography_labels=("Été", "Ete"), geography_codes=("0007", "500")
-    )
+    data = _typed_fixture(geography_labels=("Été", "Ete"), geography_codes=stored_codes)
     source.write_bytes(data)
     _command(source, output)
     content = output.read_bytes()
     assert hashlib.sha256(data).hexdigest().encode() in content
-    assert pyivt.__version__.encode() in content
+    assert f"# pyivt version: {pyivt.__version__}".encode() in content
     assert b"# Language: en" in content
     assert b"Do not edit" in content
     _command(source, output)
@@ -55,29 +57,36 @@ def test_codegen_writes_deterministic_ruff_clean_types(tmp_path):
         [_tool("ruff"), "format", "--isolated", "--check", str(output)], check=True
     )
     module = runpy.run_path(str(output))
-    assert module["Geo"].ETE == 7
-    assert module["Geo"].ETE_500 == 500
-    assert module["Time"]._1970_01_01 == 0
+    geo = module["Geo"]
+    assert geo.ETE == 1
+    assert geo.ETE_2 == 2
+    assert module["Time"]._1970_01_01 == 1
+    assert module["NATIVE_CODES"]["geo"] == {
+        geo.ETE: stored_codes[0],
+        geo.ETE_2: stored_codes[1] or None,
+    }
+    assert module["NATIVE_CODES"]["time"][module["Time"]._1970_01_01] == "000"
     ivt = pyivt.open(source)
-    dims = module["Dimensions"](geo=[module["Geo"].ETE_500])
-    assert ivt.to_arrow(**dims)["geo"].to_pylist() == [500] * 6
-    assert ivt.members(**dims)["geo"]["code"].to_pylist() == [500]
+    dims = module["Dimensions"](geo=[geo.ETE_2])
+    assert ivt.to_arrow(**dims)["geo"].to_pylist() == [2] * 6
+    assert ivt.members(**dims)["geo"]["code"].to_pylist() == [2]
+    assert "geo" not in ivt.to_arrow(geo=geo.ETE_2).column_names
 
     _command(source, output, "--language", "fr")
     assert b"# Language: fr" in output.read_bytes()
     module = runpy.run_path(str(output))
-    assert module["Geo"].QUEBEC_EST == 7
+    assert module["Geo"].QUEBEC_EST == 1
     assert module["Measure"].CODE_1 == 1
 
 
 def test_codegen_preserves_input_and_existing_output_on_error(tmp_path):
     source, output = tmp_path / "table.ivt", tmp_path / "table_types.py"
-    data = _typed_fixture(geography_codes=("X", "2"))
+    data = b"invalid IVT"
     source.write_bytes(data)
     output.write_text("existing", encoding="utf-8")
     invalid = _command(source, output, check=False)
     assert invalid.returncode == 2
-    assert "invalid native Code" in invalid.stderr
+    assert "header" in invalid.stderr
     assert output.read_text(encoding="utf-8") == "existing"
     same_file = _command(source, source, check=False)
     assert same_file.returncode == 2

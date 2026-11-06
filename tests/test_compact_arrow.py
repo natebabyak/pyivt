@@ -32,6 +32,7 @@ def test_typed_result_members_and_source_identity(tmp_path):
         table.schema.metadata[b"pyivt.table_id"]
         == hashlib.sha256(source).hexdigest().encode()
     )
+    assert table.schema.metadata[b"pyivt.dimension_encoding"] == b"one_based_index"
     for slug, lookup in members.items():
         codes = table[slug].chunk(0)
         assert lookup["code"].type == codes.type == pa.uint8()
@@ -40,6 +41,7 @@ def test_typed_result_members_and_source_identity(tmp_path):
             lookup.schema.metadata[b"pyivt.table_id"]
             == table.schema.metadata[b"pyivt.table_id"]
         )
+        assert lookup.schema.metadata[b"pyivt.dimension_encoding"] == b"one_based_index"
     assert members["geo"]["native_Code"][0].as_py() == "001"
     assert members["geo"]["Rate"][0].as_py() == 1.25
     assert members["time"]["Timeseries"].type == pa.date32()
@@ -57,11 +59,11 @@ def test_selection_matches_native_grid_and_preserves_order():
     ivt = pyivt.open(_typed_fixture())
     full = ivt.to_arrow()
     all_members = ivt.members()
-    table = ivt.to_arrow(geo=[9], measure=[2, 1], time=[2, 0])
+    table = ivt.to_arrow(geo=[2], measure=[2, 1], time=[3, 1])
     assert table["value"].to_pylist() == [3.5, -1000000000000.0, 1099511627776.5, 99.0]
-    assert table["time"].to_pylist() == [0, 2, 0, 2]
-    assert table["geo"].to_pylist() == [9] * 4
-    assert ivt.members(geo=[9], time=[2, 0])["time"]["code"].to_pylist() == [0, 2]
+    assert table["time"].to_pylist() == [1, 3, 1, 3]
+    assert table["geo"].to_pylist() == [2] * 4
+    assert ivt.members(geo=[2], time=[3, 1])["time"]["code"].to_pylist() == [1, 3]
 
     complete = {
         slug: lookup["code"].to_pylist()[::-1] for slug, lookup in all_members.items()
@@ -81,10 +83,10 @@ def test_selection_matches_native_grid_and_preserves_order():
     ]
     assert list(ivt.members(measure=2)) == ["geo", "time"]
 
-    assert ivt.to_arrow(geo=9, measure=1, time=2).to_pydict() == {
+    assert ivt.to_arrow(geo=2, measure=1, time=3).to_pydict() == {
         "value": [-1000000000000.0]
     }
-    assert ivt.members(geo=9, measure=1, time=2) == {}
+    assert ivt.members(geo=2, measure=1, time=3) == {}
 
     empty = ivt.to_arrow(geo=[], measure=1)
     members = ivt.members(geo=[], measure=1)
@@ -127,12 +129,11 @@ def test_smallest_unsigned_code_type(count, kind):
     table = ivt.to_arrow()
     assert table["axis_0"].type == kind
     assert table["axis_0"][-1].as_py() == count
-    selected = ivt.to_arrow(axis_0=[count])
-    assert selected["axis_0"].type == kind
-    assert selected["axis_0"].to_pylist() == [count]
-    members = ivt.members(axis_0=[count])
-    assert members["axis_0"]["code"].type == kind
-    assert ivt.to_arrow(axis_0=[1])["axis_0"].type == pa.uint8()
+    for codes in ([count], [1], []):
+        selected = ivt.to_arrow(axis_0=codes)["axis_0"]
+        lookup = ivt.members(axis_0=codes)["axis_0"]["code"]
+        assert selected.type == lookup.type == kind
+        assert selected.to_pylist() == lookup.to_pylist() == codes
 
 
 def test_selected_page_windows_and_projection_match_independent_values():
@@ -229,13 +230,13 @@ def test_polars_retains_unsigned_codes():
 
 def test_equivalent_selections_share_buffers():
     ivt = pyivt.open(_typed_fixture())
-    table = ivt.to_arrow(time=[2, 0], geo=[9])
-    equivalent = ivt.to_arrow(geo=[9], time=[0, 2])
+    table = ivt.to_arrow(time=[3, 1], geo=[2])
+    equivalent = ivt.to_arrow(geo=[2], time=[1, 3])
     assert (
         table["geo"].chunk(0).buffers()[1].address
         == equivalent["geo"].chunk(0).buffers()[1].address
     )
-    fixed = ivt.to_arrow(geo=9, time=[2, 0])
+    fixed = ivt.to_arrow(geo=2, time=[3, 1])
     assert fixed.column_names == ["measure", "time", "value"]
     assert fixed["value"].equals(table["value"])
 
@@ -278,10 +279,10 @@ def test_missing_translation_is_nullable():
 def test_time_series_member_labels_follow_dates_in_both_languages(rate, frequency):
     ivt = pyivt.open(_typed_fixture(rate=rate))
     assert ivt.metadata.frequency == frequency
-    table = ivt.to_arrow(time=[0, 1, 2])
-    assert table["time"].to_pylist() == [0, 1, 2] * 4
+    table = ivt.to_arrow(time=[1, 2, 3])
+    assert table["time"].to_pylist() == [1, 2, 3] * 4
     for language in ("en", "fr"):
-        time = ivt.members(language=language, time=[0, 1, 2])["time"]
+        time = ivt.members(language=language, time=[1, 2, 3])["time"]
         assert time["Timeseries"].to_pylist() == [
             date(1970, 1, 1),
             date(2000, 2, 29),
@@ -290,38 +291,35 @@ def test_time_series_member_labels_follow_dates_in_both_languages(rate, frequenc
         assert time["label"].to_pylist() == ["1970-01-01", "2000-02-29", None]
 
 
-def test_sparse_unsorted_native_codes_keep_file_order_and_minimal_width():
-    ivt = pyivt.open(_typed_fixture(geography_codes=("00070000", "0")))
-    table = ivt.to_arrow(geo=[0, 70000])
-    assert table["geo"].to_pylist() == [70000] * 6 + [0] * 6
-    assert table["geo"].type == pa.uint32()
-    assert ivt.members(geo=[0, 70000])["geo"]["code"].to_pylist() == [70000, 0]
-    assert ivt.members()["geo"]["code"].type == pa.uint32()
-    assert ivt.to_arrow(geo=[0])["geo"].type == pa.uint8()
-    assert ivt.to_arrow(geo=[0])["value"].to_pylist() == table["value"].to_pylist()[6:]
-
-
 @pytest.mark.parametrize(
-    "codes, error",
+    "stored_codes, expected_text",
     [
-        (("A1", "2"), "invalid native Code"),
-        (("01", "1"), "duplicate native Code"),
-        (("-1", "2"), "invalid native Code"),
-        ((str(2**64), "2"), "invalid native Code"),
+        (("00070000", "0"), ["00070000", "0"]),
+        (("00", "000"), ["00", "000"]),
+        (("INNC", "INNC"), ["INNC", "INNC"]),
+        (("INNC", ""), ["INNC", None]),
     ],
 )
-def test_invalid_native_codes(codes, error):
-    ivt = pyivt.open(_typed_fixture(geography_codes=codes))
-    for method in (ivt.to_arrow, ivt.members):
-        with pytest.raises(ValueError, match=error):
-            method()
+def test_native_codes_are_text_metadata(stored_codes, expected_text):
+    ivt = pyivt.open(_typed_fixture(geography_codes=stored_codes))
+    table = ivt.to_arrow(geo=[2, 1])
+    lookup = ivt.members(geo=[2, 1])["geo"]
+    assert table["geo"].type == lookup["code"].type == pa.uint8()
+    assert table["geo"].to_pylist() == [1] * 6 + [2] * 6
+    assert lookup["code"].to_pylist() == [1, 2]
+    assert lookup["native_Code"].type == pa.string()
+    assert lookup["native_Code"].to_pylist() == expected_text
+    assert ivt.members(geo=[2])["geo"]["native_Code"].to_pylist() == expected_text[1:]
+    assert ivt.to_arrow(geo=2)["value"].equals(table["value"].slice(6))
 
 
-def test_missing_native_code_falls_back_to_one_based_positions():
+def test_missing_native_code_field():
     source = bytearray(cube((2, 3), label_fields=0))
     source[824:838] = bytes(14)
     ivt = pyivt.open(source)
-    assert ivt.members()["axis_0"]["code"].to_pylist() == [1, 2]
+    lookup = ivt.members()["axis_0"]
+    assert lookup.column_names == ["code", "label"]
+    assert lookup["code"].to_pylist() == [1, 2]
     assert ivt.to_arrow(axis_0=[2])["axis_0"].to_pylist() == [2, 2, 2]
 
 

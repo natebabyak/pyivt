@@ -370,7 +370,7 @@ class Ivt:
         Each capsule owns an independent reader. Schema requests raise ValueError.
         """
     def to_arrow(self, /, **dims: object) -> pa.Table:
-        """Return a PyArrow table of native codes and nullable float64 values.
+        """Return 1-based member positions and nullable float64 values as a table.
 
         Pass dimension slugs as keywords. An integer fixes a dimension and
         drops its column. A list of integers keeps the column and limits its
@@ -383,12 +383,13 @@ class Ivt:
         """Return Arrow member lookups keyed by dimension slug.
 
         The same keyword arguments select the same codes as to_arrow().
-        Each retained dimension has a lookup with unsigned code, nullable
-        label in the requested language, and native attributes. No cells
+        Each retained dimension has a lookup with an unsigned 1-based code,
+        a nullable label in the requested language, and native attributes.
+        When present, the native Code is a separate text column. No cells
         are decoded.
         """
     def _member_fields(
-        self, *, code_only: bool = False
+        self,
     ) -> tuple[
         str,
         list[list[tuple[str, str, list[str | int | float | None]]]],

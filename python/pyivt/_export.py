@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -10,7 +9,7 @@ if TYPE_CHECKING:
 
     from pyivt._native import Ivt
 
-_Axis = tuple[bool, list[int] | None, list[int] | None]
+_Axis = tuple[bool, list[int] | None]
 _DISPLAY_NAMES = (("english desc",), ("desc français", "french desc"))
 
 
@@ -20,34 +19,10 @@ def prepare(ivt: Ivt, dims: dict[str, int | list[int]]) -> list[_Axis]:
         raise ValueError(
             f"unknown dimension {slug!r}; expected one of {layout.slugs!r}"
         )
-    _, fields, _ = ivt._member_fields(code_only=True)
     axes = []
-    for slug, count, axis_fields in zip(
-        layout.slugs, layout.counts, fields, strict=True
-    ):
-        native = next(
-            (values for name, _, values in axis_fields if name.casefold() == "code"),
-            None,
-        )
-        codes = None
-        positions = None
-        if native is not None:
-            codes = []
-            positions = {}
-            for index, value in enumerate(native):
-                if isinstance(value, str) and re.fullmatch(r"[0-9]+", value):
-                    value = int(value)
-                if not isinstance(value, int) or not 0 <= value < 2**64:
-                    raise ValueError(
-                        f"dimension {slug}: invalid native Code {value!r} at position {index + 1}"
-                    )
-                if value in positions:
-                    raise ValueError(f"dimension {slug}: duplicate native Code {value}")
-                positions[value] = index
-                codes.append(value)
-
+    for slug, count in zip(layout.slugs, layout.counts, strict=True):
         if slug not in dims:
-            axes.append((True, None, codes))
+            axes.append((True, None))
             continue
         choice = dims[slug]
         included = isinstance(choice, list)
@@ -58,20 +33,13 @@ def prepare(ivt: Ivt, dims: dict[str, int | list[int]]) -> list[_Axis]:
                 raise ValueError(  # noqa: TRY004
                     f"dimension {slug}: expected an integer code, got {code!r}"
                 )
-            index = positions.get(code) if positions is not None else code - 1
-            if index is None or not 0 <= index < count:
+            index = code - 1
+            if not 0 <= index < count:
                 raise ValueError(f"dimension {slug}: unknown member code {code}")
             if index in indices:
                 raise ValueError(f"dimension {slug}: duplicate member code {code}")
             indices.add(index)
-        ordered = sorted(indices)
-        if len(ordered) == count:
-            axes.append((included, None, codes if included else None))
-        else:
-            selected_codes = (
-                [codes[i] for i in ordered] if included and codes is not None else None
-            )
-            axes.append((included, ordered, selected_codes))
+        axes.append((included, None if len(indices) == count else sorted(indices)))
     return axes
 
 
@@ -80,7 +48,7 @@ def build_member_tables(
 ) -> dict[str, pa.Table]:
     import pyarrow as pa
 
-    if not any(included for included, _, _ in projection):
+    if not any(included for included, _ in projection):
         return {}
     index = ("en", "fr").index(language)
     table_id, fields, display_fields = ivt._member_fields()
@@ -95,21 +63,14 @@ def build_member_tables(
     axes = zip(
         projection, layout.slugs, layout.counts, fields, display_fields, strict=True
     )
-    for (included, indices, native_codes), slug, count, axis_fields, display in axes:
+    for (included, indices), slug, count, axis_fields, display in axes:
         if not included:
             continue
-        if native_codes is not None:
-            codes = native_codes
-        elif indices is None:
+        if indices is None:
             codes = range(1, count + 1)
         else:
             codes = [position + 1 for position in indices]
-        max_code = (
-            max(native_codes, default=0)
-            if native_codes is not None
-            else (codes[-1] if codes else 0)
-        )
-        columns = {"code": pa.array(codes, type=_unsigned_type(max_code))}
+        columns = {"code": pa.array(codes, type=_unsigned_type(count))}
         is_time, names, references = display
         arrays = []
         for name, kind, values in axis_fields:
@@ -137,6 +98,7 @@ def build_member_tables(
             )
         metadata = {
             b"pyivt.table_id": table_id.encode(),
+            b"pyivt.dimension_encoding": b"one_based_index",
             b"pyivt.dimension": slug.encode(),
         }
         label = date_label

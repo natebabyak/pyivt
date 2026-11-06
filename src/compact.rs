@@ -8,8 +8,7 @@ use std::sync::Arc;
 
 pub const MEMORY_LIMIT: usize = 2_147_483_648;
 
-pub type Positions = (bool, Option<Vec<usize>>);
-pub type AxisProjection = (bool, Option<Vec<usize>>, Option<Vec<u64>>);
+pub type AxisProjection = (bool, Option<Vec<usize>>);
 
 fn code_bytes(max_code: u64) -> usize {
     if u8::try_from(max_code).is_ok() {
@@ -33,12 +32,11 @@ pub fn export(
         return Err("selection does not match the layout".into());
     }
     let mut choices = Vec::with_capacity(layout.n_dim);
-    let mut native_codes = Vec::with_capacity(layout.n_dim);
     let mut counts = Vec::with_capacity(layout.n_dim);
     let mut widths = Vec::with_capacity(layout.n_dim);
-    for (axis, (included, selected, codes)) in selection.into_iter().enumerate() {
+    for (axis, (included, selected)) in selection.into_iter().enumerate() {
         let count = layout.counts[axis] as usize;
-        let (len, ordinal_max) = if let Some(indices) = &selected {
+        let len = if let Some(indices) = &selected {
             if indices.last().is_some_and(|&index| index >= count)
                 || indices.windows(2).any(|pair| pair[0] >= pair[1])
             {
@@ -47,24 +45,17 @@ pub fn export(
                     layout.slugs[axis]
                 ));
             }
-            (
-                indices.len(),
-                indices.last().map_or(0, |&index| index as u64 + 1),
-            )
+            indices.len()
         } else {
-            (count, count as u64)
+            count
         };
         counts.push(len);
         widths.push(if included {
-            let max_code = codes.as_ref().map_or(ordinal_max, |codes| {
-                codes.iter().copied().max().unwrap_or(0)
-            });
-            code_bytes(max_code)
+            code_bytes(count as u64)
         } else {
             0
         });
         choices.push(selected);
-        native_codes.push(codes);
     }
     let mut strides = vec![1usize; layout.n_dim];
     let mut rows = 1usize;
@@ -106,10 +97,7 @@ pub fn export(
                         .map_err(|_| "memory allocation failed for member codes")?;
                     codes.extend((0..rows).map(|row| {
                         let index = row / stride % count;
-                        let code = match &native_codes[axis] {
-                            Some(codes) => codes[index],
-                            None => choices[axis].as_ref().map_or(index, |c| c[index]) as u64 + 1,
-                        };
+                        let code = choices[axis].as_ref().map_or(index, |c| c[index]) as u64 + 1;
                         code as $native
                     }));
                     Arc::new(<$array>::from(codes)) as ArrayRef
