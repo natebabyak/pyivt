@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.9] - 2026-11-05
+
 ### Changed
 
 - `Ivt.to_member_table()` exports one Arrow lookup with a dictionary-encoded `dimension` column, followed by `code`, `label`, and native attributes.
@@ -14,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Arrow dimension columns and member lookup keys use 1-based positions in file order. Their unsigned widths stay consistent across slices. The combined lookup uses the width of the largest dimension.
 - Native `Code` values remain available as text in member lookups. The fact and lookup schemas identify the new encoding with `pyivt.dimension_encoding=one_based_index`.
 - Generated enums use the same positions. The generated `NATIVE_CODES` mapping exposes the original text by dimension slug and enum value.
+
+### Documentation
+
+- The README explains how to install `pyarrow-stubs` for editor type hints and shows how to pivot a sliced table by industry and occupation with Polars.
 
 ### Migration
 
@@ -211,7 +217,8 @@ First public release: Rust/PyO3 reader for Statistics Canada Beyond 20/20 `.ivt`
 - Demo IVT tests skip in CI unless Beyond sample files are linked locally
 - No CLI or catalogue download; write Parquet yourself via `pyarrow` / Polars / pandas
 
-[Unreleased]: https://github.com/natebabyak/pyivt/compare/v0.0.8...HEAD
+[Unreleased]: https://github.com/natebabyak/pyivt/compare/v0.0.9...HEAD
+[0.0.9]: https://github.com/natebabyak/pyivt/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/natebabyak/pyivt/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/natebabyak/pyivt/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/natebabyak/pyivt/compare/v0.0.5...v0.0.6
