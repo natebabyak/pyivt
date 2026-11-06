@@ -21,6 +21,16 @@ pip install pyivt
 
 With uv, run `uv add pyivt`.
 
+### Editor type hints
+
+To see `pyarrow.Table` as the return type of `ivt.to_arrow()` in your editor,
+install `pyarrow-stubs` in the same Python environment as pyivt and select that
+environment in your editor.
+
+```sh
+pip install pyarrow-stubs
+```
+
 ## Usage
 
 ### Open a table
@@ -83,6 +93,24 @@ Codes are the members' 1-based positions in the file.
 An integer fixes a dimension at one member and drops its column. A list retains
 the column and filters its rows. Omitted dimensions retain all members and
 their columns. An empty list selects zero rows.
+
+### Pivot industry by occupation with Polars
+
+On a table with `geography`, `labour_force`, `industry`, and `occupation`
+dimensions, fix geography and labour force to get one value for each industry
+and occupation pair. With Polars installed, pivot the Arrow result into one row
+per industry and one column per occupation code.
+
+```python
+import polars as pl
+
+table = ivt.to_arrow(geography=5, labour_force=1)
+pivoted = pl.from_arrow(table).pivot(
+    on="occupation",
+    index="industry",
+    values="value",
+)
+```
 
 ### Generate Python types for a table
 
