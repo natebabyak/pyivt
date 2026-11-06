@@ -6,7 +6,7 @@ import pyivt
 ivt = pyivt.open("table.ivt")
 print(ivt.metadata.title.en)
 table = ivt.to_arrow()
-members = ivt.members()
+members = ivt.to_member_table()
 ```
 """
 
@@ -86,7 +86,9 @@ class Dimension:
     All attributes are read-only. Member label lists, when available, follow
     file order. Labels may retain leading
     spaces used by Beyond 20/20 to express hierarchy. None means unavailable.
-    Use the slug as the Arrow column name and selection keyword.
+    Use the slug as the Arrow column name, selection keyword, and member
+    lookup key. The geography axis uses `geography`. Other axes use slugs
+    derived from their IVT dimension names.
 
     ```python
     for dim in ivt.metadata.dimensions:
@@ -355,7 +357,7 @@ class Ivt:
     ivt = pyivt.open("table.ivt")
     title = ivt.metadata.title.en
     table = ivt.to_arrow()
-    members = ivt.members()
+    members = ivt.to_member_table()
     ```
     """
     @property
@@ -370,25 +372,26 @@ class Ivt:
         Each capsule owns an independent reader. Schema requests raise ValueError.
         """
     def to_arrow(self, /, **dims: object) -> pa.Table:
-        """Return a PyArrow table of native codes and nullable float64 values.
+        """Return 1-based member positions and nullable float64 values as a table.
 
         Pass dimension slugs as keywords. An integer fixes a dimension and
         drops its column. A list of integers keeps the column and limits its
         rows. Omitted dimensions include all members. An empty list gives zero
         rows. Invalid slugs and codes raise ValueError before decoding.
         """
-    def members(
+    def to_member_table(
         self, /, *, language: Literal["en", "fr"] = "en", **dims: object
-    ) -> dict[str, pa.Table]:
-        """Return Arrow member lookups keyed by dimension slug.
+    ) -> pa.Table:
+        """Return one Arrow table with a dictionary-encoded dimension column first.
 
         The same keyword arguments select the same codes as to_arrow().
-        Each retained dimension has a lookup with unsigned code, nullable
-        label in the requested language, and native attributes. No cells
-        are decoded.
+        Each row identifies a retained dimension by slug and a member by its
+        unsigned 1-based code. The label is nullable and uses the requested
+        language. Native attributes are null where absent. When present, the
+        native Code is a separate text column. No cells are decoded.
         """
     def _member_fields(
-        self, *, code_only: bool = False
+        self,
     ) -> tuple[
         str,
         list[list[tuple[str, str, list[str | int | float | None]]]],
@@ -410,7 +413,7 @@ def open(
 
     ### Returns
 
-    An `Ivt` reader exposing `metadata`, `members()`, and `to_arrow()`. Summary
+    An `Ivt` reader exposing `metadata`, `to_member_table()`, and `to_arrow()`. Summary
     metadata is parsed immediately. Cell decoding happens during
     export.
 
@@ -423,7 +426,7 @@ def open(
     ### Notes
 
     Paths use selective metadata reads. Keep the file available and unchanged:
-    the first to_arrow() or members() call reads its full contents. Lazy metadata properties
+    the first export reads its full contents. Lazy metadata properties
     may read additional ranges. In-memory sources are copied when opened, so
     later changes to a bytearray do not affect the reader. This function does
     not fetch URLs or decompress archives. Exceptions raised by a supplied
@@ -439,7 +442,7 @@ def open(
     ivt = pyivt.open(Path("table.ivt"))
     title = ivt.metadata.title.en or ivt.metadata.title.fr
     table = ivt.to_arrow()
-    members = ivt.members()
+    members = ivt.to_member_table()
     in_memory = pyivt.open(BytesIO(Path("table.ivt").read_bytes()))
     ```
     """

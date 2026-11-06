@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::arrow_export::stream_capsule;
-use crate::compact::{AxisProjection, Positions};
+use crate::compact::AxisProjection;
 use crate::decode::{build_layout_with_geo, Layout};
 use crate::descriptor::parse_descriptor;
 use crate::error::IvtError;
@@ -579,7 +579,7 @@ fn export_error(error: String) -> PyErr {
 /// ivt = pyivt.open("table.ivt")
 /// title = ivt.metadata.title.en
 /// table = ivt.to_arrow()
-/// members = ivt.members()
+/// members = ivt.to_member_table()
 /// ```
 #[pyclass(name = "Ivt", module = "pyivt")]
 pub struct Ivt {
@@ -591,10 +591,9 @@ pub struct Ivt {
     path: Option<PathBuf>,
     cache: Mutex<Option<Vec<RecordBatch>>>,
     maps: Mutex<Option<Arc<TidySchema>>>,
-    code_fields: Mutex<Option<Py<PyAny>>>,
     member_fields: Mutex<Option<Py<PyAny>>>,
     source_digest: Mutex<Option<String>>,
-    compact_cache: Mutex<Option<(Vec<Positions>, RecordBatch)>>,
+    compact_cache: Mutex<Option<(Vec<AxisProjection>, RecordBatch)>>,
 }
 
 #[pymethods]
@@ -675,7 +674,7 @@ impl Ivt {
             .call_method0("read_all")
     }
 
-    /// Export native member codes and nullable float64 values in file order.
+    /// Export 1-based member positions and nullable float64 values in file order.
     #[pyo3(signature = (**dims))]
     fn to_arrow<'py>(
         slf: Bound<'py, Self>,
@@ -688,10 +687,7 @@ impl Ivt {
             .getattr("prepare")?
             .call1((&slf, dims.unwrap_or_else(|| PyDict::new(py))))?
             .extract()?;
-        let key: Vec<Positions> = projection
-            .iter()
-            .map(|(included, indices, _)| (*included, indices.clone()))
-            .collect();
+        let key = projection.clone();
         let data = this.compact_data(py, 0)?;
         let table_id = this.source_digest(py, &data)?;
         let batch = py
@@ -706,7 +702,7 @@ impl Ivt {
                 *cache = None;
                 let metadata = std::collections::HashMap::from([
                     ("pyivt.table_id".into(), table_id),
-                    ("pyivt.dimension_encoding".into(), "codes".into()),
+                    ("pyivt.dimension_encoding".into(), "one_based_index".into()),
                 ]);
                 let batch = crate::compact::export(&data, &this.layout, projection, metadata)?;
                 *cache = Some((key, batch.clone()));
@@ -728,9 +724,9 @@ impl Ivt {
             .call_method0("read_all")
     }
 
-    /// Export member lookup tables keyed by dimension slug, without decoding cells.
+    /// Export one Arrow member lookup with a dictionary-encoded dimension column.
     #[pyo3(signature = (*, language="en", **dims))]
-    fn members<'py>(
+    fn to_member_table<'py>(
         slf: Bound<'py, Self>,
         py: Python<'py>,
         language: &str,
@@ -744,19 +740,13 @@ impl Ivt {
             .getattr("prepare")?
             .call1((&slf, dims.unwrap_or_else(|| PyDict::new(py))))?;
         export
-            .getattr("build_member_tables")?
+            .getattr("build_member_table")?
             .call1((slf, prepared, language))
     }
 
     /// Private member-only bridge with Date32 day offsets and display references.
-    #[pyo3(signature = (*, code_only=false))]
-    fn _member_fields<'py>(&self, py: Python<'py>, code_only: bool) -> PyResult<Bound<'py, PyAny>> {
-        let cache = if code_only {
-            &self.code_fields
-        } else {
-            &self.member_fields
-        };
-        if let Some(fields) = cache.lock().unwrap().as_ref() {
+    fn _member_fields<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        if let Some(fields) = self.member_fields.lock().unwrap().as_ref() {
             return Ok(fields.bind(py).clone());
         }
         let member_estimate = self.layout.counts.iter().fold(0usize, |n, &count| {
@@ -781,20 +771,13 @@ impl Ivt {
                     .iter()
                     .enumerate()
                     .map(|(axis, &count)| {
-                        let (fields, positions) = if code_only {
-                            crate::members::read_code_field(&data, axis, count as usize)?
-                        } else {
+                        let (fields, positions) =
                             crate::members::read_typed_members_with_positions(
                                 &data,
                                 axis,
                                 count as usize,
-                            )?
-                        };
-                        let (names, references) = if code_only {
-                            ([None, None], [None, None])
-                        } else {
-                            metadata::member_display(&data, axis, &positions)
-                        };
+                            )?;
+                        let (names, references) = metadata::member_display(&data, axis, &positions);
                         Ok::<_, String>((fields, (axis_kinds[axis], names, references)))
                     })
                     .collect::<Result<Vec<_>, _>>()
@@ -834,7 +817,7 @@ impl Ivt {
             ],
         )?
         .into_any();
-        *cache.lock().unwrap() = Some(result.clone().unbind());
+        *self.member_fields.lock().unwrap() = Some(result.clone().unbind());
         Ok(result)
     }
 }
@@ -985,7 +968,7 @@ impl Ivt {
 ///
 /// ### Returns
 ///
-/// An `Ivt` reader exposing `metadata`, `members()`, and `to_arrow()`.
+/// An `Ivt` reader exposing `metadata`, `to_member_table()`, and `to_arrow()`.
 /// Summary metadata is parsed immediately. Cells are decoded by `to_arrow()`.
 ///
 /// ### Raises
@@ -997,7 +980,7 @@ impl Ivt {
 /// ### Notes
 ///
 /// Paths use selective metadata reads. Keep the file available and unchanged:
-/// the first to_arrow() or members() call reads its full contents. Lazy metadata properties
+/// the first export reads its full contents. Lazy metadata properties
 /// may read additional ranges. In-memory sources are copied when opened, so
 /// later changes to a bytearray do not affect the reader. This function does
 /// not fetch URLs or decompress archives. Exceptions raised by a supplied
@@ -1013,7 +996,7 @@ impl Ivt {
 /// ivt = pyivt.open(Path("table.ivt"))
 /// title = ivt.metadata.title.en or ivt.metadata.title.fr
 /// table = ivt.to_arrow()
-/// members = ivt.members()
+/// members = ivt.to_member_table()
 /// in_memory = pyivt.open(BytesIO(Path("table.ivt").read_bytes()))
 /// ```
 #[pyfunction]
@@ -1047,7 +1030,6 @@ pub fn open_ivt(py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<Ivt> {
                 path: Some(path),
                 cache: Mutex::new(None),
                 maps: Mutex::new(None),
-                code_fields: Mutex::new(None),
                 member_fields: Mutex::new(None),
                 source_digest: Mutex::new(None),
                 compact_cache: Mutex::new(None),
@@ -1081,7 +1063,6 @@ pub fn open_ivt(py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<Ivt> {
                 path: None,
                 cache: Mutex::new(None),
                 maps: Mutex::new(None),
-                code_fields: Mutex::new(None),
                 member_fields: Mutex::new(None),
                 source_digest: Mutex::new(None),
                 compact_cache: Mutex::new(None),

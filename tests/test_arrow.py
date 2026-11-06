@@ -47,19 +47,22 @@ def _canivt_projection(ivt: pyivt.Ivt) -> dict[str, str]:
     These Census files declare English Desc, GEO_NAME_EN, DGUID_EN and
     GEO_LEVEL_DES_EN. A different source schema needs an explicit mapping.
     """
+    geo_axis = ivt._layout.geo_dim
+    assert geo_axis is not None
+    geography = ivt._layout.slugs[geo_axis - 1]
     projection = {
-        "geo": "geo",
-        "geo_label": "geo_english_desc",
-        "geo_name": "geo_geo_name_en",
-        "geo_uid": "geo_dguid_en",
-        "geo_level": "geo_geo_level_des_en",
+        "geo": geography,
+        "geo_label": f"{geography}_english_desc",
+        "geo_name": f"{geography}_geo_name_en",
+        "geo_uid": f"{geography}_dguid_en",
+        "geo_level": f"{geography}_geo_level_des_en",
     }
     axes = [
         (slug, dimension)
         for slug, dimension in zip(
             ivt._layout.slugs, ivt.metadata.dimensions, strict=True
         )
-        if slug != "geo"
+        if slug != geography
     ]
     names = []
     for index, (_, dimension) in enumerate(axes, start=1):
@@ -183,7 +186,7 @@ def test_expanded_batches_match_expected(ivt_path: Path) -> None:
         if name == "geo_name":
             # canivt's ivt_f2_geo_fill_label uses the display label for synthetic
             # aggregate geographies whose native GEO_NAME_EN is absent.
-            column = pc.coalesce(column, actual["geo_english_desc"])
+            column = pc.coalesce(column, actual[projection["geo_label"]])
         # canivt trims indentation used by Beyond's hierarchical member labels.
         if column.type == pa.string():
             reference = pc.utf8_trim_whitespace(reference)

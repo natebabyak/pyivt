@@ -667,7 +667,7 @@ dependencies = [
 
 [[package]]
 name = "pyivt"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "arrow",
  "encoding_rs",

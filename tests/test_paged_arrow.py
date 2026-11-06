@@ -79,10 +79,10 @@ def _official_csv_table() -> pa.Table:
             symbols.append(row[value_index + 1] or None)
     return pa.table(
         {
-            "geo": pa.array(coordinates, pa.int64()),
+            "geography": pa.array(coordinates, pa.int64()),
             "population_and": pa.array(members, pa.int64()),
-            "geo_english_desc": pa.array(geographies, pa.string()),
-            "geo_dguid_en": pa.array(dguids, pa.string()),
+            "geography_english_desc": pa.array(geographies, pa.string()),
+            "geography_dguid_en": pa.array(dguids, pa.string()),
             "population_and_english_desc": pa.array(labels, pa.string()),
             "value": pa.array(values, pa.float64()),
             "symbol": pa.array(symbols, pa.string()),
@@ -92,7 +92,7 @@ def _official_csv_table() -> pa.Table:
 
 def test_paged_arrow_matches_complete_official_csv() -> None:
     ivt = pyivt.open(IVT_PATH)
-    assert ivt._layout.slugs == ["geo", "population_and"]
+    assert ivt._layout.slugs == ["geography", "population_and"]
     assert ivt._layout.counts == [105, 11]
     assert ivt.metadata.number_of_datapoints == 1155
     actual = plain_table(expanded_table(ivt))
@@ -100,7 +100,7 @@ def test_paged_arrow_matches_complete_official_csv() -> None:
     assert actual.num_rows == expected.num_rows == 1155
     for name in expected.column_names:
         column = actual[name]
-        if name in ("geo_english_desc", "population_and_english_desc"):
+        if name in ("geography_english_desc", "population_and_english_desc"):
             # Beyond stores hierarchy indentation; the public CSV omits it.
             column = pc.utf8_trim_whitespace(column)
         assert column.null_count == expected[name].null_count, name
@@ -111,29 +111,29 @@ def test_paged_arrow_matches_complete_official_csv() -> None:
 
 def test_paged_arrow_schema_contract() -> None:
     fields = [
-        ("geo", pa.int64()),
-        ("geo_code", pa.string()),
-        ("geo_english_desc", pa.string()),
-        ("geo_desc_fran_ais", pa.string()),
-        ("geo_geo_name_en", pa.string()),
-        ("geo_geo_name_fr", pa.string()),
-        ("geo_geo_type_desc_en", pa.string()),
-        ("geo_geo_type_desc_fr", pa.string()),
-        ("geo_geo_type_abbr_en", pa.string()),
-        ("geo_geo_type_abbr_fr", pa.string()),
-        ("geo_geo_level_des_en", pa.string()),
-        ("geo_geo_level_des_fr", pa.string()),
-        ("geo_prov_abbr_en", pa.string()),
-        ("geo_prov_abbr_fr", pa.string()),
-        ("geo_dguid_en", pa.string()),
-        ("geo_dguid_fr", pa.string()),
-        ("geo_alt_geo_code_en", pa.string()),
-        ("geo_alt_geo_code_fr", pa.string()),
-        ("geo_pr_code_en", pa.string()),
-        ("geo_pr_code_fr", pa.string()),
-        ("geo_description", pa.string()),
-        ("geo_itemnotes2", pa.string()),
-        ("geo_decimals", pa.int64()),
+        ("geography", pa.int64()),
+        ("geography_code", pa.string()),
+        ("geography_english_desc", pa.string()),
+        ("geography_desc_fran_ais", pa.string()),
+        ("geography_geo_name_en", pa.string()),
+        ("geography_geo_name_fr", pa.string()),
+        ("geography_geo_type_desc_en", pa.string()),
+        ("geography_geo_type_desc_fr", pa.string()),
+        ("geography_geo_type_abbr_en", pa.string()),
+        ("geography_geo_type_abbr_fr", pa.string()),
+        ("geography_geo_level_des_en", pa.string()),
+        ("geography_geo_level_des_fr", pa.string()),
+        ("geography_prov_abbr_en", pa.string()),
+        ("geography_prov_abbr_fr", pa.string()),
+        ("geography_dguid_en", pa.string()),
+        ("geography_dguid_fr", pa.string()),
+        ("geography_alt_geo_code_en", pa.string()),
+        ("geography_alt_geo_code_fr", pa.string()),
+        ("geography_pr_code_en", pa.string()),
+        ("geography_pr_code_fr", pa.string()),
+        ("geography_description", pa.string()),
+        ("geography_itemnotes2", pa.string()),
+        ("geography_decimals", pa.int64()),
         ("population_and", pa.int64()),
         ("population_and_code", pa.string()),
         ("population_and_english_desc", pa.string()),

@@ -130,9 +130,6 @@ pub fn build_layout_with_geo(dims: &[DimDesc], gd: Option<usize>) -> Result<Layo
     let didx: Vec<usize> = (1..=m).filter(|&i| Some(i) != gd).collect();
     let names: Vec<String> = didx.iter().map(|&i| dims[i - 1].name.clone()).collect();
     let mut slugs = vec![String::new(); m];
-    if let Some(gd) = gd {
-        slugs[gd - 1] = "geo".into();
-    }
     for (i, slug) in didx.iter().zip(dim_slugs(&names)) {
         slugs[i - 1] = slug;
     }
@@ -142,12 +139,16 @@ pub fn build_layout_with_geo(dims: &[DimDesc], gd: Option<usize>) -> Result<Layo
         "symbol",
         "status",
         "footnote_raw",
-        "geo",
         "language",
     ]
     .into_iter()
     .map(str::to_owned)
     .collect();
+    if let Some(gd) = gd {
+        let slug = String::from("geography");
+        used.insert(slug.clone());
+        slugs[gd - 1] = slug;
+    }
     for (index, slug) in slugs.iter_mut().enumerate() {
         if Some(index + 1) == gd {
             continue;
@@ -877,6 +878,15 @@ mod tests {
             assert!(!layout.slugs.iter().any(|slug| slug == reserved));
         }
         assert_eq!(layout.slugs.last().unwrap(), "language_2");
+        let dims = [dim("Geography"), dim("Region"), dim("Reference period")];
+        assert_eq!(
+            build_layout(&dims).unwrap().slugs,
+            ["geography", "region", "reference_period"]
+        );
+        assert_eq!(
+            build_layout_with_geo(&dims, Some(2)).unwrap().slugs,
+            ["geography_2", "geography", "reference_period"]
+        );
         let mut invalid = dim("Items");
         invalid.count = 0;
         assert!(build_layout(&[invalid]).is_err());

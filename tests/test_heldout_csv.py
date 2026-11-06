@@ -77,7 +77,7 @@ def test_frozen_heldout_table_matches_every_official_csv_cell(product):
         table[f"{slug}_english_desc"].to_pylist() for slug in ivt._layout.slugs
     ]
     values, symbols, dguids = [
-        table[name].to_pylist() for name in ["value", "symbol", "geo_dguid_en"]
+        table[name].to_pylist() for name in ["value", "symbol", "geography_dguid_en"]
     ]
     for position, (
         ids,

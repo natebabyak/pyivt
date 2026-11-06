@@ -1,8 +1,7 @@
-"""Prepare compact projections and typed member lookup tables."""
+"""Prepare compact projections and the typed member lookup table."""
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -10,7 +9,7 @@ if TYPE_CHECKING:
 
     from pyivt._native import Ivt
 
-_Axis = tuple[bool, list[int] | None, list[int] | None]
+_Axis = tuple[bool, list[int] | None]
 _DISPLAY_NAMES = (("english desc",), ("desc français", "french desc"))
 
 
@@ -20,34 +19,10 @@ def prepare(ivt: Ivt, dims: dict[str, int | list[int]]) -> list[_Axis]:
         raise ValueError(
             f"unknown dimension {slug!r}; expected one of {layout.slugs!r}"
         )
-    _, fields, _ = ivt._member_fields(code_only=True)
     axes = []
-    for slug, count, axis_fields in zip(
-        layout.slugs, layout.counts, fields, strict=True
-    ):
-        native = next(
-            (values for name, _, values in axis_fields if name.casefold() == "code"),
-            None,
-        )
-        codes = None
-        positions = None
-        if native is not None:
-            codes = []
-            positions = {}
-            for index, value in enumerate(native):
-                if isinstance(value, str) and re.fullmatch(r"[0-9]+", value):
-                    value = int(value)
-                if not isinstance(value, int) or not 0 <= value < 2**64:
-                    raise ValueError(
-                        f"dimension {slug}: invalid native Code {value!r} at position {index + 1}"
-                    )
-                if value in positions:
-                    raise ValueError(f"dimension {slug}: duplicate native Code {value}")
-                positions[value] = index
-                codes.append(value)
-
+    for slug, count in zip(layout.slugs, layout.counts, strict=True):
         if slug not in dims:
-            axes.append((True, None, codes))
+            axes.append((True, None))
             continue
         choice = dims[slug]
         included = isinstance(choice, list)
@@ -58,58 +33,69 @@ def prepare(ivt: Ivt, dims: dict[str, int | list[int]]) -> list[_Axis]:
                 raise ValueError(  # noqa: TRY004
                     f"dimension {slug}: expected an integer code, got {code!r}"
                 )
-            index = positions.get(code) if positions is not None else code - 1
-            if index is None or not 0 <= index < count:
+            index = code - 1
+            if not 0 <= index < count:
                 raise ValueError(f"dimension {slug}: unknown member code {code}")
             if index in indices:
                 raise ValueError(f"dimension {slug}: duplicate member code {code}")
             indices.add(index)
-        ordered = sorted(indices)
-        if len(ordered) == count:
-            axes.append((included, None, codes if included else None))
-        else:
-            selected_codes = (
-                [codes[i] for i in ordered] if included and codes is not None else None
-            )
-            axes.append((included, ordered, selected_codes))
+        axes.append((included, None if len(indices) == count else sorted(indices)))
     return axes
 
 
-def build_member_tables(
-    ivt: Ivt, projection: list[_Axis], language: str
-) -> dict[str, pa.Table]:
+def build_member_table(ivt: Ivt, projection: list[_Axis], language: str) -> pa.Table:
     import pyarrow as pa
 
-    if not any(included for included, _, _ in projection):
-        return {}
+    layout = ivt._layout
+    slugs = pa.array(
+        [
+            slug
+            for (included, _), slug in zip(projection, layout.slugs, strict=True)
+            if included
+        ],
+        type=pa.string(),
+    )
+    index_type = pa.int32()
+    code_type = _unsigned_type(max(layout.counts, default=0))
+    column_types = {
+        "dimension": pa.dictionary(index_type, pa.string()),
+        "code": code_type,
+        "label": pa.string(),
+    }
+    metadata = {b"pyivt.dimension_encoding": b"one_based_index"}
+    if len(slugs) == 0:
+        return pa.Table.from_arrays(
+            [pa.chunked_array([], type=dtype) for dtype in column_types.values()],
+            names=list(column_types),
+            metadata=metadata,
+        )
     index = ("en", "fr").index(language)
     table_id, fields, display_fields = ivt._member_fields()
-    layout = ivt._layout
+    metadata[b"pyivt.table_id"] = table_id.encode()
     types = {
         "text": pa.string(),
         "integer": pa.int64(),
         "float": pa.float64(),
         "date": pa.date32(),
     }
-    tables = {}
+    groups: list[dict[str, pa.Array]] = []
+    native_names: dict[tuple[str, str, int], str] = {}
+    reserved = set(column_types)
+    used = reserved.copy()
     axes = zip(
         projection, layout.slugs, layout.counts, fields, display_fields, strict=True
     )
-    for (included, indices, native_codes), slug, count, axis_fields, display in axes:
+    for (included, indices), slug, count, axis_fields, display in axes:
         if not included:
             continue
-        if native_codes is not None:
-            codes = native_codes
-        elif indices is None:
+        if indices is None:
             codes = range(1, count + 1)
         else:
             codes = [position + 1 for position in indices]
-        max_code = (
-            max(native_codes, default=0)
-            if native_codes is not None
-            else (codes[-1] if codes else 0)
+        dimension = pa.DictionaryArray.from_arrays(
+            pa.repeat(pa.scalar(len(groups), type=index_type), len(codes)), slugs
         )
-        columns = {"code": pa.array(codes, type=_unsigned_type(max_code))}
+        columns = {"dimension": dimension, "code": pa.array(codes, type=code_type)}
         is_time, names, references = display
         arrays = []
         for name, kind, values in axis_fields:
@@ -135,10 +121,6 @@ def build_member_tables(
                 ),
                 None,
             )
-        metadata = {
-            b"pyivt.table_id": table_id.encode(),
-            b"pyivt.dimension": slug.encode(),
-        }
         label = date_label
         if not is_time:
             reference = references[index]
@@ -162,21 +144,53 @@ def build_member_tables(
             label if label is not None else pa.nulls(len(codes), type=pa.string())
         )
         if (title := names[index]) is not None:
-            metadata[b"pyivt.label"] = title.encode()
+            metadata[f"pyivt.label.{slug}".encode()] = title.encode()
 
-        reserved = set(columns)
-        used = reserved.copy()
-        for (name, _, _), array in zip(axis_fields, arrays, strict=True):
-            base = f"native_{name}" if name.casefold() in reserved else name
-            column = base
-            suffix = 2
-            while column.casefold() in used:
-                column = f"{base}_{suffix}"
-                suffix += 1
+        occurrences: dict[tuple[str, str], int] = {}
+        for (name, kind, _), array in zip(axis_fields, arrays, strict=True):
+            field = (name.casefold(), kind)
+            occurrence = occurrences.get(field, 0)
+            occurrences[field] = occurrence + 1
+            native_key = (*field, occurrence)
+            if (column := native_names.get(native_key)) is None:
+                base = f"native_{name}" if name.casefold() in reserved else name
+                column = base
+                suffix = 2
+                while column.casefold() in used:
+                    column = f"{base}_{suffix}"
+                    suffix += 1
+                native_names[native_key] = column
+                column_types[column] = array.type
+                used.add(column.casefold())
+            elif column_types[column] != array.type:
+                # Integer Sort fields can use different widths or signedness.
+                column_types[column] = max(
+                    (column_types[column], array.type),
+                    key=lambda dtype: (
+                        pa.types.is_signed_integer(dtype),
+                        dtype.bit_width,
+                    ),
+                )
             columns[column] = array
-            used.add(column.casefold())
-        tables[slug] = pa.table(columns, metadata=metadata)
-    return tables
+        groups.append(columns)
+
+    result = []
+    # Reuse null buffers across sparse native columns.
+    nulls: dict[tuple[pa.DataType, int], pa.Array] = {}
+    for name, dtype in column_types.items():
+        chunks = []
+        for columns in groups:
+            array = columns.get(name)
+            if array is None:
+                row_count = len(columns["code"])
+                null_key = (dtype, row_count)
+                if (array := nulls.get(null_key)) is None:
+                    nulls[null_key] = array = pa.nulls(row_count, type=dtype)
+            elif array.type != dtype:
+                array = array.cast(dtype)
+            chunks.append(array)
+        result.append(pa.chunked_array(chunks, type=dtype))
+    return pa.Table.from_arrays(result, names=list(column_types), metadata=metadata)
 
 
 def _unsigned_type(max_value: int) -> pa.DataType:

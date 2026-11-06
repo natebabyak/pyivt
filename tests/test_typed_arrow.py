@@ -46,6 +46,8 @@ def _typed_fixture(
     geography_codes: tuple[str, str] = ("001", "09"),
     measure_name: str = "Measure",
     measure_sort: tuple[int, int] | None = None,
+    measure_extra_fields: tuple[tuple[str, int, bytes], ...] = (),
+    time_name: str = "Time",
 ) -> bytes:
     """Three axes (2 x 2 x 3), all fields, one extended double data component."""
     data = bytearray(1024)
@@ -96,7 +98,11 @@ def _typed_fixture(
         directory(824 + 14 * axis, records)
 
     axis_matrix = bytearray(struct.pack("<BBHH", 1, 2, 3, 82))
-    for name, count, kind in [("Region", 2, 1), (measure_name, 2, 0), ("Time", 3, 2)]:
+    for name, count, kind in [
+        ("Region", 2, 1),
+        (measure_name, 2, 0),
+        (time_name, 3, 2),
+    ]:
         row = bytearray(82)
         struct.pack_into("<I", row, 0, count)
         struct.pack_into("<H", row, 6, kind)
@@ -134,6 +140,7 @@ def _typed_fixture(
         measure_fields.append(
             ("Sort", 0x0002, _vector(2, struct.pack("<HH", *measure_sort)))
         )
+    measure_fields.extend(measure_extra_fields)
     dimension(1, measure_fields)
     dimension(
         2,
@@ -211,14 +218,14 @@ def _expected_table() -> pa.Table:
     f64 = pa.float64()
     text = pa.string()
     columns = [
-        ("geo", i64, [1] * 6 + [2] * 6),
-        ("geo_code", text, ["001"] * 6 + ["09"] * 6),
-        ("geo_english_desc", text, ["  East – Coast"] * 6 + ["West"] * 6),
-        ("geo_french_desc", text, ["  Québec – Est"] * 6 + ["Ouest"] * 6),
-        ("geo_small", i64, [-32768] * 6 + [42] * 6),
-        ("geo_large", i64, [-2000000000] * 6 + [2000000000] * 6),
-        ("geo_rate", f64, [1.25] * 6 + [-2.5] * 6),
-        ("geo_notes", text, ["Café"] * 6 + [None] * 6),
+        ("geography", i64, [1] * 6 + [2] * 6),
+        ("geography_code", text, ["001"] * 6 + ["09"] * 6),
+        ("geography_english_desc", text, ["  East – Coast"] * 6 + ["West"] * 6),
+        ("geography_french_desc", text, ["  Québec – Est"] * 6 + ["Ouest"] * 6),
+        ("geography_small", i64, [-32768] * 6 + [42] * 6),
+        ("geography_large", i64, [-2000000000] * 6 + [2000000000] * 6),
+        ("geography_rate", f64, [1.25] * 6 + [-2.5] * 6),
+        ("geography_notes", text, ["Café"] * 6 + [None] * 6),
         ("measure", i64, [1, 1, 1, 2, 2, 2] * 2),
         ("measure_code", text, ["01"] * 3 + ["02"] * 3 + ["01"] * 3 + ["02"] * 3),
         (
@@ -307,11 +314,11 @@ def test_all_dimensions_and_native_types_match_declared_result(
     path.write_bytes(data)
     ivt = pyivt.open(data if source_kind == "bytes" else path)
     assert ivt._layout.counts == [2, 2, 3]
-    assert ivt._layout.slugs == ["geo", "measure", "time"]
+    assert ivt._layout.slugs == ["geography", "measure", "time"]
     assert ivt.metadata.number_of_datapoints == 12
     encoded = expanded_table(ivt)
-    assert encoded["geo"].type == pa.int32()
-    assert encoded["geo_code"].type == pa.dictionary(pa.int32(), pa.string())
+    assert encoded["geography"].type == pa.int32()
+    assert encoded["geography_code"].type == pa.dictionary(pa.int32(), pa.string())
     actual = plain_table(encoded)
     expected = _expected_table()
     assert actual.shape == expected.shape == (12, 26)

@@ -8,10 +8,10 @@ from typing_extensions import assert_type
 
 
 def check_metadata(ivt: pyivt.Ivt) -> None:
-    assert_type(ivt.to_arrow(geo=[1]), pa.Table)
+    assert_type(ivt.to_arrow(geography=[1]), pa.Table)
     assert_type(ivt.to_arrow(), pa.Table)
-    assert_type(ivt.members(geo=[1]), dict[str, pa.Table])
-    assert_type(ivt.members(language="fr")["geo"], pa.Table)
+    assert_type(ivt.to_member_table(geography=[1]), pa.Table)
+    assert_type(ivt.to_member_table(language="fr"), pa.Table)
     assert_type(
         ivt.metadata.frequency,
         Literal["monthly", "quarterly", "semi_annual", "annual"] | None,
