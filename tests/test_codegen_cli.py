@@ -43,7 +43,11 @@ def _tool(name):
 )
 def test_codegen_writes_deterministic_ruff_clean_types(tmp_path, stored_codes):
     source, output = tmp_path / "table.ivt", tmp_path / "table_types.py"
-    data = _typed_fixture(geography_labels=("Été", "Ete"), geography_codes=stored_codes)
+    data = _typed_fixture(
+        geography_labels=("Été", "Ete"),
+        geography_codes=stored_codes,
+        time_name="Reference Period",
+    )
     source.write_bytes(data)
     _command(source, output)
     content = output.read_bytes()
@@ -57,25 +61,30 @@ def test_codegen_writes_deterministic_ruff_clean_types(tmp_path, stored_codes):
         [_tool("ruff"), "format", "--isolated", "--check", str(output)], check=True
     )
     module = runpy.run_path(str(output))
-    geo = module["Geo"]
-    assert geo.ETE == 1
-    assert geo.ETE_2 == 2
-    assert module["Time"]._1970_01_01 == 1
-    assert module["NATIVE_CODES"]["geo"] == {
-        geo.ETE: stored_codes[0],
-        geo.ETE_2: stored_codes[1] or None,
+    geography = module["Geography"]
+    assert geography.ETE == 1
+    assert geography.ETE_2 == 2
+    period = module["ReferencePeriod"]
+    assert period._1970_01_01 == 1
+    assert module["NATIVE_CODES"]["geography"] == {
+        geography.ETE: stored_codes[0],
+        geography.ETE_2: stored_codes[1] or None,
     }
-    assert module["NATIVE_CODES"]["time"][module["Time"]._1970_01_01] == "000"
+    assert module["NATIVE_CODES"]["reference_period"][period._1970_01_01] == "000"
     ivt = pyivt.open(source)
-    dims = module["Dimensions"](geo=[geo.ETE_2])
-    assert ivt.to_arrow(**dims)["geo"].to_pylist() == [2] * 6
-    assert ivt.members(**dims)["geo"]["code"].to_pylist() == [2]
-    assert "geo" not in ivt.to_arrow(geo=geo.ETE_2).column_names
+    dims = module["Dimensions"](
+        geography=[geography.ETE_2], reference_period=[period._1970_01_01]
+    )
+    table = ivt.to_arrow(**dims)
+    assert table["geography"].to_pylist() == [2] * 2
+    assert table["reference_period"].to_pylist() == [1] * 2
+    assert ivt.members(**dims)["geography"]["code"].to_pylist() == [2]
+    assert "geography" not in ivt.to_arrow(geography=geography.ETE_2).column_names
 
     _command(source, output, "--language", "fr")
     assert b"# Language: fr" in output.read_bytes()
     module = runpy.run_path(str(output))
-    assert module["Geo"].QUEBEC_EST == 1
+    assert module["Geography"].QUEBEC_EST == 1
     assert module["Measure"].CODE_1 == 1
 
 
@@ -113,8 +122,8 @@ def test_codegen_keeps_long_enum_names_and_matches_ruff(tmp_path):
     subprocess.run(
         [_tool("ruff"), "format", "--isolated", "--check", str(output)], check=True
     )
-    geo = runpy.run_path(str(output))["Geo"]
-    assert [member.name for member in geo] == list(labels)
+    geography = runpy.run_path(str(output))["Geography"]
+    assert [member.name for member in geography] == list(labels)
 
 
 @pytest.mark.parametrize("checker", ["ty", "mypy", "pyright"])
@@ -128,11 +137,11 @@ def test_generated_kwargs_type_check_at_call_site(tmp_path, checker):
     script = tmp_path / "check.py"
     good = """\
 import pyivt
-from table_types import Dimensions, Geo, Measure
+from table_types import Dimensions, Geography, Measure
 
 def check(ivt: pyivt.Ivt) -> None:
-    ivt.to_arrow(**Dimensions(geo=[Geo._CLASS], measure=[Measure.LEVEL]))
-    ivt.members(language="fr", **Dimensions(geo=Geo.WEST))
+    ivt.to_arrow(**Dimensions(geography=[Geography._CLASS], measure=[Measure.LEVEL]))
+    ivt.members(language="fr", **Dimensions(geography=Geography.WEST))
 """
     args = [command]
     if checker == "ty":
@@ -149,8 +158,8 @@ def check(ivt: pyivt.Ivt) -> None:
     subprocess.run(args, check=True, cwd=tmp_path, env=environment)
     script.write_text(
         good
-        + "    ivt.to_arrow(**Dimensions(unknown=Geo.WEST))\n"
-        + "    ivt.to_arrow(**Dimensions(geo=[Measure.LEVEL]))\n",
+        + "    ivt.to_arrow(**Dimensions(unknown=Geography.WEST))\n"
+        + "    ivt.to_arrow(**Dimensions(geography=[Measure.LEVEL]))\n",
         encoding="utf-8",
     )
     bad = subprocess.run(

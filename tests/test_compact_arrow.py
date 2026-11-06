@@ -24,8 +24,9 @@ def test_typed_result_members_and_source_identity(tmp_path):
     ivt = pyivt.open(source)
     table = ivt.to_arrow()
     members = ivt.members()
-    assert table.column_names == ["geo", "measure", "time", "value"]
+    assert table.column_names == ["geography", "measure", "time", "value"]
     assert list(members) == table.column_names[:-1]
+    assert [dim.slug for dim in ivt.metadata.dimensions] == list(members)
     assert table.num_rows == 12
     assert table["value"].equals(_expected_table()["value"])
     assert (
@@ -42,16 +43,16 @@ def test_typed_result_members_and_source_identity(tmp_path):
             == table.schema.metadata[b"pyivt.table_id"]
         )
         assert lookup.schema.metadata[b"pyivt.dimension_encoding"] == b"one_based_index"
-    assert members["geo"]["native_Code"][0].as_py() == "001"
-    assert members["geo"]["Rate"][0].as_py() == 1.25
+    assert members["geography"]["native_Code"][0].as_py() == "001"
+    assert members["geography"]["Rate"][0].as_py() == 1.25
     assert members["time"]["Timeseries"].type == pa.date32()
     assert members["time"]["Timeseries"][1].as_py() == date(2000, 2, 29)
     assert ivt.members() == members
-    path = tmp_path / "geo.parquet"
-    pq.write_table(members["geo"], path)
+    path = tmp_path / "geography.parquet"
+    pq.write_table(members["geography"], path)
     lookup = pq.read_table(path)
-    assert lookup.equals(members["geo"], check_metadata=True)
-    joined = table.join(lookup.select(["code", "native_Code"]), "geo", "code")
+    assert lookup.equals(members["geography"], check_metadata=True)
+    joined = table.join(lookup.select(["code", "native_Code"]), "geography", "code")
     assert sorted(joined["native_Code"].to_pylist()) == ["001"] * 6 + ["09"] * 6
 
 
@@ -59,11 +60,11 @@ def test_selection_matches_native_grid_and_preserves_order():
     ivt = pyivt.open(_typed_fixture())
     full = ivt.to_arrow()
     all_members = ivt.members()
-    table = ivt.to_arrow(geo=[2], measure=[2, 1], time=[3, 1])
+    table = ivt.to_arrow(geography=[2], measure=[2, 1], time=[3, 1])
     assert table["value"].to_pylist() == [3.5, -1000000000000.0, 1099511627776.5, 99.0]
     assert table["time"].to_pylist() == [1, 3, 1, 3]
-    assert table["geo"].to_pylist() == [2] * 4
-    assert ivt.members(geo=[2], time=[3, 1])["time"]["code"].to_pylist() == [1, 3]
+    assert table["geography"].to_pylist() == [2] * 4
+    assert ivt.members(geography=[2], time=[3, 1])["time"]["code"].to_pylist() == [1, 3]
 
     complete = {
         slug: lookup["code"].to_pylist()[::-1] for slug, lookup in all_members.items()
@@ -72,7 +73,7 @@ def test_selection_matches_native_grid_and_preserves_order():
     assert ivt.members(**complete) == all_members
 
     projected = ivt.to_arrow(measure=2)
-    assert projected.column_names == ["geo", "time", "value"]
+    assert projected.column_names == ["geography", "time", "value"]
     assert projected["value"].to_pylist() == [
         0.0,
         100.125,
@@ -81,36 +82,37 @@ def test_selection_matches_native_grid_and_preserves_order():
         None,
         99.0,
     ]
-    assert list(ivt.members(measure=2)) == ["geo", "time"]
+    assert list(ivt.members(measure=2)) == ["geography", "time"]
 
-    assert ivt.to_arrow(geo=2, measure=1, time=3).to_pydict() == {
+    assert ivt.to_arrow(geography=2, measure=1, time=3).to_pydict() == {
         "value": [-1000000000000.0]
     }
-    assert ivt.members(geo=2, measure=1, time=3) == {}
+    assert ivt.members(geography=2, measure=1, time=3) == {}
 
-    empty = ivt.to_arrow(geo=[], measure=1)
-    members = ivt.members(geo=[], measure=1)
+    empty = ivt.to_arrow(geography=[], measure=1)
+    members = ivt.members(geography=[], measure=1)
     assert empty.num_rows == 0
-    assert empty.column_names == ["geo", "time", "value"]
-    assert members["geo"].num_rows == 0
+    assert empty.column_names == ["geography", "time", "value"]
+    assert members["geography"].num_rows == 0
     assert members["time"].equals(all_members["time"])
-    assert members["geo"].schema == all_members["geo"].schema
+    assert members["geography"].schema == all_members["geography"].schema
 
 
 @pytest.mark.parametrize(
     "select, reason",
     [
         ({"bad": [1]}, "bad"),
-        ({"geo": [0]}, "geo"),
-        ({"geo": [3]}, "geo"),
-        ({"geo": [-1]}, "geo"),
-        ({"geo": [1, 1]}, "geo"),
-        ({"geo": [True]}, "geo"),
-        ({"geo": [1.0]}, "geo"),
-        ({"geo": ["001"]}, "geo"),
-        ({"geo": "1"}, "geo"),
-        ({"geo": (1,)}, "geo"),
-        ({"geo": True}, "geo"),
+        ({"geo": [1]}, "unknown dimension 'geo'"),
+        ({"geography": [0]}, "geography"),
+        ({"geography": [3]}, "geography"),
+        ({"geography": [-1]}, "geography"),
+        ({"geography": [1, 1]}, "geography"),
+        ({"geography": [True]}, "geography"),
+        ({"geography": [1.0]}, "geography"),
+        ({"geography": ["001"]}, "geography"),
+        ({"geography": "1"}, "geography"),
+        ({"geography": (1,)}, "geography"),
+        ({"geography": True}, "geography"),
     ],
 )
 def test_selection_errors_identify_dimension(select, reason):
@@ -177,7 +179,7 @@ def test_selection_precedes_row_allocation_and_members_do_not_decode():
     ivt = pyivt.open(bytes(broken))
     assert len(ivt.members()) == 3
     with pytest.raises(ValueError, match="unknown member code"):
-        ivt.to_arrow(geo=999)
+        ivt.to_arrow(geography=999)
     with pytest.raises(ValueError, match="directory"):
         ivt.to_arrow()
 
@@ -230,13 +232,13 @@ def test_polars_retains_unsigned_codes():
 
 def test_equivalent_selections_share_buffers():
     ivt = pyivt.open(_typed_fixture())
-    table = ivt.to_arrow(time=[3, 1], geo=[2])
-    equivalent = ivt.to_arrow(geo=[2], time=[1, 3])
+    table = ivt.to_arrow(time=[3, 1], geography=[2])
+    equivalent = ivt.to_arrow(geography=[2], time=[1, 3])
     assert (
-        table["geo"].chunk(0).buffers()[1].address
-        == equivalent["geo"].chunk(0).buffers()[1].address
+        table["geography"].chunk(0).buffers()[1].address
+        == equivalent["geography"].chunk(0).buffers()[1].address
     )
-    fixed = ivt.to_arrow(geo=2, time=[3, 1])
+    fixed = ivt.to_arrow(geography=2, time=[3, 1])
     assert fixed.column_names == ["measure", "time", "value"]
     assert fixed["value"].equals(table["value"])
 
@@ -246,7 +248,7 @@ def test_bilingual_geography_and_gender_are_joined_to_same_codes():
     selected = {
         slug: [1, 2]
         for slug in [dim.slug for dim in ivt.metadata.dimensions]
-        if slug == "geo" or slug.startswith("gender")
+        if slug == "geography" or slug.startswith("gender")
     }
     table = ivt.to_arrow(**selected)
     dims = {dim.slug: dim for dim in ivt.metadata.dimensions}
@@ -277,12 +279,15 @@ def test_missing_translation_is_nullable():
     ],
 )
 def test_time_series_member_labels_follow_dates_in_both_languages(rate, frequency):
-    ivt = pyivt.open(_typed_fixture(rate=rate))
+    ivt = pyivt.open(_typed_fixture(rate=rate, time_name="Reference Period"))
     assert ivt.metadata.frequency == frequency
-    table = ivt.to_arrow(time=[1, 2, 3])
-    assert table["time"].to_pylist() == [1, 2, 3] * 4
+    assert ivt.metadata.dimensions[-1].slug == "reference_period"
+    table = ivt.to_arrow(reference_period=[1, 2, 3])
+    assert table["reference_period"].to_pylist() == [1, 2, 3] * 4
     for language in ("en", "fr"):
-        time = ivt.members(language=language, time=[1, 2, 3])["time"]
+        time = ivt.members(language=language, reference_period=[1, 2, 3])[
+            "reference_period"
+        ]
         assert time["Timeseries"].to_pylist() == [
             date(1970, 1, 1),
             date(2000, 2, 29),
@@ -302,15 +307,18 @@ def test_time_series_member_labels_follow_dates_in_both_languages(rate, frequenc
 )
 def test_native_codes_are_text_metadata(stored_codes, expected_text):
     ivt = pyivt.open(_typed_fixture(geography_codes=stored_codes))
-    table = ivt.to_arrow(geo=[2, 1])
-    lookup = ivt.members(geo=[2, 1])["geo"]
-    assert table["geo"].type == lookup["code"].type == pa.uint8()
-    assert table["geo"].to_pylist() == [1] * 6 + [2] * 6
+    table = ivt.to_arrow(geography=[2, 1])
+    lookup = ivt.members(geography=[2, 1])["geography"]
+    assert table["geography"].type == lookup["code"].type == pa.uint8()
+    assert table["geography"].to_pylist() == [1] * 6 + [2] * 6
     assert lookup["code"].to_pylist() == [1, 2]
     assert lookup["native_Code"].type == pa.string()
     assert lookup["native_Code"].to_pylist() == expected_text
-    assert ivt.members(geo=[2])["geo"]["native_Code"].to_pylist() == expected_text[1:]
-    assert ivt.to_arrow(geo=2)["value"].equals(table["value"].slice(6))
+    assert (
+        ivt.members(geography=[2])["geography"]["native_Code"].to_pylist()
+        == expected_text[1:]
+    )
+    assert ivt.to_arrow(geography=2)["value"].equals(table["value"].slice(6))
 
 
 def test_missing_native_code_field():

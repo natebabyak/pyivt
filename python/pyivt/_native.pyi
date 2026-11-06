@@ -86,7 +86,9 @@ class Dimension:
     All attributes are read-only. Member label lists, when available, follow
     file order. Labels may retain leading
     spaces used by Beyond 20/20 to express hierarchy. None means unavailable.
-    Use the slug as the Arrow column name and selection keyword.
+    Use the slug as the Arrow column name, selection keyword, and member
+    lookup key. The geography axis uses `geography`. Other axes use slugs
+    derived from their IVT dimension names.
 
     ```python
     for dim in ivt.metadata.dimensions:

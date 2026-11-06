@@ -20,8 +20,10 @@ def test_stream_matches_independently_declared_typed_result():
     ivt = pyivt.open(_typed_fixture())
     table = expanded_table(ivt)
     assert plain_table(table).equals(_expected_table())
-    assert table.schema.field("geo").type == pa.int32()
-    assert table.schema.field("geo_code").type == pa.dictionary(pa.int32(), pa.string())
+    assert table.schema.field("geography").type == pa.int32()
+    assert table.schema.field("geography_code").type == pa.dictionary(
+        pa.int32(), pa.string()
+    )
     assert table["measure_english_desc"].null_count == 6
     assert table["symbol"].null_count == 9
     assert ivt.to_arrow()["value"].equals(_expected_table()["value"])

@@ -47,7 +47,7 @@ def test_census_geography_uid_comes_from_native_dguid_member_column():
     assert ivt._layout.geo_dim == 1
     actual = ivt.metadata.geographies.geo_uid
     with stream_reader(ivt) as reader:
-        native = next(reader).column("geo_dguid_en").to_pylist()
+        native = next(reader).column("geography_dguid_en").to_pylist()
     assert actual == native[::11]
     assert actual[0] == "2021A000224"
     assert any(value is None for value in actual)

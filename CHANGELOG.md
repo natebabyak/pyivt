@@ -9,12 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The geographic dimension uses `geography` in Arrow columns, member lookups, selection keywords, and generated types. Time dimension names follow the IVT file.
 - Arrow dimension columns and member lookup keys use 1-based positions in file order. Their unsigned width comes from the full dimension size and stays consistent across slices.
 - Native `Code` values remain available as text in member lookups. The fact and lookup schemas identify the new encoding with `pyivt.dimension_encoding=one_based_index`.
 - Generated enums use the same positions. The generated `NATIVE_CODES` mapping exposes the original text by dimension slug and enum value.
 
 ### Migration
 
+- Replace `geo` with `geography` in selection arguments and joins for geographic axes.
 - Update selection arguments to use 1-based positions and regenerate codegen modules. Re-export fact tables and member lookups together before joining on the new codes.
 
 ## [0.0.8] - 2026-11-04

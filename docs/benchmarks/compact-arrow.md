@@ -64,7 +64,7 @@ python -m scripts.profile_arrow --path 'C:\private\table.ivt' --mode compact --f
 python -m scripts.profile_arrow --path 'C:\private\table.ivt' --mode legacy --output legacy.json
 ```
 
-For explicit codes, put a mapping such as `{"geo": [1, 3]}` in `selection.json`
+For explicit codes, put a mapping such as `{"geography": [1, 3]}` in `selection.json`
 and pass `--select selection.json`. Use the actual slugs from `ivt.layout.slugs`.
 For legacy mode, raise `--max-memory-bytes` only when an export should exceed the allocation
 estimate limit; separately set `--rss-cap-bytes` and `--timeout` for the worker

@@ -41,7 +41,9 @@ for dimension in ivt.metadata.dimensions:
     print(dimension.slug, dimension.name.en, dimension.items)
 ```
 
-Use the slugs as Arrow column names and selection keys.
+Use the slugs as Arrow column names, selection keywords, and member lookup keys.
+The geography axis uses `geography`. Other axes follow their IVT dimension names,
+so a time dimension may be named `census_year`, `reference_period`, or `time`.
 
 ### Export to Parquet
 
@@ -58,6 +60,15 @@ Each lookup has one row per member code. Join the fact table's dimension column
 to the lookup's `code` column to attach labels or other attributes.
 
 ### Select a subset
+
+On a table with `geography` and `census_year`, fix geography and keep two years.
+
+```python
+table = ivt.to_arrow(geography=2, census_year=[1, 2])
+lookups = ivt.members(geography=2, census_year=[1, 2])
+```
+
+Use `Dimension.slug` when the dimensions depend on the input file.
 
 ```python
 slug = ivt.metadata.dimensions[0].slug
