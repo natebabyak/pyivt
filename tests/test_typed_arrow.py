@@ -46,6 +46,7 @@ def _typed_fixture(
     geography_codes: tuple[str, str] = ("001", "09"),
     measure_name: str = "Measure",
     measure_sort: tuple[int, int] | None = None,
+    measure_extra_fields: tuple[tuple[str, int, bytes], ...] = (),
     time_name: str = "Time",
 ) -> bytes:
     """Three axes (2 x 2 x 3), all fields, one extended double data component."""
@@ -139,6 +140,7 @@ def _typed_fixture(
         measure_fields.append(
             ("Sort", 0x0002, _vector(2, struct.pack("<HH", *measure_sort)))
         )
+    measure_fields.extend(measure_extra_fields)
     dimension(1, measure_fields)
     dimension(
         2,

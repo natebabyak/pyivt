@@ -579,7 +579,7 @@ fn export_error(error: String) -> PyErr {
 /// ivt = pyivt.open("table.ivt")
 /// title = ivt.metadata.title.en
 /// table = ivt.to_arrow()
-/// members = ivt.members()
+/// members = ivt.to_member_table()
 /// ```
 #[pyclass(name = "Ivt", module = "pyivt")]
 pub struct Ivt {
@@ -724,9 +724,9 @@ impl Ivt {
             .call_method0("read_all")
     }
 
-    /// Export member lookup tables keyed by dimension slug, without decoding cells.
+    /// Export one Arrow member lookup with a dictionary-encoded dimension column.
     #[pyo3(signature = (*, language="en", **dims))]
-    fn members<'py>(
+    fn to_member_table<'py>(
         slf: Bound<'py, Self>,
         py: Python<'py>,
         language: &str,
@@ -740,7 +740,7 @@ impl Ivt {
             .getattr("prepare")?
             .call1((&slf, dims.unwrap_or_else(|| PyDict::new(py))))?;
         export
-            .getattr("build_member_tables")?
+            .getattr("build_member_table")?
             .call1((slf, prepared, language))
     }
 
@@ -968,7 +968,7 @@ impl Ivt {
 ///
 /// ### Returns
 ///
-/// An `Ivt` reader exposing `metadata`, `members()`, and `to_arrow()`.
+/// An `Ivt` reader exposing `metadata`, `to_member_table()`, and `to_arrow()`.
 /// Summary metadata is parsed immediately. Cells are decoded by `to_arrow()`.
 ///
 /// ### Raises
@@ -980,7 +980,7 @@ impl Ivt {
 /// ### Notes
 ///
 /// Paths use selective metadata reads. Keep the file available and unchanged:
-/// the first to_arrow() or members() call reads its full contents. Lazy metadata properties
+/// the first export reads its full contents. Lazy metadata properties
 /// may read additional ranges. In-memory sources are copied when opened, so
 /// later changes to a bytearray do not affect the reader. This function does
 /// not fetch URLs or decompress archives. Exceptions raised by a supplied
@@ -996,7 +996,7 @@ impl Ivt {
 /// ivt = pyivt.open(Path("table.ivt"))
 /// title = ivt.metadata.title.en or ivt.metadata.title.fr
 /// table = ivt.to_arrow()
-/// members = ivt.members()
+/// members = ivt.to_member_table()
 /// in_memory = pyivt.open(BytesIO(Path("table.ivt").read_bytes()))
 /// ```
 #[pyfunction]

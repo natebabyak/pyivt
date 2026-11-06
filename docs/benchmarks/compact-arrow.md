@@ -51,7 +51,7 @@ The completed legacy stage totals before termination were 0.602 seconds for
 row decoding and 0.741 seconds for metadata attachment. These are partial
 measurements; no full legacy runtime or peak-memory result is claimed.
 
-The profiler's `compact` mode measures `to_arrow()`. Starting with v0.0.7, this measures numeric code columns and excludes the separate `members()` call. The measurements above use v0.0.6. Its `legacy` mode
+The profiler's `compact` mode measures `to_arrow()`. Starting with v0.0.7, this measures numeric code columns and excludes the separate member export. The measurements above use v0.0.6. Its `legacy` mode
 uses the private `_legacy_to_arrow()` diagnostic to reproduce the baseline
 from commit `ea428cc`. Raw observations are in the adjacent
 `legacy-*.json` and `compact-*.json` files.

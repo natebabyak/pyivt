@@ -39,8 +39,8 @@ def worker(args):
     select = json.loads(args.select.read_text()) if args.select else None
     if args.fraction < 1:
         first = ivt.metadata.dimensions[0]
-        codes = ivt.members()[first.slug]["code"].to_pylist()
-        select = {first.slug: codes[: ceil(first.items * args.fraction)]}
+        count = ceil(first.items * args.fraction)
+        select = {first.slug: list(range(1, count + 1))}
     print(
         json.dumps(
             {

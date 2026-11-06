@@ -86,7 +86,7 @@ def test_reader_does_not_expose_the_arrow_stream_protocol():
 
 def test_public_memory_knob_removed():
     ivt = pyivt.open(_typed_fixture())
-    for method in (ivt.to_arrow, ivt.members):
+    for method in (ivt.to_arrow, ivt.to_member_table):
         with pytest.raises(ValueError, match="max_memory_bytes"):
             method(max_memory_bytes=1)
     assert ivt.to_arrow().num_rows == 12

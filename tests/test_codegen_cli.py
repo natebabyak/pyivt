@@ -78,7 +78,10 @@ def test_codegen_writes_deterministic_ruff_clean_types(tmp_path, stored_codes):
     table = ivt.to_arrow(**dims)
     assert table["geography"].to_pylist() == [2] * 2
     assert table["reference_period"].to_pylist() == [1] * 2
-    assert ivt.members(**dims)["geography"]["code"].to_pylist() == [2]
+    assert ivt.to_member_table(**dims).select(["dimension", "code"]).to_pydict() == {
+        "dimension": ["geography", "measure", "measure", "reference_period"],
+        "code": [2, 1, 2, 1],
+    }
     assert "geography" not in ivt.to_arrow(geography=geography.ETE_2).column_names
 
     _command(source, output, "--language", "fr")
@@ -141,7 +144,7 @@ from table_types import Dimensions, Geography, Measure
 
 def check(ivt: pyivt.Ivt) -> None:
     ivt.to_arrow(**Dimensions(geography=[Geography._CLASS], measure=[Measure.LEVEL]))
-    ivt.members(language="fr", **Dimensions(geography=Geography.WEST))
+    ivt.to_member_table(language="fr", **Dimensions(geography=Geography.WEST))
 """
     args = [command]
     if checker == "ty":

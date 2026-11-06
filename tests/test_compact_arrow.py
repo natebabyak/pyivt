@@ -9,24 +9,37 @@ from math import prod
 from pathlib import Path
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 import pyivt
 import pytest
 from arrow_helpers import expanded_table
 from test_streaming import _populated_cube
-from test_typed_arrow import _expected_table, _typed_fixture
+from test_typed_arrow import _expected_table, _text_members, _typed_fixture
 
 from scripts.ivt_synthetic import cube
+
+
+def _lookup(members: pa.Table, slug: str) -> pa.Table:
+    return members.filter(pc.equal(members["dimension"], slug))
 
 
 def test_typed_result_members_and_source_identity(tmp_path):
     source = _typed_fixture()
     ivt = pyivt.open(source)
     table = ivt.to_arrow()
-    members = ivt.members()
+    members = ivt.to_member_table()
     assert table.column_names == ["geography", "measure", "time", "value"]
-    assert list(members) == table.column_names[:-1]
-    assert [dim.slug for dim in ivt.metadata.dimensions] == list(members)
+    assert members.column_names[:3] == ["dimension", "code", "label"]
+    assert members["dimension"].type == pa.dictionary(pa.int32(), pa.string())
+    assert (
+        members["dimension"].to_pylist()
+        == ["geography"] * 2 + ["measure"] * 2 + ["time"] * 3
+    )
+    slugs = [dim.slug for dim in ivt.metadata.dimensions]
+    assert all(
+        chunk.dictionary.to_pylist() == slugs for chunk in members["dimension"].chunks
+    )
     assert table.num_rows == 12
     assert table["value"].equals(_expected_table()["value"])
     assert (
@@ -34,24 +47,35 @@ def test_typed_result_members_and_source_identity(tmp_path):
         == hashlib.sha256(source).hexdigest().encode()
     )
     assert table.schema.metadata[b"pyivt.dimension_encoding"] == b"one_based_index"
-    for slug, lookup in members.items():
+    for key in (b"pyivt.table_id", b"pyivt.dimension_encoding"):
+        assert members.schema.metadata[key] == table.schema.metadata[key]
+    for slug in slugs:
+        lookup = _lookup(members, slug)
         codes = table[slug].chunk(0)
         assert lookup["code"].type == codes.type == pa.uint8()
         assert lookup["code"].to_pylist() == sorted(codes.unique().to_pylist())
-        assert (
-            lookup.schema.metadata[b"pyivt.table_id"]
-            == table.schema.metadata[b"pyivt.table_id"]
-        )
-        assert lookup.schema.metadata[b"pyivt.dimension_encoding"] == b"one_based_index"
-    assert members["geography"]["native_Code"][0].as_py() == "001"
-    assert members["geography"]["Rate"][0].as_py() == 1.25
-    assert members["time"]["Timeseries"].type == pa.date32()
-    assert members["time"]["Timeseries"][1].as_py() == date(2000, 2, 29)
-    assert ivt.members() == members
-    path = tmp_path / "geography.parquet"
-    pq.write_table(members["geography"], path)
-    lookup = pq.read_table(path)
-    assert lookup.equals(members["geography"], check_metadata=True)
+    assert members["native_Code"].to_pylist() == [
+        "001",
+        "09",
+        "01",
+        "02",
+        "000",
+        "001",
+        "002",
+    ]
+    assert members["Rate"].to_pylist() == [1.25, -2.5] + [None] * 5
+    assert members["Timeseries"].type == pa.date32()
+    assert members["Timeseries"].to_pylist() == [None] * 4 + [
+        date(1970, 1, 1),
+        date(2000, 2, 29),
+        None,
+    ]
+    assert ivt.to_member_table() == members
+    path = tmp_path / "members.parquet"
+    pq.write_table(members, path)
+    restored = pq.read_table(path)
+    assert restored.equals(members, check_metadata=True)
+    lookup = _lookup(restored, "geography")
     joined = table.join(lookup.select(["code", "native_Code"]), "geography", "code")
     assert sorted(joined["native_Code"].to_pylist()) == ["001"] * 6 + ["09"] * 6
 
@@ -59,18 +83,19 @@ def test_typed_result_members_and_source_identity(tmp_path):
 def test_selection_matches_native_grid_and_preserves_order():
     ivt = pyivt.open(_typed_fixture())
     full = ivt.to_arrow()
-    all_members = ivt.members()
+    all_members = ivt.to_member_table()
     table = ivt.to_arrow(geography=[2], measure=[2, 1], time=[3, 1])
     assert table["value"].to_pylist() == [3.5, -1000000000000.0, 1099511627776.5, 99.0]
     assert table["time"].to_pylist() == [1, 3, 1, 3]
     assert table["geography"].to_pylist() == [2] * 4
-    assert ivt.members(geography=[2], time=[3, 1])["time"]["code"].to_pylist() == [1, 3]
+    members = ivt.to_member_table(geography=[2], time=[3, 1])
+    assert _lookup(members, "time")["code"].to_pylist() == [1, 3]
 
     complete = {
-        slug: lookup["code"].to_pylist()[::-1] for slug, lookup in all_members.items()
+        dim.slug: list(range(dim.items, 0, -1)) for dim in ivt.metadata.dimensions
     }
     assert ivt.to_arrow(**complete).equals(full, check_metadata=True)
-    assert ivt.members(**complete) == all_members
+    assert ivt.to_member_table(**complete) == all_members
 
     projected = ivt.to_arrow(measure=2)
     assert projected.column_names == ["geography", "time", "value"]
@@ -82,20 +107,25 @@ def test_selection_matches_native_grid_and_preserves_order():
         None,
         99.0,
     ]
-    assert list(ivt.members(measure=2)) == ["geography", "time"]
+    members = ivt.to_member_table(measure=2)
+    assert members["dimension"].to_pylist() == ["geography"] * 2 + ["time"] * 3
 
     assert ivt.to_arrow(geography=2, measure=1, time=3).to_pydict() == {
         "value": [-1000000000000.0]
     }
-    assert ivt.members(geography=2, measure=1, time=3) == {}
+    fixed = ivt.to_member_table(geography=2, measure=1, time=3)
+    assert fixed.num_rows == 0
+    assert fixed.schema == pa.schema(list(all_members.schema)[:3])
 
     empty = ivt.to_arrow(geography=[], measure=1)
-    members = ivt.members(geography=[], measure=1)
+    members = ivt.to_member_table(geography=[], measure=1)
     assert empty.num_rows == 0
     assert empty.column_names == ["geography", "time", "value"]
-    assert members["geography"].num_rows == 0
-    assert members["time"].equals(all_members["time"])
-    assert members["geography"].schema == all_members["geography"].schema
+    assert members["dimension"].to_pylist() == ["time"] * 3
+    assert members["code"].to_pylist() == [1, 2, 3]
+    assert members["dimension"].chunk(0).dictionary.to_pylist() == ["geography", "time"]
+    assert members["Rate"].type == pa.float64()
+    assert members["Rate"].null_count == members.num_rows
 
 
 @pytest.mark.parametrize(
@@ -117,7 +147,7 @@ def test_selection_matches_native_grid_and_preserves_order():
 )
 def test_selection_errors_identify_dimension(select, reason):
     ivt = pyivt.open(_typed_fixture())
-    for method in [ivt.to_arrow, ivt.members]:
+    for method in [ivt.to_arrow, ivt.to_member_table]:
         with pytest.raises(ValueError, match=reason):
             method(**select)
 
@@ -131,9 +161,11 @@ def test_smallest_unsigned_code_type(count, kind):
     table = ivt.to_arrow()
     assert table["axis_0"].type == kind
     assert table["axis_0"][-1].as_py() == count
+    assert table["axis_1"].type == pa.uint8()
+    assert ivt.to_member_table(axis_0=1)["code"].type == kind
     for codes in ([count], [1], []):
         selected = ivt.to_arrow(axis_0=codes)["axis_0"]
-        lookup = ivt.members(axis_0=codes)["axis_0"]["code"]
+        lookup = _lookup(ivt.to_member_table(axis_0=codes), "axis_0")["code"]
         assert selected.type == lookup.type == kind
         assert selected.to_pylist() == lookup.to_pylist() == codes
 
@@ -157,9 +189,9 @@ def test_selection_does_not_decode_unselected_corrupt_pages():
     ivt = pyivt.open(bytes(source))
     selection = {"axis_0": [1], "axis_1": [1], "axis_2": [1]}
     table = ivt.to_arrow(**selection)
-    members = ivt.members(**selection)
+    members = ivt.to_member_table(**selection)
     assert table["value"].to_pylist() == [0.0]
-    assert all(lookup["code"].to_pylist() == [1] for lookup in members.values())
+    assert members["code"].to_pylist() == [1, 1, 1]
     with pytest.raises(ValueError, match="entry 1.*outside file"):
         ivt.to_arrow()
 
@@ -171,13 +203,13 @@ def test_selection_precedes_row_allocation_and_members_do_not_decode():
         ivt.to_arrow()
     select = {"axis_0": [1], "axis_1": [1], "axis_2": [1]}
     table = ivt.to_arrow(**select)
-    members = ivt.members(**select)
+    members = ivt.to_member_table(**select)
     assert table.num_rows == 1
-    assert members == ivt.members(**select)
+    assert members == ivt.to_member_table(**select)
     broken = bytearray(_typed_fixture())
     broken[558:562] = (len(broken) + 100).to_bytes(4, "little")
     ivt = pyivt.open(bytes(broken))
-    assert len(ivt.members()) == 3
+    assert ivt.to_member_table().num_rows == 7
     with pytest.raises(ValueError, match="unknown member code"):
         ivt.to_arrow(geography=999)
     with pytest.raises(ValueError, match="directory"):
@@ -205,12 +237,13 @@ def test_cached_buffers_threading_and_lifetime():
 def test_corpus_values_labels_and_metadata_match_detailed_reader(path):
     ivt = pyivt.open(path)
     table = ivt.to_arrow()
-    members = ivt.members()
+    members = ivt.to_member_table()
     detailed = expanded_table(ivt)
     counts = [dim.items for dim in ivt.metadata.dimensions]
     assert table.num_rows == prod(counts)
     assert table["value"].equals(detailed["value"])
-    for axis, (slug, lookup) in enumerate(members.items()):
+    for axis, slug in enumerate(table.column_names[:-1]):
+        lookup = _lookup(members, slug)
         array = table[slug].chunk(0)
         stride = prod(counts[axis + 1 :])
         assert array.to_pylist() == [
@@ -253,9 +286,9 @@ def test_bilingual_geography_and_gender_are_joined_to_same_codes():
     table = ivt.to_arrow(**selected)
     dims = {dim.slug: dim for dim in ivt.metadata.dimensions}
     for language in ("en", "fr"):
-        lookups = ivt.members(language=language, **selected)
+        members = ivt.to_member_table(language=language, **selected)
         for slug in selected:
-            lookup = lookups[slug]
+            lookup = _lookup(members, slug)
             assert lookup["code"].to_pylist() == sorted(
                 table[slug].unique().to_pylist()
             )
@@ -264,7 +297,7 @@ def test_bilingual_geography_and_gender_are_joined_to_same_codes():
 
 def test_missing_translation_is_nullable():
     ivt = pyivt.open(_typed_fixture())
-    measure = ivt.members(language="fr")["measure"]
+    measure = _lookup(ivt.to_member_table(language="fr"), "measure")
     assert measure["label"].type == pa.string()
     assert measure["label"].null_count == measure.num_rows
 
@@ -285,9 +318,8 @@ def test_time_series_member_labels_follow_dates_in_both_languages(rate, frequenc
     table = ivt.to_arrow(reference_period=[1, 2, 3])
     assert table["reference_period"].to_pylist() == [1, 2, 3] * 4
     for language in ("en", "fr"):
-        time = ivt.members(language=language, reference_period=[1, 2, 3])[
-            "reference_period"
-        ]
+        members = ivt.to_member_table(language=language, reference_period=[1, 2, 3])
+        time = _lookup(members, "reference_period")
         assert time["Timeseries"].to_pylist() == [
             date(1970, 1, 1),
             date(2000, 2, 29),
@@ -308,14 +340,16 @@ def test_time_series_member_labels_follow_dates_in_both_languages(rate, frequenc
 def test_native_codes_are_text_metadata(stored_codes, expected_text):
     ivt = pyivt.open(_typed_fixture(geography_codes=stored_codes))
     table = ivt.to_arrow(geography=[2, 1])
-    lookup = ivt.members(geography=[2, 1])["geography"]
+    lookup = _lookup(ivt.to_member_table(geography=[2, 1]), "geography")
     assert table["geography"].type == lookup["code"].type == pa.uint8()
     assert table["geography"].to_pylist() == [1] * 6 + [2] * 6
     assert lookup["code"].to_pylist() == [1, 2]
     assert lookup["native_Code"].type == pa.string()
     assert lookup["native_Code"].to_pylist() == expected_text
     assert (
-        ivt.members(geography=[2])["geography"]["native_Code"].to_pylist()
+        _lookup(ivt.to_member_table(geography=[2]), "geography")[
+            "native_Code"
+        ].to_pylist()
         == expected_text[1:]
     )
     assert ivt.to_arrow(geography=2)["value"].equals(table["value"].slice(6))
@@ -325,15 +359,53 @@ def test_missing_native_code_field():
     source = bytearray(cube((2, 3), label_fields=0))
     source[824:838] = bytes(14)
     ivt = pyivt.open(source)
-    lookup = ivt.members()["axis_0"]
-    assert lookup.column_names == ["code", "label"]
+    lookup = _lookup(ivt.to_member_table(), "axis_0")
+    assert lookup.column_names == ["dimension", "code", "label"]
     assert lookup["code"].to_pylist() == [1, 2]
     assert ivt.to_arrow(axis_0=[2])["axis_0"].to_pylist() == [2, 2, 2]
 
 
+def test_combined_lookup_preserves_conflicting_native_attributes():
+    ivt = pyivt.open(
+        _typed_fixture(
+            measure_extra_fields=(
+                ("Rate", 0x0001, _text_members("High", "Low")),
+                ("Dimension", 0x0001, _text_members("A", "B")),
+            )
+        )
+    )
+    members = ivt.to_member_table()
+    assert members["Rate"].type == pa.float64()
+    assert members["Rate"].to_pylist() == [1.25, -2.5] + [None] * 5
+    assert members["Rate_2"].to_pylist() == [
+        None,
+        None,
+        "High",
+        "Low",
+        None,
+        None,
+        None,
+    ]
+    assert members["native_Dimension"].to_pylist() == [
+        None,
+        None,
+        "A",
+        "B",
+        None,
+        None,
+        None,
+    ]
+
+
 def test_native_sort_attribute_uses_smallest_unsigned_type():
-    ivt = pyivt.open(_typed_fixture(measure_sort=(300, 1)))
-    sort = ivt.members()["measure"]["Sort"]
+    source = _typed_fixture(measure_sort=(300, 1))
+    ivt = pyivt.open(source)
+    sort = _lookup(ivt.to_member_table(), "measure")["Sort"]
     assert sort.to_pylist() == [300, 1]
     assert sort.type == pa.uint16()
-    assert ivt.members(measure=[2])["measure"]["Sort"].type == pa.uint8()
+    assert ivt.to_member_table(measure=[2])["Sort"].type == pa.uint8()
+
+    signed = pyivt.open(source.replace(b"\x05Small\0", b"\x04Sort\0\0", 1))
+    sort = signed.to_member_table()["Sort"]
+    assert sort.type == pa.int64()
+    assert sort.to_pylist() == [-32768, 42, 300, 1, None, None, None]

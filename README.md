@@ -23,9 +23,9 @@ With uv, run `uv add pyivt`.
 
 ### Editor type hints
 
-To see `pyarrow.Table` as the return type of `ivt.to_arrow()` in your editor,
-install `pyarrow-stubs` in the same Python environment as pyivt and select that
-environment in your editor.
+To see `pyarrow.Table` as the return type of `ivt.to_arrow()` and
+`ivt.to_member_table()` in your editor, install `pyarrow-stubs` in the same
+Python environment as pyivt and select that environment in your editor.
 
 ```sh
 pip install pyarrow-stubs
@@ -51,7 +51,8 @@ for dimension in ivt.metadata.dimensions:
     print(dimension.slug, dimension.name.en, dimension.items)
 ```
 
-Use the slugs as Arrow column names, selection keywords, and member lookup keys.
+Use the slugs as Arrow column names, selection keywords, and values in the
+member table's `dimension` column.
 The geography axis uses `geography`. Other axes follow their IVT dimension names,
 so a time dimension may be named `census_year`, `reference_period`, or `time`.
 
@@ -61,13 +62,22 @@ so a time dimension may be named `census_year`, `reference_period`, or `time`.
 import pyarrow.parquet as pq
 
 table = ivt.to_arrow()
+members = ivt.to_member_table()
 pq.write_table(table, "data.parquet")
-for slug, lookup in ivt.members().items():
-    pq.write_table(lookup, f"data.{slug}.parquet")
+pq.write_table(members, "data.members.parquet")
 ```
 
-Each lookup has one row per member code. Join the fact table's dimension column
-to the lookup's `code` column to attach labels or other attributes.
+To attach geography labels, filter the member table by `dimension` and cast
+`code` to the fact column's type before joining.
+
+```python
+import pyarrow.compute as pc
+
+lookup = members.filter(pc.equal(members["dimension"], "geography"))
+lookup = lookup.select(["code", "label"])
+lookup = lookup.set_column(0, "code", lookup["code"].cast(table["geography"].type))
+labeled = table.join(lookup, keys="geography", right_keys="code")
+```
 
 ### Select a subset
 
@@ -75,24 +85,23 @@ On a table with `geography` and `census_year`, fix geography and keep two years.
 
 ```python
 table = ivt.to_arrow(geography=2, census_year=[1, 2])
-lookups = ivt.members(geography=2, census_year=[1, 2])
+members = ivt.to_member_table(geography=2, census_year=[1, 2])
 ```
 
 Use `Dimension.slug` when the dimensions depend on the input file.
 
 ```python
 slug = ivt.metadata.dimensions[0].slug
-code = ivt.members()[slug]["code"][0].as_py()
-selection = {slug: [code]}
+selection = {slug: [1]}
 subset = ivt.to_arrow(**selection)
-subset_members = ivt.members(**selection)
+subset_members = ivt.to_member_table(**selection)
 ```
 
-Pass the same dimension keywords to both methods so their code types and subsets match.
-Codes are the members' 1-based positions in the file.
-An integer fixes a dimension at one member and drops its column. A list retains
-the column and filters its rows. Omitted dimensions retain all members and
-their columns. An empty list selects zero rows.
+Both methods select by the members' 1-based positions in the file. An integer
+fixes a dimension at one member and omits it from both outputs. A list retains
+the dimension and limits its members to the given codes. Omitted dimensions
+retain all members. An empty list gives zero fact rows and zero member rows
+for that dimension.
 
 ### Pivot industry by occupation with Polars
 
@@ -120,7 +129,7 @@ pyivt codegen data.ivt --output dimensions.py
 
 The generated module contains one `IntEnum` per dimension and a `Dimensions`
 typed dictionary for selection keywords. Enum values are 1-based member positions.
-Use enum members as codes when calling `to_arrow()` or `members()`.
+Use enum members as codes when calling `to_arrow()` or `to_member_table()`.
 `NATIVE_CODES[slug][member]` gives the original code as text, or `None` if it
 is missing. Add `--language fr` to use French labels for enum names.
 
@@ -130,15 +139,16 @@ is missing. Add `--language fr` to use French labels for enum names.
 
 - `open()` returns an `Ivt`. It accepts a path, IVT bytes, a `bytearray`, an object with `__bytes__`, or a binary file object.
 - `to_arrow()` returns rows in file order with unsigned member codes and a nullable `float64` column named `value`.
-- `members()` returns a dictionary of PyArrow tables keyed by dimension slug, without decoding cells.
+- `to_member_table()` returns one PyArrow table of member attributes, without decoding cells.
 - `pyivt.__version__` gives the package version.
 
-### Member lookup tables
+### Member lookup table
 
-- `code` contains 1-based member positions in file order. Each dimension uses the smallest unsigned integer type that can hold its full member count, including in slices.
-- `label` is a nullable string in English by default. Use `members(language="fr")` for French labels. Time-axis labels use ISO dates.
-- Native attributes use Arrow strings, integers, floats, or `date32` dates. The native `Code` field, when present, is a separate text column (typically `native_Code`) and preserves leading zeros and duplicate values. Missing values are null. Native fields that collide with lookup column names receive a `native_` prefix. Remaining name collisions receive numeric suffixes.
-- Both the fact table and lookup schemas carry `pyivt.table_id` to identify the source table and `pyivt.dimension_encoding` set to `one_based_index`.
+- `dimension` is the first column and contains dictionary-encoded dimension slugs. Rows follow dimension order and then member order in the IVT file.
+- `code` contains 1-based member positions. The member table uses one unsigned integer type wide enough for the source table's largest dimension. Each fact column still uses the width of its own dimension.
+- `label` is a nullable string in English by default. Use `to_member_table(language="fr")` for French labels. Time-axis labels use ISO dates.
+- Native attributes use Arrow strings, integers, floats, or `date32` dates. The native `Code` field, when present, is a separate text column (typically `native_Code`) and preserves leading zeros and duplicate values. Attributes are null where they are absent. Names that collide with `dimension`, `code`, or `label` receive a `native_` prefix. Incompatible attributes with the same name receive numeric suffixes.
+- Export schemas use `pyivt.dimension_encoding=one_based_index`. The fact schema and member exports with retained dimensions also carry `pyivt.table_id` to identify the source table.
 
 ### Metadata
 
