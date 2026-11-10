@@ -16,12 +16,16 @@ DATA_DIR = Path(os.environ.get("PYIVT_DATA_DIR", _TESTS.parent / "data"))
 
 def pytest_sessionstart(session):
     if os.environ.get("PYIVT_REQUIRE_DATA") == "1":
-        manifest = json.loads(
-            (_TESTS / "corpus" / "training.json").read_text(encoding="utf-8")
-        )
+        files = [
+            entry
+            for name in ("training.json", "legacy.json")
+            for entry in json.loads(
+                (_TESTS / "corpus" / name).read_text(encoding="utf-8")
+            )["files"]
+        ]
         missing = [
             entry["sha256"]
-            for entry in manifest["files"]
+            for entry in files
             if not (DATA_DIR / f"{entry['sha256']}.ivt").is_file()
         ]
         if missing or not list(DATA_DIR.glob("*.ivt")):

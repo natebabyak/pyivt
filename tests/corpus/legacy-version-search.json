@@ -1,0 +1,395 @@
+{
+  "date": "2026-11-10",
+  "purpose": "Bounded search for genuine container version 3",
+  "collections": [
+    "doi:10.5683/SP3/GPVU3L",
+    "doi:10.5683/SP3/H7WG5V",
+    "doi:10.5683/SP3/ZQENRG",
+    "doi:10.5683/SP3/PAWNKX"
+  ],
+  "attempted_range_requests": 299,
+  "range_request_failures": 273,
+  "method": "First 32 response bytes only. Initial Range batch largely failed; 20 evenly spaced inventory members retried without Range. Successful unique headers retained below. Failed requests establish no container facts.",
+  "files": [
+    {
+      "dataset": "GPVU3L",
+      "id": 16442,
+      "name": "00060101.ivt",
+      "size": 50699,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000",
+      "retry": "without Range"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16415,
+      "name": "00060102.ivt",
+      "size": 16667,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16397,
+      "name": "00060103.ivt",
+      "size": 18000,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16344,
+      "name": "00060104.ivt",
+      "size": 6698,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16390,
+      "name": "00060105.ivt",
+      "size": 402932,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16368,
+      "name": "00060106.ivt",
+      "size": 34286,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16346,
+      "name": "00060107.ivt",
+      "size": 242201,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16430,
+      "name": "00060108.ivt",
+      "size": 15723,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16440,
+      "name": "00060109.ivt",
+      "size": 345687,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16393,
+      "name": "00060110.ivt",
+      "size": 263443,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16408,
+      "name": "00060111.ivt",
+      "size": 104019,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16445,
+      "name": "00060112.ivt",
+      "size": 10278,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16414,
+      "name": "00060113.ivt",
+      "size": 499852,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16396,
+      "name": "00060114.ivt",
+      "size": 384885,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16403,
+      "name": "00060115.ivt",
+      "size": 84586,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16391,
+      "name": "00060116.ivt",
+      "size": 23119,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16373,
+      "name": "00060117.ivt",
+      "size": 28940,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16429,
+      "name": "00060118.ivt",
+      "size": 19961,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16348,
+      "name": "00060119.ivt",
+      "size": 21918,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16412,
+      "name": "00060120.ivt",
+      "size": 21053,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "ZQENRG",
+      "id": 21281,
+      "name": "ER72.IVT",
+      "size": 1688408,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "ZQENRG",
+      "id": 21284,
+      "name": "ER81.IVT",
+      "size": 1806360,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "ZQENRG",
+      "id": 21168,
+      "name": "SMA_COM.IVT",
+      "size": 2067269,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "ZQENRG",
+      "id": 21223,
+      "name": "TAB4A86D.IVT",
+      "size": 10751,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "ZQENRG",
+      "id": 21269,
+      "name": "TAB7A92D.IVT",
+      "size": 10807,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "ZQENRG",
+      "id": 21186,
+      "name": "TABLE2.IVT",
+      "size": 38676,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16427,
+      "name": "00060127.ivt",
+      "size": 82506,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000",
+      "retry": "without Range"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16353,
+      "name": "00060202.ivt",
+      "size": 28197,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000",
+      "retry": "without Range"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16385,
+      "name": "00060234.ivt",
+      "size": 5692,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000",
+      "retry": "without Range"
+    },
+    {
+      "dataset": "GPVU3L",
+      "id": 16406,
+      "name": "tb811996.ivt",
+      "size": 598123,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000",
+      "retry": "without Range"
+    },
+    {
+      "dataset": "H7WG5V",
+      "id": 11673,
+      "name": "EDDTAB01.IVT",
+      "size": 483627,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000",
+      "retry": "without Range"
+    },
+    {
+      "dataset": "H7WG5V",
+      "id": 11647,
+      "name": "EDDTAB16.IVT",
+      "size": 797509,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000",
+      "retry": "without Range"
+    },
+    {
+      "dataset": "H7WG5V",
+      "id": 11693,
+      "name": "EDDTAB31.IVT",
+      "size": 30283,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000",
+      "retry": "without Range"
+    },
+    {
+      "dataset": "H7WG5V",
+      "id": 11721,
+      "name": "EDDTAB46.IVT",
+      "size": 24515,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000",
+      "retry": "without Range"
+    },
+    {
+      "dataset": "H7WG5V",
+      "id": 11691,
+      "name": "EDDTAB60.IVT",
+      "size": 5926,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000",
+      "retry": "without Range"
+    },
+    {
+      "dataset": "ZQENRG",
+      "id": 21275,
+      "name": "ACCEVC.IVT",
+      "size": 13990,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000",
+      "retry": "without Range"
+    },
+    {
+      "dataset": "ZQENRG",
+      "id": 21183,
+      "name": "CMA86BIN.IVT",
+      "size": 145118,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000",
+      "retry": "without Range"
+    },
+    {
+      "dataset": "ZQENRG",
+      "id": 21180,
+      "name": "ER71.IVT",
+      "size": 523830,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000",
+      "retry": "without Range"
+    },
+    {
+      "dataset": "ZQENRG",
+      "id": 21255,
+      "name": "SPR4.IVT",
+      "size": 3180200,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000",
+      "retry": "without Range"
+    },
+    {
+      "dataset": "ZQENRG",
+      "id": 21173,
+      "name": "VISUSEVI.IVT",
+      "size": 21205,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000",
+      "retry": "without Range"
+    },
+    {
+      "dataset": "PAWNKX",
+      "id": 712152,
+      "name": "CACMA1-1.IVT",
+      "size": 782151,
+      "signature": "02002000",
+      "header": "0200200020000000400008002002000020000e00001000000000000000000000",
+      "retry": "without Range"
+    },
+    {
+      "dataset": "PAWNKX",
+      "id": 713252,
+      "name": "CMANAIC2_LOC-1.ivt",
+      "size": 297465,
+      "signature": "04002000",
+      "header": "0400200020000000400008002002000020000e00001000000000000000000000",
+      "retry": "without Range"
+    },
+    {
+      "dataset": "PAWNKX",
+      "id": 712484,
+      "name": "CSDNAIC6-5.IVT",
+      "size": 11119082,
+      "signature": "04002000",
+      "header": "0400200020000000400008002002000020000e00001000000000000000000000",
+      "retry": "without Range"
+    },
+    {
+      "dataset": "PAWNKX",
+      "id": 713212,
+      "name": "Jun09-Province-and-CENSUS-DIVISION-NAICS-4-digit-Location-Count.ivt",
+      "size": 1059986,
+      "signature": "04002000",
+      "header": "0400200020000000400008002002000020000e00001000000000000000000000",
+      "retry": "without Range"
+    },
+    {
+      "dataset": "PAWNKX",
+      "id": 712610,
+      "name": "prvnaic6.ivt",
+      "size": 316968,
+      "signature": "04002000",
+      "header": "0400200020000000400008002002000020000e00001000000000000000000000",
+      "retry": "without Range"
+    }
+  ]
+}

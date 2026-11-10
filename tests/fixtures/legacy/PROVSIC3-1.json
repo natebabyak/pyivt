@@ -1,0 +1,174 @@
+{
+  "metadata": {
+    "product_id": null,
+    "title_en": null,
+    "title_fr": null,
+    "universe": null,
+    "dimensions": [
+      {
+        "name": "PROV/CAN",
+        "name_fr": null,
+        "count": 13,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Newfoundland", "Prince Edward Island", "Nova Scotia", "New Brunswick", "Québec", "Ontario", "Manitoba", "Saskatchewan", "Alberta", "British Columbia", "Yukon", "Northwest Territories", "Canada"],
+        "members_fr": ["Terre-Neuve", "Ile-du-Prince-Édouard", "Nouvelle-Écosse", "Nouveau-Brunswick", "Québec", "Ontario", "Manitoba", "Saskatchewan", "Alberta", "Colombie-Britannique", "Yukon", "Territoires du Nord-Ouest", "Canada"],
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      },
+      {
+        "name": "INDUSTRY GROUPS",
+        "name_fr": null,
+        "count": 322,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Total", "010 - Other Agricultural Industries, N.E.C.", "011 - Livestock Farms (Except Animal Specialties)", "012 - Other Animal Specialty Farms", "013 - Field Crop Farms", "014 - Field Crop Combination Farms", "015 - Fruit and Other Vegetable Farms", "016 - Horticultural Specialties", "017 - Livestock, Field Crop and Horticultural Combination Farms", "020 - Other Service Industries Incidental to Agriculture, N.E.C.", "021 - Services Incidental to Livestock and Animal Specialties", "022 - Services Incidental to Agricultural Crops", "023 - Other Services Incidental to Agriculture", "030 - Other Fishing and Trapping Industries, N.E.C.", "031 - Fishing Industries", "032 - Services Incidental to Fishing", "033 - Trapping", "041 - Logging Industry", "051 - Forestry Services Industry", "061 - Metal Mines", "062 - Non-Metal Mines (Except Coal)", "063 - Coal Mines", "071 - Crude Petroleum and Natural Gas Industries", "081 - Stone Quarries", "082 - Sand and Gravel Pits", "091 - Service Industries Incidental to Crude Petroleum and Natural Gas", "092 - Service Industries Incidental to Mining", "101 - Meat and Poultry Products Industries", "102 - Fish Products Industry", "103 - Fruit and Vegetable Industries", "104 - Dairy Products Industries", "105 - Flour, Prepared Cereal Food and Feed Industries", "106 - Vegetable Oil Mills (Except Corn Oil)", "107 - Bakery Products Industries", "108 - Sugar and Sugar Confectionery Industries", "109 - Other Food Products Industries", "111 - Soft Drink Industry", "112 - Distillery Products Industry", "113 - Brewery Products Industry", "114 - Wine Industry", "121 - Leaf Tobacco Industry", "122 - Tobacco Products Industry", "151 - Tire and Tube Industry", "152 - Rubber Hose and Belting Industry", "159 - Other Rubber Products Industries", "161 - Foamed and Expanded Plastic Products Industry", "162 - Plastic Pipe and Pipe Fittings Industry", "163 - Plastic Film and Sheeting Industry", "169 - Other Plastic Products Industries", "171 - Leather and Allied Products Industries", "181 - Man-Made Fibre and Filament Yarn Industry", "182 - Spun Yarn and Woven Cloth Industries", "183 - Broad Knitted Fabric Industry", "191 - Natural Fibres Processing and Felt Products Industry", "192 - Carpet, Mat and Rug Industry", "193 - Canvas and Related Products Industry", "199 - Other Textile Products Industries", "243 - Men's and Boys' Clothing Industries", "244 - Women's Clothing Industries", "245 - Children's Clothing Industry", "249 - Other Clothing and Apparel Industries", "251 - Sawmill, Planing Mill and Shingle Mill Products Industries", "252 - Veneer and Plywood Industries", "254 - Sash, Door and Other Millwork Industries", "256 - Wooden Box and Pallet Industry", "258 - Coffin and Casket Industry", "259 - Other Wood Industries", "261 - Household Furniture Industries", "264 - Office Furniture Industries", "269 - Other Furniture and Fixture Industries", "271 - Pulp and Paper Industries", "272 - Asphalt Roofing Industry", "273 - Paper Box and Bag Industries", "279 - Other Converted Paper Products Industries", "281 - Commercial Printing Industries", "282 - Platemaking, Typesetting and Bindery Industry", "283 - Publishing Industries", "284 - Combined Publishing and Printing Industries", "291 - Primary Steel Industries", "292 - Steel Pipe and Tube Industry", "294 - Iron Foundries", "295 - Non-Ferrous Metal Smelting and Refining Industries", "296 - Aluminum Rolling, Casting and Extruding Industry", "297 - Copper and Copper Alloy Rolling, Casting and Extruding Industry", "299 - Other Rolled, Cast and Extruded Non-Ferrous Metal Products Industries", "301 - Power Boiler and Heat Exchanger Industry", "302 - Fabricated Structural Metal Products Industries", "303 - Ornamental and Architectural Metal Products Industries", "304 - Stamped, Pressed and Coated Metal Products Industries", "305 - Wire and Wire Products Industries", "306 - Hardware, Tool and Cutlery Industries", "307 - Heating Equipment Industry", "308 - Machine Shop Industry", "309 - Other Metal Fabricating Industrie", "311 - Agricultural Implement Industry", "312 - Commercial Refrigeration and Air Conditioning Equipment Industry", "319 - Other Machinery and Equipment Industries", "321 - Aircraft and Aircraft Parts Industry", "323 - Motor Vehicle Industry", "324 - Truck and Bus Body and Trailer Industries", "325 - Motor Vehicle Parts and Accessories Industries", "326 - Railroad Rolling Stock Industry", "327 - Shipbuilding and Repair Industry", "328 - Boatbuilding and Repair Industry", "329 - Other Transportation Equipment Industries", "331 - Small Electrical Appliance Industry", "332 - Major Appliance Industry (Electric and Non-Electric)", "333 - Electric Lighting Industries", "334 - Record Player, Radio and Television Receiver Industry", "335 - Communication and Other Electronic Equipment Industries", "336 - Office, Store and Business Machine Industries", "337 - Electrical Industrial Equipment Industries", "338 - Communications and Energy Wire and Cable Industry", "339 - Other Electrical Products Industries", "351 - Clay Products Industries", "352 - Hydraulic Cement Industry", "354 - Concrete Products Industries", "355 - Ready-Mix Concrete Industry", "356 - Glass and Glass Products Industries", "357 - Abrasives Industry", "358 - Lime Industry", "359 - Other Non-Metallic Mineral Products Industries", "361 - Refined Petroleum Industries", "369 - Other Petroleum and Coal Products Industries", "371 - Industrial Chemicals Industries n.e.c.", "372 - Agricultural Chemical Industries", "373 - Plastic and Synthetic Resin Industry", "374 - Pharmaceutical and Medicine Industry", "375 - Paint and Varnish Industry", "376 - Soap and Cleaning Compounds Industry", "377 - Toilet Preparations Industry", "379 - Other Chemical Products Industries", "391 - Scientific and Professional Equipment Industries", "392 - Jewellery and Precious Metal Industries", "393 - Sporting Goods and Toy Industries", "397 - Sign and Display Industry", "399 - Other Manufactured Products Industries", "401 - Residential Building and Development", "402 - Non-Residential Building and Development", "411 - Industrial Construction (Other Than Buildings)", "412 - Highway and Heavy Construction", "421 - Site Work", "422 - Structural and Related Work", "423 - Exterior Close-in Work", "424 - Plumbing, Heating and Air Conditioning, Mechanical Work", "425 - Mechanical Specialty Work", "426 - Electrical Work", "427 - Interior and Finishing Work", "429 - Other Trade Work", "441 - Project Management, Construction", "449 - Other Services Incidental to Construction", "451 - Air Transport Industries", "452 - Service Industries Incidental to Air Transport", "453 - Railway Transport and Related Service Industries", "454 - Water Transport Industries", "455 - Service Industries Incidental to Water Transport", "456 - Truck Transport Industries", "457 - Public Passenger Transit Systems Industries", "458 - Other Transportation Industries", "459 - Other Service Industries Incidental to Transportation", "461 - Pipeline Transport Industries", "471 - Grain Elevator Industry", "479 - Other Storage and Warehousing Industries", "481 - Telecommunication Broadcasting Industries", "482 - Telecommunication Carriers Industry", "483 - Other Telecommunication Industries", "484 - Postal and Courier Service Industries", "491 - Electric Power Systems Industry", "492 - Gas Distribution Systems Industry", "493 - Water Systems Industry", "499 - Other Utility Industries n.e.c.", "501 - Farm Products, Wholesale", "511 - Petroleum Products, Wholesale", "521 - Food, Wholesale", "522 - Beverages, Wholesale", "523 - Drugs and Toilet Preparations, Wholesale", "524 - Tobacco Products, Wholesale", "531 - Apparel, Wholesale", "532 - Dry Goods, Wholesale", "541 - Electrical and Electronic Household Appliances and Parts, Wholesale", "542 - Household Furniture, Wholesale", "543 - Household Furnishings, Wholesale", "551 - Motor Vehicles, Wholesale", "552 - Motor Vehicle Parts and Accessories, Wholesale", "561 - Metal and Metal Products, Wholesale", "562 - Hardware and Plumbing, Heating and Air Conditioning Equipment and Supplies", "563 - Lumber and Building Materials, Wholesale", "571 - Farm Machinery, Equipment and Supplies, Wholesale", "572 - Construction, Forestry and Mining Machinery, Equipment and Supplies, Wholesale", "573 - Industrial Machinery, Equipment and Supplies, Wholesale", "574 - Electrical and Electronic Machinery, Equipment and Supplies, Wholesale", "579 - Other Machinery, Equipment and Supplies, Wholesale", "591 - Waste Materials, Wholesale", "592 - Paper and Paper Products, Wholesale", "593 - Agricultural Supplies, Wholesale", "594 - Toys, Amusement and Sporting Goods, Wholesale", "595 - Photographic Equipment and Musical Instruments and Supplies, Wholesale", "596 - Jewellery and Watches, Wholesale", "597 - Industrial and Household Chemicals, Wholesale", "598 - General Merchandise, Wholesale", "599 - Other Products n.e.c., Wholesale", "601 - Food Stores", "602 - Liquor, Wine and Beer Stores", "603 - Prescription Drugs and Patent Medicine Stores", "611 - Shoe Stores", "612 - Men's Clothing Stores", "613 - Women's Clothing Stores", "614 - Clothing Stores n.e.c.", "615 - Fabric and Yarn Stores", "621 - Household Furniture Stores", "622 - Appliance, Television, Radio and Stereo Stores", "623 - Household Furnishings Stores", "631 - Automobile Dealers", "632 - Recreational Vehicle Dealers", "633 - Gasoline Service Stations", "634 - Automotive Parts and Accessories Stores", "635 - Motor Vehicle Repair Shops", "639 - Other Motor Vehicle Services", "641 - General Merchandise Stores", "651 - Book and Stationery Stores", "652 - Florists, Lawn and Garden Centres", "653 - Hardware, Paint, Glass and Wallpaper Stores", "654 - Sporting Goods and Bicycle Shops", "655 - Musical Instrument and Record Stores", "656 - Jewellery Stores and Watch and Jewellery Repair Shops", "657 - Camera and Photographic Supply Stores", "658 - Toy, Hobby, Novelty and Souvenir Stores", "659 - Other Retail Stores", "691 - Vending Machine Operators", "692 - Direct Sellers", "701 - Central Bank", "702 - Chartered Banks and Other Banking-Type Intermediaries", "703 - Trust Companies", "704 - Deposit Accepting Mortgage Companies", "705 - Credit Unions", "709 - Other Deposit Accepting Intermediaries", "711 - Consumer Loan Companies", "712 - Business Financing Companies", "721 - Portfolio Investment Intermediaries", "722 - Mortgage Companies", "729 - Other Investment Intermediaries", "731 - Life Insurers", "732 - Deposit Insurers", "733 - Property and Casualty Insurers", "741 - Security Brokers and Dealers", "742 - Mortgage Brokers", "743 - Security and Commodity Exchanges", "749 - Other Financial Intermediaries n.e.c.", "751 - Operators of Buildings and Dwellings", "759 - Other Real Estate Operators", "761 - Insurance and Real Estate Agencies", "771 - Employment Agencies and Personnel Suppliers", "772 - Computer and Related Services", "773 - Accounting and Bookkeeping Services", "774 - Advertising Services", "775 - Architectural, Engineering and Other Scientific and Technical Services", "776 - Offices of Lawyers and Notaries", "777 - Management Consulting Services", "779 - Other Business Services", "811 - Defence Services", "812 - Protective Services", "813 - Labour, Employment and Immigration Services", "814 - Foreign Affairs and International Assistance", "815 - General Administrative Services", "816 - Human Resource Administration", "817 - Economic Services Administration", "822 - Protective Services", "823 - Labour and Employment Services", "825 - General Administrative Services", "826 - Human Resource Administration", "827 - Economic Services Administration", "832 - Protective Services", "835 - General Administrative Services", "836 - Human Resource Administration", "837 - Economic Services Administration", "841 - International and Other Extra-Territorial Agencies", "851 - Elementary and Secondary Education", "852 - Post-Secondary Non-University Education", "853 - University Education", "854 - Library Services", "855 - Museums and Archives", "859 - Other Educational Services", "861 - Hospitals", "862 - Other Institutional Health and Social Services", "863 - Non-Institutional Health Services", "864 - Non-Institutional Social Services", "865 - Offices of Physicians, Surgeons and Dentists, Private Practice", "866 - Offices of Other Health Practitioners", "867 - Offices of Social Services Practitioners", "868 - Medical and Other Health Laboratories", "869 - Health and Social Service Associations and Agencies", "911 - Hotels, Motels and Tourist Courts", "912 - Lodging Houses and Residential Clubs", "913 - Camping Grounds and Travel Trailer Parks", "914 - Recreation and Vacation Camps", "921 - Food Services", "922 - Taverns, Bars and Night Clubs", "961 - Motion Picture, Audio and Video Production and Distribution", "962 - Motion Picture Exhibition", "963 - Theatrical and Other Staged Entertainment Services", "964 - Commercial Spectator Sports", "965 - Sports and Recreation Clubs and Services", "966 - Gambling Operations", "969 - Other Amusement and Recreational Services", "971 - Barber and Beauty Shops", "972 - Laundries and Cleaners", "973 - Funeral Services", "974 - Private Households", "979 - Other Personal and Household Services", "981 - Religious Organizations", "982 - Business Associations", "983 - Professional Membership Associations", "984 - Labour Organizations", "985 - Political Organizations", "986 - Civic and Fraternal Organizations", "991 - Machinery and Equipment Rental and Leasing Services", "992 - Automobile and Truck Rental and Leasing Services", "993 - Photographers", "994 - Other Repair Services", "995 - Services to Buildings and Dwellings", "996 - Travel Services", "999 - Other Services n.e.c."],
+        "members_fr": null,
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      },
+      {
+        "name": "EMPCLASS",
+        "name_fr": null,
+        "count": 11,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Total", "0", "Total (excl. 0)", "1-4", "5-9", "10-19", "20-49", "50-99", "100-199", "200-499", "500 +"],
+        "members_fr": ["Total", "0", "Total (excl. 0)", "1-4", "5-9", "10-19", "20-49", "50-99", "100-199", "200-499", "500 +"],
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      }
+    ],
+    "dimension_names": ["PROV/CAN", "INDUSTRY GROUPS", "EMPCLASS"],
+    "dimension_names_fr": [null, null, null],
+    "dimension_counts": [13, 322, 11],
+    "geographies": {
+      "member_id": []
+    },
+    "n_geographies": 0,
+    "footnotes": [],
+    "dqf_legend": null
+  },
+  "cell_status": {
+    "pages": [0, 0, 52, 0, 0],
+    "n_missing": 0,
+    "reasons_stated": false,
+    "legend": null,
+    "nan_words": 0,
+    "extra_words": 0,
+    "verdict": "0 of 52 pages classify their absent cells (0 missing); 52 pages carry no readable tail, so their absences are unclassified"
+  },
+  "warnings": [
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (chunked SIC/NAIC): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (chunked SIC/NAIC): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (chunked SIC/NAIC): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (chunked SIC/NAIC): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (chunked SIC/NAIC): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (chunked SIC/NAIC): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (chunked SIC/NAIC): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (chunked SIC/NAIC): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (chunked SIC/NAIC): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (chunked SIC/NAIC): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Member labels for 1 dimension (\"INDUSTRY GROUPS\") did not resolve from the\nheader slot directories; falling back to the codebook marker / count-keyed\nlabel scans.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (chunked SIC/NAIC): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (chunked SIC/NAIC): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (chunked SIC/NAIC): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    }
+  ]
+}

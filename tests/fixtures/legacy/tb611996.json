@@ -1,0 +1,77 @@
+{
+  "metadata": {
+    "product_id": null,
+    "title_en": null,
+    "title_fr": null,
+    "universe": null,
+    "dimensions": [
+      {
+        "name": "CAUSE",
+        "name_fr": null,
+        "count": 36,
+        "type": 0,
+        "is_geography": false,
+        "members": ["All causes", "Infectious and parasitic diseases", "Malignant neoplasms", "Esophagus and stomach", "Intestine and rectum", "Pancreas", "Trachea, bronchus and lung ", "Breast", "Uterus, ovary and adnexa", "Prostate", "Urinary system", "Lymphatic tissue and leukemia", "Other(Malinant neoplasms)", "Diabetes mellitus", "Diseases of the nervous system and sense organs", "Diseases of the circulatory system", "Ischaemic heart disease", "Cardiac dysrhythmias and heart failure", "Cerebrovascular disease", "Arteries and capillaries", "Other (Diseases of the circulatory system)", "Respiratory diseases", "Pneumonia and influenza", "Chronic bronchitis, emphysema and asthma", "Other chronic airways obstruction", "Other (Respiratory diseases)", "Chronic liver disease and cirrhosis", "Congenital anomalies", "Certain perinatal causes (excluding stillbirths)", "Accidents and adverse effects", "Motor vehicle accidents", "Accidental falls", "Suicide", "Homicide", "Other (Accidents and adverse effects)", "All other causes"],
+        "members_fr": ["Toutes les causes", "Maladies infectieuses et parasitaires", "Tumeurs malignes", "Oesophage et estomac", "Intestin et rectum", "Pancréas", "Trachée, bronches et poumon", "Sein", "Utérus, ovaire et autres annexes", "Prostate", "Appereil urinaire", "Tissus lymphatiques et leucémie", "Autres (Tumeurs malignes)", "Diabète sucré", "Maladies du système nerveux at des organes des sens", "Maladies de l'appareil circulatoire", "Cardiopathies ischémiques", "Troubles du rythme cardiaque et insuffisance cardiaque", "Maladies vasculaire cérébrales", "Artères et caplillaires", "Autres (Maladies de l'appareil circulatoire)", "Maladies de l'appareil respiratoire", "Pneumonie et grippe", "Bronchite chronique, emphysème et asthme", "Autre obstruction respiratoire chronique", "Autre (Maladies de l'appareil respiratoire)", "Maladies chroniques et cirrhose du foie", "Anomalies congénitales", "Certain causes périnatales (à l'exclusion des mortinaissances)", "Accidents et effets adverses", "Accidents de véhicules à moteur", "Chutes accidentelles", "Suicide", "Homicide", "Autres (Accidents et effets adverses)", "Toutes les autres causes"],
+        "ordinal": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36],
+        "description": null,
+        "description_fr": null
+      },
+      {
+        "name": "SEX",
+        "name_fr": "SEXE",
+        "count": 3,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Male", "Female", "Total"],
+        "members_fr": ["Hommes", "Femmes", "Total"],
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      },
+      {
+        "name": "REGION",
+        "name_fr": null,
+        "count": 14,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Canada", "Newfoundland", "Prince Edward Island", "Nova Scotia", "New Brunswick", "Québec", "Ontario", "Manitoba", "Saskatchewan", "Alberta", "British Columbia", "Yukon", "North West Territories", "Unknown"],
+        "members_fr": ["Canada", "Terre-Neuve", "Ile-du-Prince-Edouard", "Nouvelle-Ecosse", "Nouveau-Brunswick", "Québec", "Ontario", "Manitoba", "Saskatchewan", "Alberta", "Columbie-Britannique", "Yukon", "Territories-du-Nord", "Inconnue"],
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      },
+      {
+        "name": "ANNUAL RATE",
+        "name_fr": null,
+        "count": 3,
+        "type": 0,
+        "is_geography": false,
+        "members": ["1996", "1997", "1995"],
+        "members_fr": null,
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      }
+    ],
+    "dimension_names": ["CAUSE", "SEX", "REGION", "ANNUAL RATE"],
+    "dimension_names_fr": [null, "SEXE", null, null],
+    "dimension_counts": [36, 3, 14, 3],
+    "geographies": {
+      "member_id": []
+    },
+    "n_geographies": 0,
+    "footnotes": [],
+    "dqf_legend": null
+  },
+  "cell_status": {
+    "pages": [5, 0, 0, 0, 0],
+    "n_missing": 0,
+    "reasons_stated": false,
+    "legend": null,
+    "nan_words": 0,
+    "extra_words": 0,
+    "verdict": "every absent cell is classified by the file (5 pages with a status tail): 0 missing, every other absence a declared zero"
+  },
+  "warnings": []
+}

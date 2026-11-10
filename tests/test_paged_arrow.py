@@ -152,7 +152,7 @@ def test_paged_arrow_schema_contract() -> None:
 @pytest.mark.parametrize(
     ("mutation", "reason"),
     [
-        ("page_size", "unsupported directory page size 2048"),
+        ("page_size", "invalid IVT header at byte 20"),
         ("count", "entry count exceeds capacity"),
         ("zero_count", "metadata entry index"),
         ("null_pointer", "metadata page pointer"),
@@ -175,6 +175,10 @@ def test_paged_directory_corruption_is_rejected(mutation: str, reason: str) -> N
         struct.pack_into("<I", data, index_start, len(data) - 7)
     elif mutation == "truncated_index":
         del data[-1]
+    if mutation == "page_size":
+        with pytest.raises(ValueError, match=reason):
+            pyivt.open(bytes(data))
+        return
     ivt = pyivt.open(bytes(data))
     with pytest.raises(ValueError, match=reason):
         expanded_table(ivt)

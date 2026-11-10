@@ -1,0 +1,77 @@
+{
+  "metadata": {
+    "product_id": null,
+    "title_en": "Number of women 15 years and over who had a pap smear within the past year by age group(8), Canada, Provinces and Territories, 1985, 1990, 1994-95 and 1996-97.",
+    "title_fr": null,
+    "universe": null,
+    "dimensions": [
+      {
+        "name": "Quantifier",
+        "name_fr": "Quantificateur",
+        "count": 1,
+        "type": 0,
+        "is_geography": false,
+        "members": "Number of women who had a pap smear within past year.",
+        "members_fr": "Le nombre de femmes qui ont passé le test de Papanicolaou au cours de l'année écoulée.",
+        "ordinal": null,
+        "description": "Data with a sampling variability (coefficient of variation) of greater than 25% were suppressed, therefore, numbers in various disaggregations may not sum to the totals. In 1994-95, estimates with a sampling variability greater than 16.6 percent have been suppressed and given a value of zero.",
+        "description_fr": "Comme les données présentant une variabilité d'échantillon-nage (coefficient de variation) supérieure à 25% ont été éliminées, il est possible que la somme des données désagrégées ne corresponde pas aux totaux indiqués.  En 1994-1995 les estimations avec une variabilitié d'échantillonage supérieure de 16.6 pourcent ont été éliminées et elles ont été données un valeur de zéro."
+      },
+      {
+        "name": "AGE",
+        "name_fr": null,
+        "count": 8,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Total", "15 - 19 years", "20 - 24 years", "25 - 34 years", "35 - 44 years", "45 - 54 years", "55 - 64 years", "65 years and over"],
+        "members_fr": ["Total", "15 - 19 ans", "20 - 24 ans", "25 - 34 ans", "35 - 44 ans", "45 - 54 ans", "55 - 64 ans", "65 ans et plus"],
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      },
+      {
+        "name": "REGION",
+        "name_fr": null,
+        "count": 13,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Canada", "Newfoundland", "Prince Edward Island", "Nova Scotia", "New Brunswick", "Quebec", "Ontario", "Manitoba", "Saskatchewan", "Alberta", "British Columbia", "Yukon", "Northwest Territories"],
+        "members_fr": ["Canada", "Terre-Neuve", "Ile-de-Prince-Édouard", "Nouvelle-Écosse", "Nouveau-Brunswick", "Québec", "Ontario", "Manitoba", "Saskatchewan", "Alberta", "Colombie-Britannique", "Yukon", "Territoires du Nord-Ouest"],
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      },
+      {
+        "name": "Periods",
+        "name_fr": null,
+        "count": 4,
+        "type": 0,
+        "is_geography": false,
+        "members": ["1985", "1990", "1994-95", "1996-97"],
+        "members_fr": ["1985", "1990", "1994-95", "1996-97"],
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      }
+    ],
+    "dimension_names": ["Quantifier", "AGE", "REGION", "Periods"],
+    "dimension_names_fr": ["Quantificateur", null, null, null],
+    "dimension_counts": [1, 8, 13, 4],
+    "geographies": {
+      "member_id": []
+    },
+    "n_geographies": 0,
+    "footnotes": [],
+    "dqf_legend": null
+  },
+  "cell_status": {
+    "pages": [1, 0, 0, 0, 0],
+    "n_missing": 8,
+    "reasons_stated": false,
+    "legend": null,
+    "nan_words": 0,
+    "extra_words": 0,
+    "verdict": "every absent cell is classified by the file (1 page with a status tail): 8 missing, every other absence a declared zero"
+  },
+  "warnings": []
+}

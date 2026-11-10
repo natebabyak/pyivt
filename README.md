@@ -42,7 +42,19 @@ ivt = pyivt.open("data.ivt")
 print(ivt.metadata.title.en or ivt.metadata.title.fr)
 ```
 
-Use an extracted IVT version 4 file. For a download, pass the complete IVT bytes to `pyivt.open()`.
+Pass an IVT file or a StatCan ZIP download as a path or complete bytes.
+A ZIP containing exactly one `.ivt` member opens automatically. If it contains
+several, choose one with `pyivt.open("tables.zip", member="folder/table.ivt")`;
+the member name is exact and case-sensitive. ZIP tables are streamed to a
+private temporary file, which is removed when the reader and its metadata
+are released. Opening parses metadata; exports decode the cells.
+
+Container versions 2 and 4 are supported. Version 2 includes historical survey,
+agriculture, and Business Patterns tables with sparse member slots and older
+bilingual display fields. Version 3 remains explicitly unsupported because no
+real sample was found in the [historical archive search](tests/corpus/legacy-version-search.json).
+The [legacy verification report](docs/investigations/older-ivt-support.md)
+records the tested files and comparison limits.
 
 ### Inspect dimensions
 
@@ -137,7 +149,7 @@ is missing. Add `--language fr` to use French labels for enum names.
 
 ### Opening and exporting
 
-- `open()` returns an `Ivt`. It accepts a path, IVT bytes, a `bytearray`, an object with `__bytes__`, or a binary file object.
+- `open(source, *, member=None)` returns an `Ivt`. It accepts a path, IVT or ZIP bytes, a `bytearray`, an object with `__bytes__`, or a binary file object. `member` selects an IVT inside a ZIP with several tables.
 - `to_arrow()` returns rows in file order with unsigned member codes and a nullable `float64` column named `value`.
 - `to_member_table()` returns one PyArrow table of member attributes, without decoding cells.
 - `pyivt.__version__` gives the package version.

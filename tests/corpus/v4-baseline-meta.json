@@ -1,0 +1,9 @@
+{
+  "pyarrow_version": "26.0.0",
+  "encoding": "Arrow IPC stream after removing schema metadata",
+  "comparison": "all Arrow columns and row order; input identity checked against SHA-256 filenames",
+  "reference": "Published pyivt 0.0.9 CPython ABI3 Windows wheel, imported from an isolated extracted package; captured November 10, 2026",
+  "independent_value_oracle": false,
+  "reference_wheel": "pyivt-0.0.9-cp310-abi3-win_amd64.whl",
+  "reference_wheel_sha256": "dc24c988a0b57358eb9d53db589cf19b637fc7d38f464855eb687b6ec661b8a6"
+}

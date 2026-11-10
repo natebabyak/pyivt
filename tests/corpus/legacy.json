@@ -1,0 +1,139 @@
+{
+  "role": "development fixtures; public historical Statistics Canada inputs, promoted before implementation",
+  "acquired": "2026-11-10",
+  "canivt_commit": "2c55e9a194c39a46eb24bb85d2f2b2b9c705025b",
+  "files": [
+    {
+      "sha256": "b162a3aac1784293dde48ad0fe9ade3cc98bfa87c7beb24f7f95b9ff50976797",
+      "url": "https://borealisdata.ca/api/access/datafile/16344",
+      "filename": "00060104.ivt",
+      "source_dataset": "doi:10.5683/SP3/GPVU3L",
+      "source_size": 6698,
+      "source_md5": "3a7ec1e90ae42b3217c2ceb08e9a8f72",
+      "container_version": 2,
+      "oracle": "tests/fixtures/legacy/00060104.csv.gz",
+      "oracle_sha256": "96b7fda5b398232620676a63ab19bf91b9ec070ac0e68fb5ef6f751cf4f541d7",
+      "metadata_oracle_sha256": "e5a2e5a4fa18c0e70bae7ef55689baaf96a3bd53950e9ad6efbf5712866023b8"
+    },
+    {
+      "sha256": "135f68215afc04d96caa1d0c77546f2115262dc1fb0d6ea75219ac6eebdbcf6d",
+      "url": "https://borealisdata.ca/api/access/datafile/16430",
+      "filename": "00060108.ivt",
+      "source_dataset": "doi:10.5683/SP3/GPVU3L",
+      "source_size": 15723,
+      "source_md5": "4fac5429f8ae37b669978b4aa5513dd1",
+      "container_version": 2,
+      "oracle": "tests/fixtures/legacy/00060108.csv.gz",
+      "oracle_sha256": "e3367bf69c7d60abdeb7f8f9495b45d8835ae92326a0d14da8b82ee3e6d712c5",
+      "metadata_oracle_sha256": "0f836571a37af84d45b4207baeb29c6bca80c2111312bae6a1a4d3ffd0744702"
+    },
+    {
+      "sha256": "c9745cc7de89b3a836fbaebcc81f8d08c837cb0d01ac5afae97728bc0bbdb3b1",
+      "url": "https://borealisdata.ca/api/access/datafile/16373",
+      "filename": "00060117.ivt",
+      "source_dataset": "doi:10.5683/SP3/GPVU3L",
+      "source_size": 28940,
+      "source_md5": "c750caccb8b5d3fa56bcf6f6085f767f",
+      "container_version": 2,
+      "oracle": "tests/fixtures/legacy/00060117.csv.gz",
+      "oracle_sha256": "b11a7e3995969645134dcdc34254e64e6d7053368ad2b265164c7f4ce7b6439c",
+      "metadata_oracle_sha256": "1d1170bee9e88f0430d32f3e7520a977a7f64033db3d2fdadc40c208e0c7b78d"
+    },
+    {
+      "sha256": "c718ec9fe1a88b73dea032c9fd314c4450201d06676305fc53571d55b71f4a28",
+      "url": "https://borealisdata.ca/api/access/datafile/16372",
+      "filename": "00060208.ivt",
+      "source_dataset": "doi:10.5683/SP3/GPVU3L",
+      "source_size": 10536,
+      "source_md5": "cf73313f0191d740bf240550b4fcc77d",
+      "container_version": 2,
+      "oracle": "tests/fixtures/legacy/00060208.csv.gz",
+      "oracle_sha256": "256c30244a339ab526ea986139704ec720190b311d5807152fa2c80453639777",
+      "metadata_oracle_sha256": "b8d4d6be9f3177ada595752f6a4071d5a263d4de04f45897c5b3e90eeb83c288"
+    },
+    {
+      "sha256": "d80a6a7b9c3e55a6ef1f4e3e6cd8c0466990cbee6409e3a3bb690b36cf3acd24",
+      "url": "https://borealisdata.ca/api/access/datafile/16437",
+      "filename": "tb611996.ivt",
+      "source_dataset": "doi:10.5683/SP3/GPVU3L",
+      "source_size": 42035,
+      "source_md5": "39b32b6601f707cb5fa45d1089a4c522",
+      "container_version": 2,
+      "oracle": "tests/fixtures/legacy/tb611996.csv.gz",
+      "oracle_sha256": "d390537ed18897d361d666a0e6c6a5a1fca0af6c6aee3330dc1196f5bfb80ff8",
+      "metadata_oracle_sha256": "e92eb54c6021a5494a2f58e954e4b0bfe160ab49e2d77cef3c2584b5b45139bc"
+    },
+    {
+      "sha256": "5fee95730912cd8e6a40c87ea7e0dfcc1db77c59c817f005ac65f0a044ae307a",
+      "url": "https://borealisdata.ca/api/access/datafile/11697",
+      "filename": "EDDTAB39.IVT",
+      "source_dataset": "doi:10.5683/SP3/H7WG5V",
+      "source_size": 12741,
+      "source_md5": "507843f0bac780f9e84cdf1abad7bb65",
+      "container_version": 2,
+      "oracle": "tests/fixtures/legacy/EDDTAB39.csv.gz",
+      "oracle_sha256": "9056706acb05cce3d3b0f4665e1ac224553d997dde3921547cff08370443eae0",
+      "metadata_oracle_sha256": "a5e4cb5eb9de818e8360a82a5abee00c41d02e0e46e5fdec124fd17ad985bfe5"
+    },
+    {
+      "sha256": "7cb296153011496c89bee2f9846eac040ed956a95fb50dc30db8a3ad818b9b77",
+      "url": "https://borealisdata.ca/api/access/datafile/21171",
+      "filename": "EMPLOY1.IVT",
+      "source_dataset": "doi:10.5683/SP3/ZQENRG",
+      "source_size": 32099,
+      "source_md5": "753230a922c734772f899839e69eac41",
+      "container_version": 2,
+      "oracle": "tests/fixtures/legacy/EMPLOY1.csv.gz",
+      "oracle_sha256": "6dab8ada0f98337aa16a70e9e5ff04e6dd3c1a52c39276ca7ac49f4c054d84ce",
+      "metadata_oracle_sha256": "09b730f15d5aa2685e248dbd895256c2f066dd949d545f4c9f356de58fea478f"
+    },
+    {
+      "sha256": "696440d22c33903900a2a29b5a40ac9918efcffd1ae50a54970a61c68a2f916a",
+      "url": "https://borealisdata.ca/api/access/datafile/712138",
+      "filename": "PROVIND.IVT",
+      "source_dataset": "doi:10.5683/SP3/PAWNKX",
+      "source_size": 28208,
+      "source_md5": "16785fd4000afee0df233052f5bee58e",
+      "container_version": 2,
+      "oracle": "tests/fixtures/legacy/PROVIND.csv.gz",
+      "oracle_sha256": "060c743e0a987eb48f0b1a11d5a3bd4dde42d7e7460cea9cfe56964851f6954f",
+      "metadata_oracle_sha256": "87c7bb054a558911a34c10d9bf4dba50757776b15f3e56d1544f40a3650a122d"
+    },
+    {
+      "sha256": "318403a6103a586e70f4b87c7afd52e5f6a0cdd2e1c1ce545477c5890e58b75f",
+      "url": "https://borealisdata.ca/api/access/datafile/712155",
+      "filename": "PROVSIC3-1.IVT",
+      "source_dataset": "doi:10.5683/SP3/PAWNKX",
+      "source_size": 138930,
+      "source_md5": "5172276c28f26a9daa4ca201059b5bef",
+      "container_version": 2,
+      "oracle": "tests/fixtures/legacy/PROVSIC3-1.csv.gz",
+      "oracle_sha256": "27eaaa472335dde7c99a6ddbfbc87d508ca74c72b94242dd077a3fee6a9b94a3",
+      "metadata_oracle_sha256": "1a886e9247b39ef62f5d599155ca0c823b5f21b747044ea65735124489b7e542"
+    },
+    {
+      "sha256": "edf82d781529c7a674607b7cdeb6cbd6f5a25d147ded6c38bffb5e05f2e31593",
+      "url": "https://borealisdata.ca/api/access/datafile/712133",
+      "filename": "PROVSIC3.IVT",
+      "source_dataset": "doi:10.5683/SP3/PAWNKX",
+      "source_size": 112981,
+      "source_md5": "3282bd85fa7b4ede30b63930512ac742",
+      "container_version": 2,
+      "oracle": "tests/fixtures/legacy/PROVSIC3.csv.gz",
+      "oracle_sha256": "c118c81b8155e66e49e3bdbefdd44f70c6a32cc2683d6e396e85ed8267eacc1e",
+      "metadata_oracle_sha256": "15599076d5cc989c5ea38d7a844736191b230f1edee28d016df6107e19432a7b"
+    },
+    {
+      "sha256": "995c9a7692b9be780e40ea60581111af15534b912190eaa02dd61b3732d088c7",
+      "url": "https://borealisdata.ca/api/access/datafile/712175",
+      "filename": "PRVNAIC1.IVT",
+      "source_dataset": "doi:10.5683/SP3/PAWNKX",
+      "source_size": 41720,
+      "source_md5": "246a028ff8a816711f4a8564142b91bc",
+      "container_version": 2,
+      "oracle": "tests/fixtures/legacy/PRVNAIC1.csv.gz",
+      "oracle_sha256": "8af926466f16c6aa37c05165777cc5f6684277e34a8e53857c9666cb80fbb606",
+      "metadata_oracle_sha256": "5fa9fd0926d96ffd0518c823d861602ec3470caf9cd4bb715caf8fd52b32d855"
+    }
+  ]
+}

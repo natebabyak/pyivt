@@ -7,6 +7,9 @@ pub fn decompress_component(data: &[u8]) {
 pub fn metadata_directory(data: &[u8]) {
     use crate::metadata_directory::MetadataDirectory;
     for slot in [544, 558, 824, 838, 852] {
+        let Some(slot) = crate::header::slot_offset(data, slot) else {
+            continue;
+        };
         if let Ok(directory) = MetadataDirectory::new(data, slot) {
             for index in [0, 1, directory.count.saturating_sub(1)] {
                 let _ = directory.entry(data, index);

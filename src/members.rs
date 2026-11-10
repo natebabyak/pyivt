@@ -22,6 +22,19 @@ pub enum MemberValues {
 }
 
 impl MemberValues {
+    fn select(&mut self, slots: &[usize]) {
+        macro_rules! select {
+            ($values:expr) => {
+                *$values = slots.iter().map(|&slot| $values[slot].clone()).collect()
+            };
+        }
+        match self {
+            Self::Utf8(v) => select!(v),
+            Self::Int64(v) => select!(v),
+            Self::Float64(v) => select!(v),
+            Self::Date32(v) => select!(v),
+        }
+    }
     fn memory_bytes(&self) -> usize {
         match self {
             Self::Utf8(v) => v
@@ -88,9 +101,8 @@ impl<'a> Directory<'a> {
             .checked_mul(DIM_SLOT_STRIDE)
             .and_then(|n| HDR_DIM_SLOT0.checked_add(n))
             .ok_or("dimension slot overflow")?;
-        if slot + DIM_SLOT_STRIDE > data.len() {
-            return Err(format!("missing directory for dimension {dimension}"));
-        }
+        let slot = crate::header::slot_offset(data, slot)
+            .ok_or_else(|| format!("missing directory for dimension {dimension}"))?;
         let directory = MetadataDirectory::new(data, slot).map_err(|e| e.to_string())?;
         let entries = directory.count;
         if entries == 0 {
@@ -314,6 +326,98 @@ fn time_members(record: &[u8]) -> Result<MemberValues, String> {
     Ok(MemberValues::Date32(dates))
 }
 
+/// Time member records retain deleted physical slots as zero dates. Their
+/// decoded eight-byte rows, rather than compressed bitmap bytes, declare the map.
+pub(crate) fn time_member_slots(
+    data: &[u8],
+    dimension: usize,
+) -> Result<Option<Vec<usize>>, String> {
+    let dir = Directory::new(data, dimension)?;
+    let Some(definitions) = dir.record(0)? else {
+        return Ok(None);
+    };
+    if definitions.get(..2) != Some(&[1, 2]) || u16(&definitions, 4) != 34 {
+        return Ok(None);
+    }
+    for field in definitions[6..].as_chunks::<34>().0 {
+        if u16(field, 18) != 0x0180 {
+            continue;
+        }
+        let mut slots = Vec::new();
+        let mut base = 0;
+        for index in dir.chunks(u32(field, 26) as usize)? {
+            let record = dir.record(index)?.ok_or("missing time member chunk")?;
+            let MemberValues::Date32(dates) = time_members(&record)? else {
+                unreachable!()
+            };
+            slots.extend(
+                dates
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, date)| date.map(|_| base + i)),
+            );
+            base += dates.len();
+        }
+        return Ok(Some(slots));
+    }
+    Ok(None)
+}
+
+/// Public member positions omit unallocated code rows. The code field's own
+/// chunk index supplies the physical order, including holes between chunks.
+pub(crate) fn member_slots(
+    data: &[u8],
+    dimension: usize,
+    count: usize,
+) -> Result<Option<Vec<usize>>, String> {
+    if let Some(slots) = time_member_slots(data, dimension)? {
+        if slots.len() != count {
+            return Err("time member count differs from the axis matrix".into());
+        }
+        return Ok(Some(slots));
+    }
+    let dir = Directory::new(data, dimension)?;
+    let definitions = dir.record(0)?.ok_or("missing member field definitions")?;
+    if definitions.get(..2) != Some(&[1, 2]) || u16(&definitions, 4) != 34 {
+        return Err("unsupported member field definition layout".into());
+    }
+    for field in definitions[6..].as_chunks::<34>().0 {
+        let length = field[0] as usize;
+        if length > 17 {
+            return Err("member field name exceeds its definition".into());
+        }
+        if !latin1(&field[1..1 + length]).eq_ignore_ascii_case("code") || u16(field, 18) != 0x0140 {
+            continue;
+        }
+        let mut slots = Vec::new();
+        let mut base = 0usize;
+        for index in dir.chunks(u32(field, 26) as usize)? {
+            let record = dir.record(index)?.ok_or("missing member code chunk")?;
+            let values = fixed_strings(&record)?;
+            slots.extend(
+                values
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, value)| value.as_ref().map(|_| base + i)),
+            );
+            base = base
+                .checked_add(values.len())
+                .ok_or("member slot overflow")?;
+            if slots.len() > MAX_MEMBER_MEMORY / std::mem::size_of::<usize>() {
+                return Err("member slots exceed the 256 MiB memory safety limit".into());
+            }
+        }
+        if slots.len() != count {
+            return Err(format!(
+                "code member count {} differs from the axis matrix {count}",
+                slots.len()
+            ));
+        }
+        return Ok((slots.iter().copied().ne(0..count)).then_some(slots));
+    }
+    Ok(None)
+}
+
 /// Gregorian civil date from days since 1970-01-01 (400-year cycle arithmetic).
 pub(crate) fn iso_date(days: i64) -> String {
     let z = days + 719_468;
@@ -387,10 +491,23 @@ pub(crate) fn read_typed_members_with_positions(
     dimension: usize,
     count: usize,
 ) -> Result<(TypedFields, Vec<usize>), String> {
+    let slots = if data.first() == Some(&2) {
+        member_slots(data, dimension, count)?
+    } else {
+        None
+    };
+    if slots.as_ref().is_some_and(|slots| slots.len() != count) {
+        return Err("time member count differs from the axis matrix".into());
+    }
+    let stored_count = slots
+        .as_ref()
+        .and_then(|s| s.last())
+        .map_or(count, |s| s + 1);
     let slot = dimension
         .checked_mul(DIM_SLOT_STRIDE)
         .and_then(|offset| HDR_DIM_SLOT0.checked_add(offset))
         .ok_or("dimension slot overflow")?;
+    let slot = crate::header::slot_offset(data, slot).ok_or("missing dimension slot")?;
     if data
         .get(slot..slot + DIM_SLOT_STRIDE)
         .is_some_and(|slot| slot.iter().all(|&byte| byte == 0))
@@ -403,7 +520,7 @@ pub(crate) fn read_typed_members_with_positions(
         return Err("unsupported member field definition layout".into());
     }
     let field_count = definitions[6..].len() / 34;
-    if count
+    if stored_count
         .checked_mul(field_count)
         .and_then(|n| n.checked_mul(32))
         .is_none_or(|n| n > MAX_MEMBER_MEMORY)
@@ -425,7 +542,7 @@ pub(crate) fn read_typed_members_with_positions(
         let mut time_serials = Vec::new();
         let mut time_aux = Vec::new();
         for index in dir.chunks(entry)? {
-            if values.as_ref().is_some_and(|v| v.len() >= count) {
+            if values.as_ref().is_some_and(|v| v.len() >= stored_count) {
                 break;
             }
             if index == 0 {
@@ -461,19 +578,23 @@ pub(crate) fn read_typed_members_with_positions(
         let mut values = match values {
             Some(v) => v,
             None => match kind {
-                0x0140 | 0x0001 | 0x0304 => MemberValues::Utf8(vec![None; count]),
-                0x0180 => MemberValues::Date32(vec![None; count]),
-                0x0002 | 0x0302 => MemberValues::Int64(vec![None; count]),
+                0x0140 | 0x0001 | 0x0304 => MemberValues::Utf8(vec![None; stored_count]),
+                0x0180 => MemberValues::Date32(vec![None; stored_count]),
+                0x0002 | 0x0302 => MemberValues::Int64(vec![None; stored_count]),
                 _ => return Err(format!("unsupported member field type 0x{kind:04x}")),
             },
         };
-        if values.len() < count {
+        if values.len() < stored_count {
             return Err(format!(
                 "dimension {dimension}, field {name}: only {} of {count} members",
                 values.len()
             ));
         }
-        values.truncate(count);
+        if let Some(slots) = &slots {
+            values.select(slots);
+        } else {
+            values.truncate(count);
+        }
         if kind == 0x0304 {
             if let MemberValues::Int64(ordinals) = &values {
                 if let Some(text) = referenced_strings(&dir, ordinals)
@@ -494,8 +615,13 @@ pub(crate) fn read_typed_members_with_positions(
             return Err("member maps exceed the 256 MiB memory safety limit".into());
         }
         if kind == 0x0180 {
-            time_serials.resize(count, None);
-            time_aux.resize(count, None);
+            if let Some(slots) = &slots {
+                time_serials = slots.iter().map(|&slot| time_serials[slot]).collect();
+                time_aux = slots.iter().map(|&slot| time_aux[slot]).collect();
+            } else {
+                time_serials.resize(count, None);
+                time_aux.resize(count, None);
+            }
             fields.push((format!("{name}_serial"), MemberValues::Int64(time_serials)));
             fields.push((format!("{name}_aux"), MemberValues::Int64(time_aux)));
         }

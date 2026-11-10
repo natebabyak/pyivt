@@ -1,0 +1,174 @@
+{
+  "metadata": {
+    "product_id": null,
+    "title_en": null,
+    "title_fr": null,
+    "universe": null,
+    "dimensions": [
+      {
+        "name": "PROV/CANGORY",
+        "name_fr": null,
+        "count": 13,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Newfoundland", "Prince Edward Island", "Nova Scotia", "New Brunswick", "Québec", "Ontario", "Manitoba", "Saskatchewan", "Alberta", "British Columbia", "Yukon Territory", "Northwest Territories", "Canada"],
+        "members_fr": ["Terre-Neuve", "Ile-du-Prince-Édouard", "Nouvelle-Écosse", "Nouveau-Brunswick", "Québec", "Ontario", "Manitoba", "Saskatchewan", "Alberta", "Colombie-Britannique", "Yukon", "Territoires du Nord-Ouest", "Canada"],
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      },
+      {
+        "name": "SECTORS",
+        "name_fr": null,
+        "count": 22,
+        "type": 0,
+        "is_geography": false,
+        "members": ["11 - Agriculture, Forestry, Fishing and Hunting", "21 - Mining and Oil and Gas Extraction", "22 - Utilities", "23 - Construction", "31-33 - Manufacturing", "41 - Wholesale Trade", "44-45 - Retail Trade", "48-49 - Transportation and Warehousing", "51 - Information and Cultural Industries", "52 - Finance and Insurance", "53 - Real Estate and Rental and Leasing", "54 - Professional, Scientific and Technical Services", "55 - Management of Companies and Enterprises", "56 - Administrative and Support, Waste Management and Remediation Services", "61 - Educational Services", "62 - Health Care and Social Assistance", "71 - Arts, Entertainment and Recreation", "72 - Accommodation and Food Services", "81 - Other Services (except Public Administration)", "91 - Public Administration", "Total", "00 - Not Classified"],
+        "members_fr": ["11 - Agriculture, foresterie, pêche et chasse", "21 - Extraction minière et extraction de pétrole et de gaz", "22 - Services publics", "23 - Construction", "31-33 - Fabrication", "41 - Commerce de gros", "44-45 - Commerce de détail", "48-49 - Transport et entreposage", "51 - Industrie de l'information et industrie culturelle", "52 - Finance et assurances", "53 - Services immobiliers et services de location et de location à bail", "54 - Services professionnels, scientifiques et techniques", "55 - Gestion de sociétés et d'entreprises", "56 - Services administratifs, services de soutien, services de gestion des déchets et services d'assainissement", "61 - Services d'enseignement", "62 - Soins de santé et assistance sociale", "71 - Arts, spectacles et loisirs", "72 - Hébergement et services de restauration", "81 - Autres services, sauf les administrations publiques", "91 - Administrations publiques", "Total", "00 - Non classé"],
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      },
+      {
+        "name": "EMP. CATEGORY",
+        "name_fr": null,
+        "count": 11,
+        "type": 0,
+        "is_geography": false,
+        "members": ["       Total        (A)", "Indeterminate(B)", "    Subtotal     (A - B)", "1-4", "5-9", "10-19", "20-49", "50-99", "100-199", "200-499", "500 +"],
+        "members_fr": ["     Total         (A)", " Indéterminé    (B)", "  Sous-total    (A - B)", "1-4", "5-9", "10-19", "20-49", "50-99", "100-199", "200-499", "500 +"],
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      }
+    ],
+    "dimension_names": ["PROV/CANGORY", "SECTORS", "EMP. CATEGORY"],
+    "dimension_names_fr": [null, null, null],
+    "dimension_counts": [13, 22, 11],
+    "geographies": {
+      "member_id": []
+    },
+    "n_geographies": 0,
+    "footnotes": [],
+    "dqf_legend": null
+  },
+  "cell_status": {
+    "pages": [0, 0, 29, 0, 0],
+    "n_missing": 0,
+    "reasons_stated": false,
+    "legend": null,
+    "nan_words": 0,
+    "extra_words": 0,
+    "verdict": "0 of 29 pages classify their absent cells (0 missing); 29 pages carry no readable tail, so their absences are unclassified"
+  },
+  "warnings": [
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (sparse NAICS slots): the\nouter directory stride (16) is a non-declared physical constant measured from\nthe page directory, and the industry axis is decoded under a reconciliation\ngate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (sparse NAICS slots): the\nouter directory stride (16) is a non-declared physical constant measured from\nthe page directory, and the industry axis is decoded under a reconciliation\ngate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (sparse NAICS slots): the\nouter directory stride (16) is a non-declared physical constant measured from\nthe page directory, and the industry axis is decoded under a reconciliation\ngate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (sparse NAICS slots): the\nouter directory stride (16) is a non-declared physical constant measured from\nthe page directory, and the industry axis is decoded under a reconciliation\ngate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (sparse NAICS slots): the\nouter directory stride (16) is a non-declared physical constant measured from\nthe page directory, and the industry axis is decoded under a reconciliation\ngate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (sparse NAICS slots): the\nouter directory stride (16) is a non-declared physical constant measured from\nthe page directory, and the industry axis is decoded under a reconciliation\ngate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (sparse NAICS slots): the\nouter directory stride (16) is a non-declared physical constant measured from\nthe page directory, and the industry axis is decoded under a reconciliation\ngate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (sparse NAICS slots): the\nouter directory stride (16) is a non-declared physical constant measured from\nthe page directory, and the industry axis is decoded under a reconciliation\ngate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (sparse NAICS slots): the\nouter directory stride (16) is a non-declared physical constant measured from\nthe page directory, and the industry axis is decoded under a reconciliation\ngate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (sparse NAICS slots): the\nouter directory stride (16) is a non-declared physical constant measured from\nthe page directory, and the industry axis is decoded under a reconciliation\ngate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Member labels for 1 dimension (\"SECTORS\") did not resolve from the header slot\ndirectories; falling back to the codebook marker / count-keyed label scans.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (sparse NAICS slots): the\nouter directory stride (16) is a non-declared physical constant measured from\nthe page directory, and the industry axis is decoded under a reconciliation\ngate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (sparse NAICS slots): the\nouter directory stride (16) is a non-declared physical constant measured from\nthe page directory, and the industry axis is decoded under a reconciliation\ngate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (sparse NAICS slots): the\nouter directory stride (16) is a non-declared physical constant measured from\nthe page directory, and the industry axis is decoded under a reconciliation\ngate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba_labels", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "The industry axis LABELS are PROVISIONAL: cell values reconcile exactly, but\nthe code->member assignment (standard B2020 storage order) is unverified\nagainst ground truth.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    }
+  ]
+}

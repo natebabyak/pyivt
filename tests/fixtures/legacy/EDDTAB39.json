@@ -1,0 +1,77 @@
+{
+  "metadata": {
+    "product_id": null,
+    "title_en": null,
+    "title_fr": null,
+    "universe": null,
+    "dimensions": [
+      {
+        "name": "Provinces",
+        "name_fr": null,
+        "count": 11,
+        "type": 0,
+        "is_geography": false,
+        "members": ["CANADA", "Newfoundland", "Prince Edward Island", "Nova Scotia", "New Brunswick", "Quebec", "Ontario", "Manitoba", "Saskatchewan", "Alberta", "British Columbia"],
+        "members_fr": ["CANADA", "Terre-Neuve", "Île-du-Prince-Édouard", "Nouvelle-Écosse", "Nouveau-Brunswick", "Québec", "Ontario", "Manitoba", "Saskatchewan", "Alberta", "Colombie-Britannique"],
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      },
+      {
+        "name": "Number_and_%",
+        "name_fr": null,
+        "count": 2,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Farms reporting", "% distribution"],
+        "members_fr": ["Fermes déclarantes", "Répartition en %"],
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      },
+      {
+        "name": "Variables",
+        "name_fr": null,
+        "count": 10,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Receipts class in 1995 constant dollars - Under 2,500", "Receipts class in 1995 constant dollars - 2,500 to 4,999", "Receipts class in 1995 constant dollars - 5,000 to 9,999", "Receipts class in 1995 constant dollars - 10,000 to 24,999", "Receipts class in 1995 constant dollars - 25,000 to 49,999", "Receipts class in 1995 constant dollars - 50,000 to 99,999", "Receipts class in 1995 constant dollars - 100,000 to 249,999", "Receipts class in 1995 constant dollars - 250,000 to 499,999", "Receipts class in 1995 constant dollars - 500,000 and over", "Total"],
+        "members_fr": ["Catégorie des revenus en dollars constants de 1995 - Moins de 2 500", "Catégorie des revenus en dollars constants de 1995 - 2 500 à 4 999", "Catégorie des revenus en dollars constants de 1995 - 5 000 à 9 999", "Catégorie des revenus en dollars constants de 1995 - 10 000 à 24 999", "Catégorie des revenus en dollars constants de 1995 - 25 000 à 49 999", "Catégorie des revenus en dollars constants de 1995 - 50 000 à 99 999", "Catégorie des revenus en dollars constants de 1995 - 100 000 à 249 999", "Catégorie des revenus en dollars constants de 1995 - 250 000 à 499 999", "Catégorie des revenus en dollars constants de 1995 - 500 000 et plus", "Total"],
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      },
+      {
+        "name": "1976-96",
+        "name_fr": null,
+        "count": 5,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Census year - 1976", "Census year - 1981", "Census year - 1986", "Census year - 1991", "Census year - 1996"],
+        "members_fr": ["Année de recensement - 1976", "Année de recensement - 1981", "Année de recensement - 1986", "Année de recensement - 1991", "Année de recensement - 1996"],
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      }
+    ],
+    "dimension_names": ["Provinces", "Number_and_%", "Variables", "1976-96"],
+    "dimension_names_fr": [null, null, null, null],
+    "dimension_counts": [11, 2, 10, 5],
+    "geographies": {
+      "member_id": []
+    },
+    "n_geographies": 0,
+    "footnotes": [],
+    "dqf_legend": null
+  },
+  "cell_status": {
+    "pages": [0, 0, 2, 0, 0],
+    "n_missing": 0,
+    "reasons_stated": false,
+    "legend": null,
+    "nan_words": 0,
+    "extra_words": 0,
+    "verdict": "0 of 2 pages classify their absent cells (0 missing); 2 pages carry no readable tail, so their absences are unclassified"
+  },
+  "warnings": []
+}

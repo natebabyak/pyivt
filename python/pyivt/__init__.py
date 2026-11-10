@@ -9,8 +9,8 @@ from pyivt._native import (
     LocalizedLabels,
     LocalizedText,
     MissingValue,
-    open,
 )
+from pyivt._open import open
 
 __all__ = [
     "Dimension",
@@ -24,4 +24,4 @@ __all__ = [
     "open",
 ]
 
-__version__ = "0.0.9"
+__version__ = "0.0.10"

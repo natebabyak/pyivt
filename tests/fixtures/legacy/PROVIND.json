@@ -1,0 +1,114 @@
+{
+  "metadata": {
+    "product_id": null,
+    "title_en": null,
+    "title_fr": null,
+    "universe": null,
+    "dimensions": [
+      {
+        "name": "PROV/CAN",
+        "name_fr": null,
+        "count": 13,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Newfoundland", "Prince-Edward-Island", "Nova Scotia", "New Brunswick", "Quebec", "Ontario", "Manitoba", "Saskatchewan", "Alberta", "Bristish Columbia", "Yukon Territories", "Northwest Territories", "Canada"],
+        "members_fr": ["Terre-Neuve", "Ile-du-Prince-Édouard", "Nouvelle-Écosse", "Nouveau-Brunswick", "Québec", "Ontario", "Manitoba", "Saskatchewan", "Alberta", "Colombie-Britannique", "Yukon", "Territoires du Nord-Ouest", "Canada"],
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      },
+      {
+        "name": "DIVISIONS",
+        "name_fr": null,
+        "count": 19,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Total", "A - Agricultural and Related Service Industries", "B - Fishing and Trapping Industries", "C - Logging and Forestry Industries", "D - Mining (Including Milling), Quarrying and Oil Wells", "E - Manufacturing Industries", "F - Construction Industries", "G - Transportation and Storage Industries", "H - Communication and Other Utility Industries", "I - Wholesale Trade Industries", "J - Retail Trade Industries", "K - Finance and Insurance Industries", "L - Real Estate Operator and Insurance Agent Industries", "M - Business Service Industries", "N - Government Service Industries", "O - Educational Service Industries", "P - Health and Social Service Industries", "Q - Accommodation, Food and Beverage Service Industries", "R - Other Service Industries"],
+        "members_fr": ["Total", "A - Industries agricoles et de services connexes", "B - Industries de la pêche et du piégeage", "C - Industries de l'exploitation forestières et des services forestiers", "D - Industries des mines (y compris broyage), carrières et puits de pétrole", "E - Industries manufacturières", "F - Industries de la construction", "G - Industries du transport et de l'entreposage", "H - Industries des communications et autres services publics", "I - Industries du commerce de gros", "J - Industries du commerce de détail", "K - Industries des intermédiaires financiers et des assurances", "L - Industries des services immobiliers et agences d'assurances", "M - Industries des services aux entreprises", "N - Industries des services gouvernementaux", "O - Industries des services d'enseignement", "P - Industries des services de soins de santé et des services sociaux", "Q - Industries de l'hébergement et de la restauration", "R - Autres industries de services"],
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      },
+      {
+        "name": "EMPCLASS",
+        "name_fr": null,
+        "count": 9,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Total", "1-4", "5-9", "10-19", "20-49", "50-99", "100-199", "200-499", "500 +"],
+        "members_fr": ["Total", "1-4", "5-9", "10-19", "20-49", "50-99", "100-199", "200-499", "500 +"],
+        "ordinal": [9, 1, 2, 3, 4, 5, 6, 7, 8],
+        "description": null,
+        "description_fr": null
+      }
+    ],
+    "dimension_names": ["PROV/CAN", "DIVISIONS", "EMPCLASS"],
+    "dimension_names_fr": [null, null, null],
+    "dimension_counts": [13, 19, 9],
+    "geographies": {
+      "member_id": []
+    },
+    "n_geographies": 0,
+    "footnotes": [],
+    "dqf_legend": null
+  },
+  "cell_status": {
+    "pages": [0, 0, 13, 0, 0],
+    "n_missing": 0,
+    "reasons_stated": false,
+    "legend": null,
+    "nan_words": 0,
+    "extra_words": 0,
+    "verdict": "0 of 13 pages classify their absent cells (0 missing); 13 pages carry no readable tail, so their absences are unclassified"
+  },
+  "warnings": [
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (dense divisions): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (dense divisions): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (dense divisions): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (dense divisions): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (dense divisions): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (dense divisions): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (dense divisions): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (dense divisions): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (dense divisions): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (dense divisions): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (dense divisions): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    },
+    {
+      "class": ["canivt_suba", "canivt_fallback", "rlang_warning", "warning", "condition"],
+      "message": "Type-00 sub-A provincial Business-Patterns table (dense divisions): the outer\ndirectory stride (16) is a non-declared physical constant measured from the\npage directory, and the industry axis is decoded under a reconciliation gate.\nℹ The primary (positional, validated) read path could not supply this, so the\n  result may be incomplete or heuristically read; treat the affected values\n  with care. `options(canivt.strict = TRUE)` makes this an error."
+    }
+  ]
+}

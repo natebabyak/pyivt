@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.10] - 2026-11-10
+
+### Added
+
+- Open StatCan ZIP downloads from paths, bytes, or binary files. Use `member=` to select an IVT when an archive contains several.
+- Read version-2 IVT tables using native axis allocations, live code slots, and date records, including historical Business Patterns tables.
+
+### Fixed
+
+- Read older bilingual dimension summaries at their declared directory entries and honor native code fields selected for display.
+- Validate metadata records identically for path and bytes inputs, with directory context in errors for records extending past EOF.
+- Bound dimension slots to the header's declared slot table so 12-axis tables cannot read into the next file region.
+
 ## [0.0.9] - 2026-11-05
 
 ### Changed
@@ -217,7 +230,8 @@ First public release: Rust/PyO3 reader for Statistics Canada Beyond 20/20 `.ivt`
 - Demo IVT tests skip in CI unless Beyond sample files are linked locally
 - No CLI or catalogue download; write Parquet yourself via `pyarrow` / Polars / pandas
 
-[Unreleased]: https://github.com/natebabyak/pyivt/compare/v0.0.9...HEAD
+[Unreleased]: https://github.com/natebabyak/pyivt/compare/v0.0.10...HEAD
+[0.0.10]: https://github.com/natebabyak/pyivt/compare/v0.0.9...v0.0.10
 [0.0.9]: https://github.com/natebabyak/pyivt/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/natebabyak/pyivt/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/natebabyak/pyivt/compare/v0.0.6...v0.0.7

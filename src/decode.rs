@@ -25,6 +25,33 @@ pub struct Layout {
     pub ent_counts: Vec<i64>,
     pub estride: Vec<i64>,
     pub geo_in_page: bool,
+    pub member_slots: Vec<Option<Vec<usize>>>,
+    page_strides: Vec<i64>,
+}
+
+pub fn build_descriptor_layout(desc: &crate::descriptor::Descriptor) -> Result<Layout, String> {
+    let mut physical = desc.dims.clone();
+    for (dim, slots) in physical.iter_mut().zip(&desc.member_slots) {
+        if let Some(slots) = slots {
+            if slots.len() != dim.count as usize || slots.windows(2).any(|s| s[0] >= s[1]) {
+                return Err("member slots do not match the axis matrix".into());
+            }
+            dim.count = slots
+                .last()
+                .ok_or("empty member slot map")?
+                .checked_add(1)
+                .ok_or("member slot overflow")? as i64;
+        }
+    }
+    let allocations = desc
+        .allocation_bits
+        .as_ref()
+        .map(|bits| bits.iter().map(|&bits| 1i64 << bits).collect::<Vec<_>>());
+    let mut layout =
+        build_layout_with_allocations(&physical, desc.geo_dim, allocations.as_deref())?;
+    layout.counts = desc.dims.iter().map(|d| d.count).collect();
+    layout.member_slots = desc.member_slots.clone();
+    Ok(layout)
 }
 
 #[cfg(test)]
@@ -115,7 +142,16 @@ pub fn build_layout(dims: &[DimDesc]) -> Result<Layout, String> {
     build_layout_with_geo(dims, crate::descriptor::geo_dim_index(dims))
 }
 
+#[cfg(any(test, feature = "fuzzing"))]
 pub fn build_layout_with_geo(dims: &[DimDesc], gd: Option<usize>) -> Result<Layout, String> {
+    build_layout_with_allocations(dims, gd, None)
+}
+
+fn build_layout_with_allocations(
+    dims: &[DimDesc],
+    gd: Option<usize>,
+    allocations: Option<&[i64]>,
+) -> Result<Layout, String> {
     if dims.is_empty() || dims.iter().any(|dim| dim.count <= 0) {
         return Err("descriptor must have dimensions with positive item counts".into());
     }
@@ -164,7 +200,18 @@ pub fn build_layout_with_geo(dims: &[DimDesc], gd: Option<usize>) -> Result<Layo
         }
     }
 
-    let pad: Vec<i64> = cnt.iter().map(|&c| nextpow2(c)).collect();
+    let pad: Vec<i64> = allocations.map_or_else(
+        || cnt.iter().map(|&c| nextpow2(c)).collect(),
+        |allocations| allocations.to_vec(),
+    );
+    if pad.len() != m
+        || pad
+            .iter()
+            .zip(&cnt)
+            .any(|(&capacity, &count)| capacity < count || capacity & (capacity - 1) != 0)
+    {
+        return Err("axis allocation does not contain its declared members".into());
+    }
     let mut blk = 1i64;
     let mut straddle = 1usize;
     let mut inner_block = 1i64;
@@ -189,7 +236,11 @@ pub fn build_layout_with_geo(dims: &[DimDesc], gd: Option<usize>) -> Result<Layo
     let grid_counts = ipc.clone();
     let (tuples, bit) = cell_grid(&grid_counts, &stride);
 
-    let ws = nextpow2(win);
+    let ws = if allocations.is_some() {
+        (pad[straddle - 1] / ipc_straddle).max(1)
+    } else {
+        nextpow2(win)
+    };
     let mut ent_idx = vec![straddle];
     let mut ent_counts = vec![win];
     let mut ent_pad = vec![ws];
@@ -226,7 +277,29 @@ pub fn build_layout_with_geo(dims: &[DimDesc], gd: Option<usize>) -> Result<Layo
         ent_counts,
         estride,
         geo_in_page: Some(straddle) == gd,
+        member_slots: vec![None; m],
+        page_strides: stride,
     })
+}
+
+fn mapped_cell(lay: &Layout, coordinate: impl Fn(usize) -> usize) -> (usize, usize) {
+    let physical = |axis: usize| {
+        let member = coordinate(axis);
+        lay.member_slots[axis]
+            .as_ref()
+            .map_or(member, |slots| slots[member])
+    };
+    let axis = lay.straddle - 1;
+    let member = physical(axis);
+    let mut entry = member / lay.ipc[0] as usize * lay.estride[0] as usize;
+    for (i, &dim) in lay.ent_idx.iter().enumerate().skip(1) {
+        entry += physical(dim - 1) * lay.estride[i] as usize;
+    }
+    let mut bit = member % lay.ipc[0] as usize * lay.page_strides[0] as usize;
+    for (i, &dim) in lay.inpage_idx.iter().enumerate().skip(1) {
+        bit += physical(dim - 1) * lay.page_strides[i] as usize;
+    }
+    (entry, bit)
 }
 
 struct PageCells {
@@ -309,7 +382,9 @@ pub fn decompress_component(data: &[u8]) -> Result<Vec<u8>, String> {
 }
 
 fn missing_mode(data: &[u8]) -> Result<u16, String> {
-    let raw = crate::metadata_directory::record(data, HDR_MASTER_PTR, 2)
+    let master = crate::header::slot_offset(data, HDR_MASTER_PTR)
+        .ok_or("missing or truncated table settings slot")?;
+    let raw = crate::metadata_directory::record(data, master, 2)
         .ok_or("missing or truncated table settings")?;
     let decoded = decompress_component(raw)?;
     if decoded.len() < 8 || decoded[..4] != [1, 1, 32, 0] {
@@ -552,15 +627,17 @@ pub fn decode_selected(
     let _profile = crate::profile::Stage::new("decode_values");
     use arrow::array::BooleanBufferBuilder;
     use arrow::buffer::{NullBuffer, ScalarBuffer};
-    let directory = MetadataDirectory::new(data, HDR_DIR_PTR)
-        .map_err(|e| format!("invalid data directory: {e}"))?;
-    if u16(data, HDR_DIR_PTR + 12) & 1 != 0 && u16(data, 20) != 4096 {
+    let slot =
+        crate::header::slot_offset(data, HDR_DIR_PTR).ok_or("missing data directory slot")?;
+    let directory =
+        MetadataDirectory::new(data, slot).map_err(|e| format!("invalid data directory: {e}"))?;
+    if u16(data, slot + 12) & 1 != 0 && u16(data, 20) != 4096 {
         return Err(format!(
             "invalid data directory: unsupported directory page size {}",
             u16(data, 20)
         ));
     }
-    let capacity = u32(data, HDR_DIR_PTR + 4) as usize;
+    let capacity = u32(data, slot + 4) as usize;
     if directory.count > capacity {
         return Err(format!("invalid data directory: expected_entry_count={}, allocated_capacity={capacity}; reason=entry count exceeds capacity", directory.count));
     }
@@ -575,6 +652,7 @@ pub fn decode_selected(
     let axis = lay.straddle - 1;
     let inner = native_strides[axis];
     let full_grid = choices.iter().all(Option::is_none);
+    let mapped = lay.member_slots.iter().any(Option::is_some);
     let mut coords = vec![0usize; lay.n_dim];
     for row in 0..rows {
         let native_row = if full_grid {
@@ -601,6 +679,10 @@ pub fn decode_selected(
         for (entry_axis, &dim) in lay.ent_idx.iter().enumerate().skip(1) {
             index += coordinate(dim - 1) * lay.estride[entry_axis] as usize;
         }
+        let mapped_address = mapped.then(|| mapped_cell(lay, coordinate));
+        if let Some((entry, _)) = mapped_address {
+            index = entry;
+        }
         if cached
             .as_ref()
             .is_none_or(|(previous, _)| *previous != index)
@@ -612,7 +694,7 @@ pub fn decode_selected(
         }
         let page = &cached.as_ref().unwrap().1;
         let local = (axis_coord % lay.ipc[0] as usize) * inner + native_row % inner;
-        let bit = lay.bit[local] as usize;
+        let bit = mapped_address.map_or_else(|| lay.bit[local] as usize, |(_, bit)| bit);
         let published = page.statuses[bit] == 0;
         valid.append(published);
         values.push(if published { page.vals[bit] } else { 0.0 });
@@ -662,15 +744,17 @@ pub fn decode_range(
     if start > end || end > total {
         return Err("cell batch range outside grid".into());
     }
-    let directory = MetadataDirectory::new(data, HDR_DIR_PTR)
+    let slot =
+        crate::header::slot_offset(data, HDR_DIR_PTR).ok_or("missing data directory slot")?;
+    let directory = MetadataDirectory::new(data, slot)
         .map_err(|err| format!("invalid data directory: {err}"))?;
-    if u16(data, HDR_DIR_PTR + 12) & 1 != 0 && u16(data, 20) != 4096 {
+    if u16(data, slot + 12) & 1 != 0 && u16(data, 20) != 4096 {
         return Err(format!(
             "invalid data directory: unsupported directory page size {}",
             u16(data, 20)
         ));
     }
-    let capacity = u32(data, HDR_DIR_PTR + 4) as usize;
+    let capacity = u32(data, slot + 4) as usize;
     if directory.count > capacity {
         return Err(format!("invalid data directory: expected_entry_count={}, allocated_capacity={capacity}; reason=entry count exceeds capacity", directory.count));
     }
@@ -695,6 +779,28 @@ pub fn decode_range(
         notes: Vec::new(),
     };
     batch.note_offsets.push(0);
+    if lay.member_slots.iter().any(Option::is_some) {
+        let mut cached: Option<(usize, PageCells)> = None;
+        for row in start..end {
+            let (entry, bit) =
+                mapped_cell(lay, |axis| row / strides[axis] % lay.counts[axis] as usize);
+            if cached
+                .as_ref()
+                .is_none_or(|(previous, _)| *previous != entry)
+            {
+                cached = Some((entry, directory_page(data, &directory, entry, lay, mode)?));
+            }
+            let page = &cached.as_ref().unwrap().1;
+            batch.values.push(page.vals[bit]);
+            batch.statuses.push(page.statuses[bit]);
+            batch.notes.extend_from_slice(&page.footnotes[bit]);
+            batch.note_offsets.push(
+                i32::try_from(batch.notes.len())
+                    .map_err(|_| "too many annotations in one batch")?,
+            );
+        }
+        return Ok(batch);
+    }
     let axis = lay.straddle - 1;
     let inner = strides[axis];
     let mut row = start;
@@ -736,11 +842,77 @@ pub fn decode_range(
 mod tests {
     use super::*;
 
+    fn mapped_layout(counts: &[i64], slots: Vec<Option<Vec<usize>>>) -> Layout {
+        let descriptor = crate::descriptor::Descriptor {
+            offset: 0,
+            dims: counts
+                .iter()
+                .enumerate()
+                .map(|(axis, &count)| DimDesc {
+                    name: format!("Axis {axis}"),
+                    count,
+                    type_code: 0,
+                    double01: false,
+                })
+                .collect(),
+            geo_dim: None,
+            member_slots: slots,
+            allocation_bits: None,
+        };
+        build_descriptor_layout(&descriptor).unwrap()
+    }
+
+    #[test]
+    fn deleted_slots_keep_inner_outer_and_straddling_coordinates() {
+        // Independent physical coordinates: padded inner axes use 8 and 1
+        // bits per step, while the first axis advances 16 bits in one page.
+        let inner = mapped_layout(&[2, 2, 3], vec![None, None, Some(vec![0, 2, 5])]);
+        assert_eq!(inner.counts, [2, 2, 3]);
+        assert_eq!(mapped_cell(&inner, |axis| [1, 1, 2][axis]), (0, 29));
+
+        // The middle axis spans nine 256-member windows; directory allocation
+        // rounds that to sixteen. Physical outer member 5 begins at entry 80.
+        let outer = mapped_layout(
+            &[3, 2051, 3],
+            vec![Some(vec![0, 2, 5]), None, Some(vec![1, 3, 6])],
+        );
+        assert_eq!(mapped_cell(&outer, |axis| [2, 2050, 2][axis]), (88, 22));
+
+        // Physical member 600 crosses a 512-member window on the middle axis.
+        let straddle = mapped_layout(&[2, 3, 3], vec![None, Some(vec![0, 255, 600]), None]);
+        assert_eq!(mapped_cell(&straddle, |axis| [1, 2, 2][axis]), (3, 354));
+
+        let single = mapped_layout(&[3], vec![Some(vec![0, 2048, 4096])]);
+        assert_eq!(mapped_cell(&single, |_| 0), (0, 0));
+        assert_eq!(mapped_cell(&single, |_| 1), (1, 0));
+        assert_eq!(mapped_cell(&single, |_| 2), (2, 0));
+    }
+
+    #[test]
+    fn native_axis_allocation_reserves_unused_directory_windows() {
+        let dims: Vec<_> = [13, 19, 9]
+            .into_iter()
+            .map(|count| DimDesc {
+                name: format!("Items {count}"),
+                count,
+                type_code: 0,
+                double01: false,
+            })
+            .collect();
+        let layout = build_layout_with_allocations(&dims, None, Some(&[16, 2048, 16])).unwrap();
+        assert_eq!(layout.straddle, 2);
+        assert_eq!(layout.estride, [1, 16]);
+        assert_eq!(mapped_cell(&layout, |axis| [1, 0, 0][axis]), (16, 0));
+        assert_eq!(mapped_cell(&layout, |axis| [12, 18, 8][axis]), (192, 296));
+    }
+
     fn paged_data_directory() -> (Vec<u8>, Layout) {
         // Three directory pages in deliberately nonmonotonic physical order.
         // A partial last page must keep its holes and declared ordinal bound.
         let pages = [1024u32, 66_560, 33_792];
         let mut data = vec![0; 99_328];
+        data[12..16].copy_from_slice(&544u32.to_le_bytes());
+        data[16..18].copy_from_slice(&32u16.to_le_bytes());
         data[20..22].copy_from_slice(&4096u16.to_le_bytes());
         data[HDR_DIR_PTR..HDR_DIR_PTR + 4].copy_from_slice(&1000u32.to_le_bytes());
         data[HDR_DIR_PTR + 4..HDR_DIR_PTR + 8].copy_from_slice(&16_384u32.to_le_bytes());
@@ -1037,8 +1209,9 @@ mod tests {
     fn supplied_pages_decode_all_dimensions_and_cells() {
         for path in crate::test_data::files() {
             let data = std::fs::read(&path).unwrap();
-            let dims = crate::descriptor::parse_descriptor(&data).unwrap().dims;
-            let layout = build_layout(&dims).unwrap();
+            let descriptor = crate::descriptor::parse_descriptor(&data).unwrap();
+            let dims = &descriptor.dims;
+            let layout = build_descriptor_layout(&descriptor).unwrap();
             let count = row_count(&layout).unwrap();
             let columns = decode_range(&data, &layout, 0, count)
                 .unwrap_or_else(|err| panic!("{}: {err}", path.display()));

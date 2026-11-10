@@ -71,6 +71,7 @@ def build_member_table(ivt: Ivt, projection: list[_Axis], language: str) -> pa.T
         )
     index = ("en", "fr").index(language)
     table_id, fields, display_fields = ivt._member_fields()
+    legacy = ivt.metadata.signature == "02002000"
     metadata[b"pyivt.table_id"] = table_id.encode()
     types = {
         "text": pa.string(),
@@ -126,10 +127,11 @@ def build_member_table(ivt: Ivt, projection: list[_Axis], language: str) -> pa.T
             reference = references[index]
             if reference is not None:
                 name, kind, _ = axis_fields[reference]
-                if kind == "text" and name.casefold() not in {
-                    "code",
-                    *_DISPLAY_NAMES[1 - index],
-                }:
+                if (
+                    kind == "text"
+                    and name.casefold() not in _DISPLAY_NAMES[1 - index]
+                    and (legacy or name.casefold() != "code")
+                ):
                     label = arrays[reference]
             if label is None:
                 label = next(
