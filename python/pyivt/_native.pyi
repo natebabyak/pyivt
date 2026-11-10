@@ -400,6 +400,8 @@ class Ivt:
 
 def open(
     source: str | PathLike[str] | bytes | bytearray | memoryview | BinaryIO,
+    *,
+    _source_owner: object | None = None,
 ) -> Ivt:
     """Open a Beyond 20/20 IVT source without decoding its cell values.
 

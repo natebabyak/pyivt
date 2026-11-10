@@ -1,0 +1,323 @@
+INDUSTRY GROUPS,Total,1-4,5-9,10-19,20-49,50-99,100-199,200-499,500 +
+Total,17539,11487,2946,1650,925,280,128,76,47
+"010 - Other Agricultural Industries, N.E.C.",0,0,0,0,0,0,0,0,0
+011 - Livestock Farms (Except Animal Specialties),69,45,14,8,2,0,0,0,0
+012 - Other Animal Specialty Farms,14,14,0,0,0,0,0,0,0
+013 - Field Crop Farms,67,58,4,4,1,0,0,0,0
+014 - Field Crop Combination Farms,1,1,0,0,0,0,0,0,0
+015 - Fruit and Other Vegetable Farms,32,25,2,2,2,1,0,0,0
+016 - Horticultural Specialties,47,32,7,3,4,1,0,0,0
+"017 - Livestock, Field Crop and Horticultural Combination Farms",57,50,6,1,0,0,0,0,0
+"020 - Other Service Industries Incidental to Agriculture, N.E.C.",0,0,0,0,0,0,0,0,0
+021 - Services Incidental to Livestock and Animal Specialties,27,18,4,4,1,0,0,0,0
+022 - Services Incidental to Agricultural Crops,11,7,0,1,1,1,1,0,0
+023 - Other Services Incidental to Agriculture,8,7,1,0,0,0,0,0,0
+"030 - Other Fishing and Trapping Industries, N.E.C.",0,0,0,0,0,0,0,0,0
+031 - Fishing Industries,293,198,56,25,10,3,1,0,0
+032 - Services Incidental to Fishing,24,12,5,3,1,1,2,0,0
+033 - Trapping,3,1,1,1,0,0,0,0,0
+041 - Logging Industry,199,114,39,24,14,7,1,0,0
+051 - Forestry Services Industry,17,8,4,2,1,2,0,0,0
+061 - Metal Mines,7,1,1,1,1,0,0,2,1
+062 - Non-Metal Mines (Except Coal),8,3,1,1,1,2,0,0,0
+063 - Coal Mines,0,0,0,0,0,0,0,0,0
+071 - Crude Petroleum and Natural Gas Industries,2,1,0,0,0,0,0,1,0
+081 - Stone Quarries,7,1,2,0,3,1,0,0,0
+082 - Sand and Gravel Pits,14,6,4,3,1,0,0,0,0
+091 - Service Industries Incidental to Crude Petroleum and Natural Gas,5,2,2,0,1,0,0,0,0
+092 - Service Industries Incidental to Mining,22,9,4,8,0,0,1,0,0
+101 - Meat and Poultry Products Industries,18,10,1,5,1,0,0,1,0
+102 - Fish Products Industry,114,13,16,8,18,20,19,16,4
+103 - Fruit and Vegetable Industries,3,1,0,1,1,0,0,0,0
+104 - Dairy Products Industries,5,1,0,1,1,2,0,0,0
+"105 - Flour, Prepared Cereal Food and Feed Industries",3,2,0,0,1,0,0,0,0
+106 - Vegetable Oil Mills (Except Corn Oil),0,0,0,0,0,0,0,0,0
+107 - Bakery Products Industries,12,7,1,0,2,1,1,0,0
+108 - Sugar and Sugar Confectionery Industries,6,4,1,1,0,0,0,0,0
+109 - Other Food Products Industries,9,5,0,0,4,0,0,0,0
+111 - Soft Drink Industry,5,1,2,0,1,1,0,0,0
+112 - Distillery Products Industry,1,0,0,1,0,0,0,0,0
+113 - Brewery Products Industry,5,2,0,1,0,0,2,0,0
+114 - Wine Industry,1,1,0,0,0,0,0,0,0
+121 - Leaf Tobacco Industry,0,0,0,0,0,0,0,0,0
+122 - Tobacco Products Industry,1,1,0,0,0,0,0,0,0
+151 - Tire and Tube Industry,0,0,0,0,0,0,0,0,0
+152 - Rubber Hose and Belting Industry,1,1,0,0,0,0,0,0,0
+159 - Other Rubber Products Industries,0,0,0,0,0,0,0,0,0
+161 - Foamed and Expanded Plastic Products Industry,1,1,0,0,0,0,0,0,0
+162 - Plastic Pipe and Pipe Fittings Industry,2,1,1,0,0,0,0,0,0
+163 - Plastic Film and Sheeting Industry,0,0,0,0,0,0,0,0,0
+169 - Other Plastic Products Industries,15,6,3,2,3,0,1,0,0
+171 - Leather and Allied Products Industries,3,2,0,0,0,0,1,0,0
+181 - Man-Made Fibre and Filament Yarn Industry,0,0,0,0,0,0,0,0,0
+182 - Spun Yarn and Woven Cloth Industries,0,0,0,0,0,0,0,0,0
+183 - Broad Knitted Fabric Industry,0,0,0,0,0,0,0,0,0
+191 - Natural Fibres Processing and Felt Products Industry,0,0,0,0,0,0,0,0,0
+"192 - Carpet, Mat and Rug Industry",2,1,1,0,0,0,0,0,0
+193 - Canvas and Related Products Industry,2,1,1,0,0,0,0,0,0
+199 - Other Textile Products Industries,6,3,2,1,0,0,0,0,0
+243 - Men's and Boys' Clothing Industries,0,0,0,0,0,0,0,0,0
+244 - Women's Clothing Industries,7,4,2,1,0,0,0,0,0
+245 - Children's Clothing Industry,2,2,0,0,0,0,0,0,0
+249 - Other Clothing and Apparel Industries,9,5,2,2,0,0,0,0,0
+"251 - Sawmill, Planing Mill and Shingle Mill Products Industries",85,52,19,6,6,2,0,0,0
+252 - Veneer and Plywood Industries,1,1,0,0,0,0,0,0,0
+"254 - Sash, Door and Other Millwork Industries",30,15,7,5,2,1,0,0,0
+256 - Wooden Box and Pallet Industry,4,2,0,1,1,0,0,0,0
+258 - Coffin and Casket Industry,1,0,1,0,0,0,0,0,0
+259 - Other Wood Industries,18,17,0,0,1,0,0,0,0
+261 - Household Furniture Industries,12,12,0,0,0,0,0,0,0
+264 - Office Furniture Industries,0,0,0,0,0,0,0,0,0
+269 - Other Furniture and Fixture Industries,5,2,1,1,1,0,0,0,0
+271 - Pulp and Paper Industries,3,0,0,0,0,0,0,1,2
+272 - Asphalt Roofing Industry,0,0,0,0,0,0,0,0,0
+273 - Paper Box and Bag Industries,4,1,1,0,1,1,0,0,0
+279 - Other Converted Paper Products Industries,5,4,0,1,0,0,0,0,0
+281 - Commercial Printing Industries,37,20,11,4,2,0,0,0,0
+"282 - Platemaking, Typesetting and Bindery Industry",9,7,1,1,0,0,0,0,0
+283 - Publishing Industries,12,3,4,4,0,1,0,0,0
+284 - Combined Publishing and Printing Industries,11,4,1,1,2,1,2,0,0
+291 - Primary Steel Industries,0,0,0,0,0,0,0,0,0
+292 - Steel Pipe and Tube Industry,1,0,1,0,0,0,0,0,0
+294 - Iron Foundries,1,1,0,0,0,0,0,0,0
+295 - Non-Ferrous Metal Smelting and Refining Industries,0,0,0,0,0,0,0,0,0
+"296 - Aluminum Rolling, Casting and Extruding Industry",1,1,0,0,0,0,0,0,0
+"297 - Copper and Copper Alloy Rolling, Casting and Extruding Industry",0,0,0,0,0,0,0,0,0
+"299 - Other Rolled, Cast and Extruded Non-Ferrous Metal Products Industries",1,0,0,1,0,0,0,0,0
+301 - Power Boiler and Heat Exchanger Industry,0,0,0,0,0,0,0,0,0
+302 - Fabricated Structural Metal Products Industries,11,5,1,2,2,0,0,1,0
+303 - Ornamental and Architectural Metal Products Industries,7,3,4,0,0,0,0,0,0
+"304 - Stamped, Pressed and Coated Metal Products Industries",9,6,3,0,0,0,0,0,0
+305 - Wire and Wire Products Industries,5,3,2,0,0,0,0,0,0
+"306 - Hardware, Tool and Cutlery Industries",3,1,2,0,0,0,0,0,0
+307 - Heating Equipment Industry,1,0,0,1,0,0,0,0,0
+308 - Machine Shop Industry,26,9,6,5,6,0,0,0,0
+309 - Other Metal Fabricating Industrie,9,5,2,0,2,0,0,0,0
+311 - Agricultural Implement Industry,0,0,0,0,0,0,0,0,0
+312 - Commercial Refrigeration and Air Conditioning Equipment Industry,0,0,0,0,0,0,0,0,0
+319 - Other Machinery and Equipment Industries,11,6,3,2,0,0,0,0,0
+321 - Aircraft and Aircraft Parts Industry,3,1,1,1,0,0,0,0,0
+323 - Motor Vehicle Industry,1,0,0,1,0,0,0,0,0
+324 - Truck and Bus Body and Trailer Industries,1,0,0,1,0,0,0,0,0
+325 - Motor Vehicle Parts and Accessories Industries,3,2,0,1,0,0,0,0,0
+326 - Railroad Rolling Stock Industry,0,0,0,0,0,0,0,0,0
+327 - Shipbuilding and Repair Industry,7,0,1,1,4,0,0,1,0
+328 - Boatbuilding and Repair Industry,27,13,6,6,1,1,0,0,0
+329 - Other Transportation Equipment Industries,0,0,0,0,0,0,0,0,0
+331 - Small Electrical Appliance Industry,0,0,0,0,0,0,0,0,0
+332 - Major Appliance Industry (Electric and Non-Electric),0,0,0,0,0,0,0,0,0
+333 - Electric Lighting Industries,0,0,0,0,0,0,0,0,0
+"334 - Record Player, Radio and Television Receiver Industry",1,1,0,0,0,0,0,0,0
+335 - Communication and Other Electronic Equipment Industries,9,3,1,2,3,0,0,0,0
+"336 - Office, Store and Business Machine Industries",3,2,1,0,0,0,0,0,0
+337 - Electrical Industrial Equipment Industries,3,2,1,0,0,0,0,0,0
+338 - Communications and Energy Wire and Cable Industry,1,1,0,0,0,0,0,0,0
+339 - Other Electrical Products Industries,1,1,0,0,0,0,0,0,0
+351 - Clay Products Industries,7,6,1,0,0,0,0,0,0
+352 - Hydraulic Cement Industry,1,0,0,0,0,0,1,0,0
+354 - Concrete Products Industries,6,3,2,1,0,0,0,0,0
+355 - Ready-Mix Concrete Industry,15,3,3,3,6,0,0,0,0
+356 - Glass and Glass Products Industries,2,2,0,0,0,0,0,0,0
+357 - Abrasives Industry,1,1,0,0,0,0,0,0,0
+358 - Lime Industry,0,0,0,0,0,0,0,0,0
+359 - Other Non-Metallic Mineral Products Industries,7,1,3,2,0,1,0,0,0
+361 - Refined Petroleum Industries,8,6,1,0,0,0,0,0,1
+369 - Other Petroleum and Coal Products Industries,0,0,0,0,0,0,0,0,0
+371 - Industrial Chemicals Industries n.e.c.,3,1,0,1,1,0,0,0,0
+372 - Agricultural Chemical Industries,3,1,1,0,1,0,0,0,0
+373 - Plastic and Synthetic Resin Industry,0,0,0,0,0,0,0,0,0
+374 - Pharmaceutical and Medicine Industry,1,0,0,0,1,0,0,0,0
+375 - Paint and Varnish Industry,3,2,1,0,0,0,0,0,0
+376 - Soap and Cleaning Compounds Industry,1,1,0,0,0,0,0,0,0
+377 - Toilet Preparations Industry,0,0,0,0,0,0,0,0,0
+379 - Other Chemical Products Industries,3,2,0,0,1,0,0,0,0
+391 - Scientific and Professional Equipment Industries,4,1,1,1,1,0,0,0,0
+392 - Jewellery and Precious Metal Industries,4,3,0,0,1,0,0,0,0
+393 - Sporting Goods and Toy Industries,13,9,2,2,0,0,0,0,0
+397 - Sign and Display Industry,18,13,3,1,1,0,0,0,0
+399 - Other Manufactured Products Industries,28,22,2,3,1,0,0,0,0
+401 - Residential Building and Development,736,588,93,33,17,4,1,0,0
+402 - Non-Residential Building and Development,68,39,9,7,8,4,0,0,1
+411 - Industrial Construction (Other Than Buildings),5,3,1,0,0,0,0,0,1
+412 - Highway and Heavy Construction,127,61,24,10,18,8,2,4,0
+421 - Site Work,226,175,28,11,10,2,0,0,0
+422 - Structural and Related Work,41,27,7,5,2,0,0,0,0
+423 - Exterior Close-in Work,125,94,18,6,7,0,0,0,0
+"424 - Plumbing, Heating and Air Conditioning, Mechanical Work",138,104,19,11,3,1,0,0,0
+425 - Mechanical Specialty Work,36,21,7,6,2,0,0,0,0
+426 - Electrical Work,174,123,23,21,6,1,0,0,0
+427 - Interior and Finishing Work,309,274,25,8,1,1,0,0,0
+429 - Other Trade Work,26,17,3,4,1,1,0,0,0
+"441 - Project Management, Construction",17,7,4,3,2,1,0,0,0
+449 - Other Services Incidental to Construction,21,16,1,2,2,0,0,0,0
+451 - Air Transport Industries,33,11,5,4,3,4,4,2,0
+452 - Service Industries Incidental to Air Transport,11,1,4,3,2,1,0,0,0
+453 - Railway Transport and Related Service Industries,2,1,0,0,0,0,0,1,0
+454 - Water Transport Industries,47,25,6,5,7,2,2,0,0
+455 - Service Industries Incidental to Water Transport,42,30,10,1,0,0,0,1,0
+456 - Truck Transport Industries,470,360,65,28,13,3,1,0,0
+457 - Public Passenger Transit Systems Industries,95,66,12,9,6,1,1,0,0
+458 - Other Transportation Industries,55,49,4,2,0,0,0,0,0
+459 - Other Service Industries Incidental to Transportation,38,22,7,1,4,2,0,1,1
+461 - Pipeline Transport Industries,0,0,0,0,0,0,0,0,0
+471 - Grain Elevator Industry,0,0,0,0,0,0,0,0,0
+479 - Other Storage and Warehousing Industries,10,4,3,3,0,0,0,0,0
+481 - Telecommunication Broadcasting Industries,25,8,4,8,0,4,0,1,0
+482 - Telecommunication Carriers Industry,9,5,1,2,0,0,0,0,1
+483 - Other Telecommunication Industries,0,0,0,0,0,0,0,0,0
+484 - Postal and Courier Service Industries,44,27,10,2,3,0,1,0,1
+491 - Electric Power Systems Industry,7,1,0,0,2,0,0,2,2
+492 - Gas Distribution Systems Industry,1,0,1,0,0,0,0,0,0
+493 - Water Systems Industry,6,2,2,1,0,1,0,0,0
+499 - Other Utility Industries n.e.c.,46,38,4,2,1,0,1,0,0
+"501 - Farm Products, Wholesale",3,1,1,1,0,0,0,0,0
+"511 - Petroleum Products, Wholesale",98,65,22,5,3,2,1,0,0
+"521 - Food, Wholesale",173,92,26,29,19,7,0,0,0
+"522 - Beverages, Wholesale",66,34,22,7,1,1,1,0,0
+"523 - Drugs and Toilet Preparations, Wholesale",16,12,1,1,2,0,0,0,0
+"524 - Tobacco Products, Wholesale",9,3,2,2,2,0,0,0,0
+"531 - Apparel, Wholesale",5,4,0,0,1,0,0,0,0
+"532 - Dry Goods, Wholesale",2,0,2,0,0,0,0,0,0
+"541 - Electrical and Electronic Household Appliances and Parts, Wholesale",5,3,0,1,1,0,0,0,0
+"542 - Household Furniture, Wholesale",2,2,0,0,0,0,0,0,0
+"543 - Household Furnishings, Wholesale",8,3,3,2,0,0,0,0,0
+"551 - Motor Vehicles, Wholesale",33,19,5,9,0,0,0,0,0
+"552 - Motor Vehicle Parts and Accessories, Wholesale",60,29,19,11,0,0,1,0,0
+"561 - Metal and Metal Products, Wholesale",7,4,2,1,0,0,0,0,0
+"562 - Hardware and Plumbing, Heating and Air Conditioning Equipment and Supplies",37,25,4,5,3,0,0,0,0
+"563 - Lumber and Building Materials, Wholesale",133,45,49,21,16,1,1,0,0
+"571 - Farm Machinery, Equipment and Supplies, Wholesale",5,3,2,0,0,0,0,0,0
+"572 - Construction, Forestry and Mining Machinery, Equipment and Supplies, Wholesale",20,7,5,5,1,1,1,0,0
+"573 - Industrial Machinery, Equipment and Supplies, Wholesale",47,26,12,8,1,0,0,0,0
+"574 - Electrical and Electronic Machinery, Equipment and Supplies, Wholesale",75,47,16,4,7,1,0,0,0
+"579 - Other Machinery, Equipment and Supplies, Wholesale",110,69,23,10,7,1,0,0,0
+"591 - Waste Materials, Wholesale",33,21,2,6,3,1,0,0,0
+"592 - Paper and Paper Products, Wholesale",19,4,6,5,3,1,0,0,0
+"593 - Agricultural Supplies, Wholesale",7,7,0,0,0,0,0,0,0
+"594 - Toys, Amusement and Sporting Goods, Wholesale",12,9,0,2,1,0,0,0,0
+"595 - Photographic Equipment and Musical Instruments and Supplies, Wholesale",7,5,2,0,0,0,0,0,0
+"596 - Jewellery and Watches, Wholesale",2,1,0,1,0,0,0,0,0
+"597 - Industrial and Household Chemicals, Wholesale",16,9,6,0,1,0,0,0,0
+"598 - General Merchandise, Wholesale",11,8,2,1,0,0,0,0,0
+"599 - Other Products n.e.c., Wholesale",57,44,6,2,2,2,1,0,0
+601 - Food Stores,1115,771,197,90,34,19,2,1,1
+"602 - Liquor, Wine and Beer Stores",16,12,1,1,0,1,1,0,0
+603 - Prescription Drugs and Patent Medicine Stores,174,46,42,50,36,0,0,0,0
+611 - Shoe Stores,25,5,13,6,0,1,0,0,0
+612 - Men's Clothing Stores,16,5,3,6,2,0,0,0,0
+613 - Women's Clothing Stores,68,20,26,16,4,1,1,0,0
+614 - Clothing Stores n.e.c.,66,31,9,19,6,1,0,0,0
+615 - Fabric and Yarn Stores,23,16,2,4,1,0,0,0,0
+621 - Household Furniture Stores,51,32,10,6,2,0,1,0,0
+"622 - Appliance, Television, Radio and Stereo Stores",80,54,16,9,1,0,0,0,0
+623 - Household Furnishings Stores,26,14,4,7,1,0,0,0,0
+631 - Automobile Dealers,85,29,10,16,21,5,3,1,0
+632 - Recreational Vehicle Dealers,64,42,15,7,0,0,0,0,0
+633 - Gasoline Service Stations,305,138,102,57,8,0,0,0,0
+634 - Automotive Parts and Accessories Stores,57,23,14,8,9,1,2,0,0
+635 - Motor Vehicle Repair Shops,300,223,56,17,3,1,0,0,0
+639 - Other Motor Vehicle Services,15,10,1,3,1,0,0,0,0
+641 - General Merchandise Stores,302,120,98,48,18,7,8,3,0
+651 - Book and Stationery Stores,16,8,2,4,2,0,0,0,0
+"652 - Florists, Lawn and Garden Centres",49,35,10,3,1,0,0,0,0
+"653 - Hardware, Paint, Glass and Wallpaper Stores",80,39,18,16,7,0,0,0,0
+654 - Sporting Goods and Bicycle Shops,54,32,10,11,1,0,0,0,0
+655 - Musical Instrument and Record Stores,24,18,2,3,1,0,0,0,0
+656 - Jewellery Stores and Watch and Jewellery Repair Shops,40,17,17,5,1,0,0,0,0
+657 - Camera and Photographic Supply Stores,7,4,3,0,0,0,0,0,0
+"658 - Toy, Hobby, Novelty and Souvenir Stores",131,105,15,8,3,0,0,0,0
+659 - Other Retail Stores,125,86,19,16,3,1,0,0,0
+691 - Vending Machine Operators,9,8,1,0,0,0,0,0,0
+692 - Direct Sellers,50,41,6,1,2,0,0,0,0
+701 - Central Bank,0,0,0,0,0,0,0,0,0
+702 - Chartered Banks and Other Banking-Type Intermediaries,7,0,1,0,1,1,0,3,1
+703 - Trust Companies,5,3,0,0,1,0,0,0,1
+704 - Deposit Accepting Mortgage Companies,1,1,0,0,0,0,0,0,0
+705 - Credit Unions,22,7,8,4,3,0,0,0,0
+709 - Other Deposit Accepting Intermediaries,0,0,0,0,0,0,0,0,0
+711 - Consumer Loan Companies,28,12,14,1,0,1,0,0,0
+712 - Business Financing Companies,23,9,6,6,2,0,0,0,0
+721 - Portfolio Investment Intermediaries,191,129,33,13,12,4,0,0,0
+722 - Mortgage Companies,9,3,3,2,0,1,0,0,0
+729 - Other Investment Intermediaries,12,8,3,1,0,0,0,0,0
+731 - Life Insurers,13,5,4,1,3,0,0,0,0
+732 - Deposit Insurers,0,0,0,0,0,0,0,0,0
+733 - Property and Casualty Insurers,6,2,1,0,0,1,0,2,0
+741 - Security Brokers and Dealers,7,1,4,2,0,0,0,0,0
+742 - Mortgage Brokers,2,2,0,0,0,0,0,0,0
+743 - Security and Commodity Exchanges,0,0,0,0,0,0,0,0,0
+749 - Other Financial Intermediaries n.e.c.,4,4,0,0,0,0,0,0,0
+751 - Operators of Buildings and Dwellings,234,188,32,7,4,2,0,1,0
+759 - Other Real Estate Operators,7,7,0,0,0,0,0,0,0
+761 - Insurance and Real Estate Agencies,211,133,39,20,17,2,0,0,0
+771 - Employment Agencies and Personnel Suppliers,39,23,6,2,6,0,1,1,0
+772 - Computer and Related Services,84,61,10,6,6,0,0,1,0
+773 - Accounting and Bookkeeping Services,177,134,23,8,10,2,0,0,0
+774 - Advertising Services,52,34,13,1,4,0,0,0,0
+"775 - Architectural, Engineering and Other Scientific and Technical Services",230,143,37,26,17,5,1,0,1
+776 - Offices of Lawyers and Notaries,96,70,14,4,8,0,0,0,0
+777 - Management Consulting Services,182,137,22,13,8,1,1,0,0
+779 - Other Business Services,145,98,19,14,9,1,3,1,0
+811 - Defence Services,2,1,0,0,0,0,0,0,1
+812 - Protective Services,3,0,0,0,2,0,1,0,0
+"813 - Labour, Employment and Immigration Services",2,0,0,1,0,0,0,0,1
+814 - Foreign Affairs and International Assistance,1,1,0,0,0,0,0,0,0
+815 - General Administrative Services,6,2,0,0,0,1,2,0,1
+816 - Human Resource Administration,8,2,2,0,1,1,2,0,0
+817 - Economic Services Administration,11,2,0,0,2,4,1,0,2
+822 - Protective Services,6,1,1,2,0,1,0,0,1
+823 - Labour and Employment Services,2,1,0,0,0,0,0,1,0
+825 - General Administrative Services,20,0,15,1,0,1,0,3,0
+826 - Human Resource Administration,9,1,1,1,2,1,0,0,3
+827 - Economic Services Administration,9,0,0,0,0,1,3,4,1
+832 - Protective Services,1,0,1,0,0,0,0,0,0
+835 - General Administrative Services,334,164,91,46,19,9,2,3,0
+836 - Human Resource Administration,1,1,0,0,0,0,0,0,0
+837 - Economic Services Administration,4,2,2,0,0,0,0,0,0
+841 - International and Other Extra-Territorial Agencies,6,3,1,1,1,0,0,0,0
+851 - Elementary and Secondary Education,49,27,0,6,3,3,0,2,8
+852 - Post-Secondary Non-University Education,70,20,20,6,10,8,2,4,0
+853 - University Education,3,0,1,1,0,0,0,0,1
+854 - Library Services,12,9,1,1,0,0,0,1,0
+855 - Museums and Archives,31,24,4,2,0,1,0,0,0
+859 - Other Educational Services,46,33,5,4,3,1,0,0,0
+861 - Hospitals,73,19,12,7,7,9,8,4,7
+862 - Other Institutional Health and Social Services,155,68,34,17,12,10,10,2,2
+863 - Non-Institutional Health Services,166,122,17,13,11,2,1,0,0
+864 - Non-Institutional Social Services,942,819,66,25,25,5,2,0,0
+"865 - Offices of Physicians, Surgeons and Dentists, Private Practice",455,361,62,25,7,0,0,0,0
+866 - Offices of Other Health Practitioners,121,86,16,15,3,1,0,0,0
+867 - Offices of Social Services Practitioners,8,7,1,0,0,0,0,0,0
+868 - Medical and Other Health Laboratories,8,4,2,0,2,0,0,0,0
+869 - Health and Social Service Associations and Agencies,64,45,9,6,3,1,0,0,0
+"911 - Hotels, Motels and Tourist Courts",230,106,42,33,31,16,1,1,0
+912 - Lodging Houses and Residential Clubs,20,8,7,4,0,1,0,0,0
+913 - Camping Grounds and Travel Trailer Parks,19,12,4,2,1,0,0,0,0
+914 - Recreation and Vacation Camps,88,41,28,13,6,0,0,0,0
+921 - Food Services,838,413,192,132,83,10,7,1,0
+"922 - Taverns, Bars and Night Clubs",234,147,49,23,13,2,0,0,0
+"961 - Motion Picture, Audio and Video Production and Distribution",28,21,3,1,1,2,0,0,0
+962 - Motion Picture Exhibition,13,10,0,1,2,0,0,0,0
+963 - Theatrical and Other Staged Entertainment Services,18,9,5,2,2,0,0,0,0
+964 - Commercial Spectator Sports,15,13,0,2,0,0,0,0,0
+965 - Sports and Recreation Clubs and Services,145,105,25,9,4,1,1,0,0
+966 - Gambling Operations,17,10,7,0,0,0,0,0,0
+969 - Other Amusement and Recreational Services,118,92,10,12,3,0,0,1,0
+971 - Barber and Beauty Shops,274,204,43,19,7,0,1,0,0
+972 - Laundries and Cleaners,72,52,11,8,1,0,0,0,0
+973 - Funeral Services,49,29,11,9,0,0,0,0,0
+974 - Private Households,0,0,0,0,0,0,0,0,0
+979 - Other Personal and Household Services,179,151,16,6,3,2,1,0,0
+981 - Religious Organizations,388,354,22,6,2,4,0,0,0
+982 - Business Associations,80,51,15,8,6,0,0,0,0
+983 - Professional Membership Associations,29,15,3,7,2,1,1,0,0
+984 - Labour Organizations,48,25,8,7,8,0,0,0,0
+985 - Political Organizations,4,2,2,0,0,0,0,0,0
+986 - Civic and Fraternal Organizations,472,382,49,23,12,5,1,0,0
+991 - Machinery and Equipment Rental and Leasing Services,139,98,18,14,8,1,0,0,0
+992 - Automobile and Truck Rental and Leasing Services,33,21,5,4,3,0,0,0,0
+993 - Photographers,28,18,6,1,3,0,0,0,0
+994 - Other Repair Services,74,56,8,6,3,1,0,0,0
+995 - Services to Buildings and Dwellings,195,136,29,18,6,3,3,0,0
+996 - Travel Services,36,19,11,3,1,0,2,0,0
+999 - Other Services n.e.c.,122,93,8,15,4,2,0,0,0

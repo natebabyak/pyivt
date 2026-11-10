@@ -1,0 +1,15 @@
+{
+  "role": "development ZIP regression fixture; wraps an existing training IVT",
+  "zip_url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100001.zip",
+  "zip_sha256": "1aacd65190c729c91938b55310270ffd38e4bfb484eae90e8e797f5107107d3d",
+  "member": "98100001.ivt",
+  "csv_url": "https://www150.statcan.gc.ca/n1/en/tbl/csv/98100001-eng.zip",
+  "csv_sha256": "4f05e651c9592f88066d5287f7684ee8df5e6c5677c0361464a972506690e5f1",
+  "files": [
+    {
+      "sha256": "625ff7c387bd3d45af25b0bfd48aff3e186d46d93e749d0632f1840dee806192",
+      "url": "https://www150.statcan.gc.ca/n1/en/tbl/b2020/98100001.zip",
+      "product_id": "98100001"
+    }
+  ]
+}

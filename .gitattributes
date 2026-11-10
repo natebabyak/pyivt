@@ -1,2 +1,6 @@
 tests/fixtures/*.ivt binary
 tests/fixtures/98100018.csv text eol=lf
+tests/fixtures/legacy/*.json -text
+tests/fixtures/legacy/*-browser.csv -text
+tests/fixtures/zip/*.csv -text
+docs/investigations/heldout-compatibility-*.jsonl -text

@@ -8,7 +8,7 @@ import pytest
 from scripts.ivt_synthetic import cube
 
 
-@pytest.mark.parametrize("version", [2, 3])
+@pytest.mark.parametrize("version", [0, 1, 3, 5])
 @pytest.mark.parametrize("source", ["bytes", "path"])
 def test_unsupported_container_versions_raise_clear_errors(version, source, tmp_path):
     data = bytearray(cube((2, 3)))
@@ -16,7 +16,7 @@ def test_unsupported_container_versions_raise_clear_errors(version, source, tmp_
     path = tmp_path / f"v{version}.ivt"
     path.write_bytes(data)
     with pytest.raises(
-        ValueError, match=f"container version {version}; only version 4"
+        ValueError, match=f"container version {version}; supported versions are 2 and 4"
     ):
         pyivt.open(path if source == "path" else bytes(data))
 

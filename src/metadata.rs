@@ -242,8 +242,10 @@ impl IvtMetadata {
 
 fn master_dir_entries(data: &[u8], max_entries: usize) -> Vec<(u32, u16)> {
     let mut out = Vec::new();
-    let Ok(directory) = crate::metadata_directory::MetadataDirectory::new(data, HDR_MASTER_PTR)
-    else {
+    let Some(master) = crate::header::slot_offset(data, HDR_MASTER_PTR) else {
+        return out;
+    };
+    let Ok(directory) = crate::metadata_directory::MetadataDirectory::new(data, master) else {
         return out;
     };
     for index in 0..max_entries.min(directory.count) {
@@ -265,7 +267,8 @@ fn master_dir_entries(data: &[u8], max_entries: usize) -> Vec<(u32, u16)> {
 
 /// Indexed master entries retain holes: language references are entry ordinals.
 fn master_record(data: &[u8], index: usize) -> Option<&[u8]> {
-    crate::metadata_directory::record(data, HDR_MASTER_PTR, index)
+    let slot = crate::header::slot_offset(data, HDR_MASTER_PTR)?;
+    crate::metadata_directory::record(data, slot, index)
 }
 
 /// Language matrix rows: language ID, FACET index, notes index, keywords index.
@@ -505,21 +508,33 @@ fn parse_table_identity(data: &[u8]) -> HashMap<&'static str, Option<String>> {
 
 fn dimension_record(data: &[u8], slot_index: usize, entry_index: usize) -> Option<&[u8]> {
     let base = HDR_DIM_SLOT0.checked_add(DIM_SLOT_STRIDE.checked_mul(slot_index)?)?;
+    let base = crate::header::slot_offset(data, base)?;
     crate::metadata_directory::record(data, base, entry_index)
 }
 
 fn dimension_summary_rows(data: &[u8], slot_index: usize) -> Option<Vec<u8>> {
-    let raw = dimension_record(data, slot_index, 3)?;
-    let decoded = crate::decode::decompress_component(raw).ok()?;
-    if decoded.get(..2) != Some(&[1, 2])
-        || decoded.len() < 6
-        || u16(&decoded, 4) != 86
-        || !(1..=32).contains(&u16(&decoded, 2))
-        || decoded.len() < 6 + 86 * u16(&decoded, 2) as usize
-    {
+    let summary = |index| {
+        let decoded =
+            crate::decode::decompress_component(dimension_record(data, slot_index, index)?).ok()?;
+        (decoded.get(..2) == Some(&[1, 2])
+            && decoded.len() >= 6
+            && u16(&decoded, 4) == 86
+            && (1..=32).contains(&u16(&decoded, 2))
+            && decoded.len() == 6 + 86 * u16(&decoded, 2) as usize)
+            .then_some(decoded)
+    };
+    if let Some(rows) = summary(3) {
+        return Some(rows);
+    }
+    if data.first() != Some(&2) {
         return None;
     }
-    Some(decoded)
+    let slot = HDR_DIM_SLOT0.checked_add(DIM_SLOT_STRIDE.checked_mul(slot_index)?)?;
+    let slot = crate::header::slot_offset(data, slot)?;
+    let directory = crate::metadata_directory::MetadataDirectory::new(data, slot).ok()?;
+    let mut matches = (0..directory.count).filter_map(summary);
+    let rows = matches.next()?;
+    matches.next().is_none().then_some(rows)
 }
 
 fn dim_title(
@@ -807,9 +822,9 @@ fn missing_values(data: &[u8]) -> Vec<MissingValue> {
 }
 
 fn legend_values(data: &[u8], slot: usize, trim_short_period: bool) -> Vec<MissingValue> {
-    if data.len() < slot + 14 {
+    let Some(slot) = crate::header::slot_offset(data, slot) else {
         return Vec::new();
-    }
+    };
     let dir_ptr = u32(data, slot);
     let n_entries = u32(data, slot + 8);
     if dir_ptr == 0 || n_entries < 1 {
@@ -965,9 +980,6 @@ pub fn build_metadata_from_source(
     desc: Option<Descriptor>,
     hdr: Option<HeaderLayout>,
 ) -> Result<IvtMetadata, IvtError> {
-    if let Some(data) = source.memory_arc() {
-        return build_metadata_memory(data.as_ref(), source, desc, hdr);
-    }
     build_metadata_selective(source, desc, hdr)
 }
 
@@ -981,9 +993,6 @@ fn build_metadata_memory(
         Some(h) => h,
         None => read_header(data).map_err(IvtError::Parse)?,
     };
-    if hdr.signature != [0x04, 0x00, 0x20, 0x00] && hdr.signature != [0x02, 0x00, 0x20, 0x00] {
-        return Err(IvtError::InvalidSignature(hdr.signature));
-    }
     let desc = match desc {
         Some(d) => d,
         None => parse_descriptor(data).ok_or(IvtError::DescriptorNotFound)?,
@@ -1046,14 +1055,17 @@ fn metadata_catalog(
     descriptor: bool,
 ) -> Result<Vec<u8>, IvtError> {
     let file_len = source.len()? as usize;
-    let header_len = (HDR_DIM_SLOT0 + DIM_SLOT_STRIDE * 32).min(file_len);
-    let mut catalog = source.read_prefix(header_len)?;
-    read_header_ex(&catalog, file_len).map_err(IvtError::Parse)?;
-    if catalog.len() < 576 {
-        return Err(IvtError::Parse(
-            "IVT file too small to contain a header".into(),
-        ));
-    }
+    let prefix = source.read_prefix(576)?;
+    read_header_ex(&prefix, file_len).map_err(IvtError::Parse)?;
+    let table = crate::header::slot_table_range(&prefix)
+        .ok_or(IvtError::InvalidDirectory("metadata slot table"))?;
+    let slot_bytes = source.read_range(table.start as u64, table.len())?;
+    // Keep the catalog compact even if the source stores its slot table at EOF.
+    // All record offsets inside the copied slots still refer to the source.
+    let mut catalog = prefix;
+    catalog.resize(HDR_MASTER_PTR + slot_bytes.len(), 0);
+    catalog[HDR_MASTER_PTR..].copy_from_slice(&slot_bytes);
+    catalog[12..16].copy_from_slice(&(HDR_MASTER_PTR as u32).to_le_bytes());
     let header = catalog.clone();
     let mut copied = HashMap::<(u32, u16), u32>::new();
     let mut slots = Vec::new();
@@ -1087,7 +1099,12 @@ fn metadata_catalog(
                 continue;
             }
             if off as usize + length as usize > file_len {
-                return Err(IvtError::InvalidDirectory("metadata record range"));
+                return Err(IvtError::Parse(format!(
+                    "IVT metadata record extends past EOF: slot={slot} ordinal={} offset={off} content_len={length} allocation_len={} expected_end={} file_len={file_len}",
+                    i / 8,
+                    u16(&directory, i + 6),
+                    off as u64 + u64::from(length),
+                )));
             }
             let relocated = if let Some(&at) = copied.get(&(off, length)) {
                 at
@@ -1191,6 +1208,8 @@ mod tests {
     fn master_fixture(records: &[(usize, Vec<u8>)]) -> Vec<u8> {
         let count = records.iter().map(|(i, _)| i + 1).max().unwrap_or(0);
         let mut data = vec![0; 1024 + count * 8];
+        data[12..16].copy_from_slice(&544u32.to_le_bytes());
+        data[16..18].copy_from_slice(&32u16.to_le_bytes());
         data[HDR_MASTER_PTR..HDR_MASTER_PTR + 4].copy_from_slice(&1024u32.to_le_bytes());
         data[HDR_MASTER_PTR + 8..HDR_MASTER_PTR + 12]
             .copy_from_slice(&(count as u32).to_le_bytes());

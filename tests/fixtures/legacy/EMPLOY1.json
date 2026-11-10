@@ -1,0 +1,89 @@
+{
+  "metadata": {
+    "product_id": null,
+    "title_en": null,
+    "title_fr": null,
+    "universe": null,
+    "dimensions": [
+      {
+        "name": "UNITS",
+        "name_fr": null,
+        "count": 2,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Participants", "Taux de participation (%)"],
+        "members_fr": null,
+        "ordinal": null,
+        "description": ["Participants in adult education and training:\r\nParticipants in adult education and training activities are defined as people aged 17 years and over enrolled in any part-time educational or training activities or in full-time training activities if these full-time activities are supported by the employer.", "Participation rate:\r\nThe participation rate represents the proportion of a given population engaged in an education or training activity."],
+        "description_fr": ["Participants à l’éducation et à la formation des adultes\r\nLes participants à l’éducation et à la formation des adultes sont les individus âgés de 17 ans et plus inscrits à des activités d’éducation ou de formation à temps partiel ou à des activités à temps plein si ces activités à temps plein sont appuyées par l’employeur.", "Taux de participation\r\nLe taux de participation est la portion d’une population donnée qui participe à des activités d’éducation ou de formation."]
+      },
+      {
+        "name": "TRAINING",
+        "name_fr": "FORMATION",
+        "count": 3,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Total", "Liée à l'emploi", "Intérêt personnel"],
+        "members_fr": null,
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      },
+      {
+        "name": "GEOGRAPHY",
+        "name_fr": "GÉOGRAPHIE",
+        "count": 20,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Canada", "Province de l'Atlantique", "Terre-Neuve", "Ile-du-Prince-Edouard", "Nouvelle-Écosse", "Nouveau Brunswick", "Québec", "Montréal", "Ontario", "Toronto", "Provinces des Prairies", "Manitoba", "Winnipeg", "Saskatchewan", "Alberta", "Calgary", "Edmonton", "Colombie-Britannique", "Vancouver", "Toutes régions métropolitaines"],
+        "members_fr": null,
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      },
+      {
+        "name": "EMPL. STATUS",
+        "name_fr": null,
+        "count": 3,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Total", "Travailleurs", "Sans emploi"],
+        "members_fr": null,
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      },
+      {
+        "name": "YEAR",
+        "name_fr": null,
+        "count": 2,
+        "type": 0,
+        "is_geography": false,
+        "members": ["1991-01-01", "1993-01-01"],
+        "members_fr": null,
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      }
+    ],
+    "dimension_names": ["UNITS", "TRAINING", "GEOGRAPHY", "EMPL. STATUS", "YEAR"],
+    "dimension_names_fr": [null, "FORMATION", "GÉOGRAPHIE", null, null],
+    "dimension_counts": [2, 3, 20, 3, 2],
+    "geographies": {
+      "member_id": []
+    },
+    "n_geographies": 0,
+    "footnotes": [],
+    "dqf_legend": null
+  },
+  "cell_status": {
+    "pages": [0, 0, 1, 0, 0],
+    "n_missing": 0,
+    "reasons_stated": false,
+    "legend": null,
+    "nan_words": 0,
+    "extra_words": 0,
+    "verdict": "0 of 1 page classify their absent cells (0 missing); 1 page carry no readable tail, so their absences are unclassified"
+  },
+  "warnings": []
+}

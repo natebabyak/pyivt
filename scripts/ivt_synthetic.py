@@ -30,7 +30,8 @@ def cube(counts: tuple[int, ...], label_fields: int = 8) -> bytes:
     for axis, count in enumerate(counts):
         row = bytearray(82)
         struct.pack_into("<I", row, 0, count)
-        row[12:18] = f"Axis {axis}".encode()
+        name = f"Axis {axis}".encode()
+        row[12 : 12 + len(name)] = name
         matrix.extend(row)
         definitions = bytearray(struct.pack("<BBHH", 1, 2, label_fields, 34))
         records = [b""]

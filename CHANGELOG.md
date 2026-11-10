@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Open StatCan ZIP downloads from paths, bytes, or binary files. Use `member=` to select an IVT when an archive contains several.
+- Read version-2 IVT tables using native axis allocations, live code slots, and date records, including historical Business Patterns tables.
+
+### Fixed
+
+- Read older bilingual dimension summaries at their declared directory entries and honor native code fields selected for display.
+- Validate metadata records identically for path and bytes inputs, with directory context in errors for records extending past EOF.
+- Bound dimension slots to the header's declared slot table so 12-axis tables cannot read into the next file region.
+
 ## [0.0.9] - 2026-11-05
 
 ### Changed

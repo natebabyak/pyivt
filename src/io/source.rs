@@ -98,13 +98,6 @@ impl IvtSource {
         }
     }
 
-    pub fn memory_arc(&self) -> Option<Arc<[u8]>> {
-        match self {
-            Self::Memory { data, .. } => Some(Arc::clone(data)),
-            Self::File { .. } => None,
-        }
-    }
-
     /// Read exactly `length` bytes at `offset`, using the cache when possible.
     pub fn read_exact_at(&self, offset: u64, buffer: &mut [u8]) -> Result<(), IvtError> {
         let length = buffer.len();

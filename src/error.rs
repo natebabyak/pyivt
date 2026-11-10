@@ -10,7 +10,6 @@ pub enum IvtError {
         expected: usize,
         actual: usize,
     },
-    InvalidSignature([u8; 4]),
     InvalidPointer {
         offset: u64,
         length: usize,
@@ -33,11 +32,6 @@ impl fmt::Display for IvtError {
             } => write!(
                 f,
                 "unexpected EOF at offset {offset}: expected {expected} bytes, got {actual}"
-            ),
-            Self::InvalidSignature(sig) => write!(
-                f,
-                "unrecognised IVT signature: {:02x}{:02x}{:02x}{:02x}",
-                sig[0], sig[1], sig[2], sig[3]
             ),
             Self::InvalidPointer {
                 offset,

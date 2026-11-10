@@ -1,0 +1,35 @@
+{
+  "date": "2026-11-10",
+  "application": "Beyond 20/20 Professional Browser",
+  "binary_sha256": "f9c2a065f6b7c110842f9f4f5eea492f7ff1969df50994e81f95cfe105230bae",
+  "export": "File > Save As > Comma Separated (*.csv), Standard Header checked, English language. Original file bytes are preserved in Windows-1252 encoding.",
+  "files": [
+    {
+      "input": "00060104.ivt",
+      "export": "00060104-browser.csv",
+      "sha256": "bd192d520423de5c162df08b267407dd78ef7247e52d28d3343804525d1b2a64",
+      "selection": {"Quantifier": "Total fertility rate"},
+      "rows": "REGION",
+      "columns": "Periods",
+      "cells": 481
+    },
+    {
+      "input": "tb611996.ivt",
+      "export": "tb611996-browser.csv",
+      "sha256": "1d08d144fe03d7b79c3953f8395c3f6c586ba19aed45e7cf10e63edfc84f10d8",
+      "selection": {"CAUSE": "All causes", "SEX": "Male"},
+      "rows": "REGION",
+      "columns": "ANNUAL RATE",
+      "cells": 42
+    },
+    {
+      "input": "PROVSIC3.IVT",
+      "export": "PROVSIC3-browser.csv",
+      "sha256": "b2c8c996a757feea05f9bb6ed913e53a2f84a575b778a8dfd42dba93f9911fc0",
+      "selection": {"PROV/CAN": "Newfoundland"},
+      "rows": "INDUSTRY GROUPS",
+      "columns": "EMPCLASS",
+      "cells": 2898
+    }
+  ]
+}

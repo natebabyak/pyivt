@@ -1,0 +1,89 @@
+{
+  "metadata": {
+    "product_id": null,
+    "title_en": null,
+    "title_fr": null,
+    "universe": null,
+    "dimensions": [
+      {
+        "name": "Quantifier",
+        "name_fr": null,
+        "count": 2,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Patient-days", "Patient-days per 1,000 population"],
+        "members_fr": ["Journées d'hospitalisation", "Journées d'hospitalisation par 1,000 habitants"],
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      },
+      {
+        "name": "REGION",
+        "name_fr": null,
+        "count": 13,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Canada", "Newfoundland", "Prince Edward Island", "Nova Scotia", "New Brunswick", "Quebec", "Ontario", "Manitoba", "Saskatchewan", "Alberta", "British Columbia", "Yukon", "Northwest Territories"],
+        "members_fr": ["Canada", "Terre-Neuve", "Ile-du-Prince-Édouard", "Nouvelle-Écosse", "Nouveau-Brunswick", "Québec", "Ontario", "Manitoba", "Saskatchewan", "Alberta", "Colombie-Britannique", "Yukon", "Territoires du Nord-Ouest"],
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      },
+      {
+        "name": "TYPE",
+        "name_fr": null,
+        "count": 3,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Total", "Hospitals", "Residential care facilities"],
+        "members_fr": ["Total", "Hôpitaux", "Établissements de soins pour bénéficiaires internes"],
+        "ordinal": null,
+        "description": ["Includes only the facilities that were in operation for the entire fiscal year and reported patient-days in the Annual Hospital Survey or Survey of Residential Care Facilities.", "For hospitals, short-term refers to inpatients who require diagnostic and therapeutic services. Long-term refers to inpatients who require regular medical assessment, treat- ment services and continuing nursing care.", "The patient-days for residential care facilities have been estimated by using the ratios of operating facility beds to reporting facility beds for each province and applying them to the patient-days that were reported. Residential Care Facilities include only those facilities with four or more beds. Data for Residential Care Facilities have been revised for 1981-82 through 1988-89."],
+        "description_fr": ["Comprend uniquement les établissements qui ont été en activité pendant tout l'exercice financier et qui ont déclaré des journées d'hospitalisation dans le cadre de l'enquête annuelle sur les hôpitaux ou de l'enquête sur les établissements de soins pour bénéficiaires internes.", "Les hôpitaux de soins de courte durée accueillent des hospitalisés qui nécessitent des services diagnostiques ou thérapeutiques. Les hôpitaux de soins de longue durée accueillent quant à eux hospitalisés qui nécessitent une surveillance médicale régulière, des services radiologiques et des soins infirmiers constants.", "On a estimé le nombre de journées d'hospitalisation dans lesétablissements de soins pour bénéficiaires internes en calculant les ratios du nombre de lits dans les établisse- ments en activité par rapport au nombre de lits dans les établissements répondants pour chaque province et en appliquant ces ratios aux journées d'hospitalisation déclarées. La base de sondage est constituée d'une liste desétablissements de soins pour bénéficiaires internes dotés dequatre lits ou plus. Établissements de soins pour bénéficiaires internes: les données de 1981-82 à 1988-89 ontété révisées."]
+      },
+      {
+        "name": "CARE",
+        "name_fr": null,
+        "count": 3,
+        "type": 0,
+        "is_geography": false,
+        "members": ["Total patient-days", "Short-term patient-days", "Long-term patient-days"],
+        "members_fr": ["Total journées d'hospitalisation", "De courte durée", "Unités de longue durée"],
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      },
+      {
+        "name": "ANNUAL",
+        "name_fr": null,
+        "count": 15,
+        "type": 0,
+        "is_geography": false,
+        "members": ["1979-80", "1980-81", "1981-82", "1982-83", "1983-84", "1984-85", "1985-86", "1986-87", "1987-88", "1988-89", "1989-90", "1990-91", "1991-92", "1992-93", "1993-94"],
+        "members_fr": null,
+        "ordinal": null,
+        "description": null,
+        "description_fr": null
+      }
+    ],
+    "dimension_names": ["Quantifier", "REGION", "TYPE", "CARE", "ANNUAL"],
+    "dimension_names_fr": [null, null, null, null, null],
+    "dimension_counts": [2, 13, 3, 3, 15],
+    "geographies": {
+      "member_id": []
+    },
+    "n_geographies": 0,
+    "footnotes": [],
+    "dqf_legend": null
+  },
+  "cell_status": {
+    "pages": [0, 0, 4, 0, 0],
+    "n_missing": 0,
+    "reasons_stated": false,
+    "legend": null,
+    "nan_words": 0,
+    "extra_words": 0,
+    "verdict": "0 of 4 pages classify their absent cells (0 missing); 4 pages carry no readable tail, so their absences are unclassified"
+  },
+  "warnings": []
+}

@@ -23,6 +23,8 @@ pub struct Descriptor {
     pub offset: u32,
     pub dims: Vec<DimDesc>,
     pub geo_dim: Option<usize>,
+    pub member_slots: Vec<Option<Vec<usize>>>,
+    pub allocation_bits: Option<Vec<u16>>,
 }
 
 /// Only the native master axis matrix is authoritative. Missing or malformed
@@ -33,12 +35,13 @@ pub fn parse_descriptor(data: &[u8]) -> Option<Descriptor> {
 
 pub fn structured_descriptor(data: &[u8]) -> Option<Descriptor> {
     use crate::header::HDR_MASTER_PTR;
-    if data.len() < HDR_MASTER_PTR + 12 || u32(data, HDR_MASTER_PTR + 8) < 2 {
+    let master = crate::header::slot_offset(data, HDR_MASTER_PTR)?;
+    if u32(data, master + 8) < 2 {
         return None;
     }
-    let directory = crate::metadata_directory::MetadataDirectory::new(data, HDR_MASTER_PTR).ok()?;
+    let directory = crate::metadata_directory::MetadataDirectory::new(data, master).ok()?;
     let offset = u32(directory.entry(data, 1).ok()?, 0);
-    let raw = crate::metadata_directory::record(data, HDR_MASTER_PTR, 1)?;
+    let raw = crate::metadata_directory::record(data, master, 1)?;
     let decoded = crate::decode::decompress_component(raw).ok()?;
     if decoded.get(..2) != Some(&[1, 2]) || decoded.len() < 6 || u16(&decoded, 4) != 82 {
         return None;
@@ -48,14 +51,20 @@ pub fn structured_descriptor(data: &[u8]) -> Option<Descriptor> {
         return None;
     }
     let mut dims = Vec::with_capacity(count);
+    let mut allocation_bits = Vec::with_capacity(count);
     for row in decoded[6..].as_chunks::<82>().0 {
         let items = u32(row, 0);
         let kind = u16(row, 6);
+        let bits = u16(row, 4);
         let end = row[12..30].iter().position(|&b| b == 0).unwrap_or(18);
         let name = latin1(&row[12..12 + end]);
         if items == 0 || items > i32::MAX as u32 || name.is_empty() || kind > 2 {
             return None;
         }
+        if data.first() == Some(&2) && (bits > 30 || (1u32 << bits) < items) {
+            return None;
+        }
+        allocation_bits.push(bits);
         dims.push(DimDesc {
             name,
             count: items as i64,
@@ -82,6 +91,17 @@ pub fn structured_descriptor(data: &[u8]) -> Option<Descriptor> {
     });
     Some(Descriptor {
         offset,
+        member_slots: (0..dims.len())
+            .map(|axis| {
+                if data.first() == Some(&2) {
+                    crate::members::member_slots(data, axis, dims[axis].count as usize)
+                } else {
+                    Ok(None)
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .ok()?,
+        allocation_bits: (data.first() == Some(&2)).then_some(allocation_bits),
         dims,
         geo_dim,
     })
