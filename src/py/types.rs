@@ -624,6 +624,8 @@ pub struct Ivt {
     /// export or stream uses them; a later export reads the file again.
     loaded: Mutex<Option<WeakSharedBytes>>,
     path: Option<PathBuf>,
+    /// Source length the metadata was parsed against.
+    opened_len: u64,
     maps: Mutex<Option<Arc<TidySchema>>>,
     member_fields: Mutex<Option<Py<PyAny>>>,
     table_id: Mutex<Option<String>>,
@@ -1061,7 +1063,8 @@ impl Ivt {
             .path
             .as_ref()
             .ok_or_else(|| IvtError::Parse("IVT has no in-memory data or path".into()))?;
-        let bytes = SharedBytes::from(std::fs::read(path).map_err(IvtError::Io)?);
+        // Memory-mapped when the file still has the length parsed at open.
+        let bytes = crate::io::load_file(path, self.opened_len)?;
         *loaded = Some(bytes.downgrade());
         Ok(bytes)
     }
@@ -1137,6 +1140,7 @@ pub fn open_ivt(
                     Ok((meta, layout))
                 })
                 .map_err(map_ivt_err)?;
+            let opened_len = meta.source_len().map_err(map_ivt_err)?;
             let py_layout = PyLayout::from(&layout);
             let metadata = Py::new(
                 py,
@@ -1153,12 +1157,14 @@ pub fn open_ivt(
                 data: Mutex::new(None),
                 loaded: Mutex::new(None),
                 path: Some(path),
+                opened_len,
                 maps: Mutex::new(None),
                 member_fields: Mutex::new(None),
                 table_id: Mutex::new(None),
             })
         }
         OpenSource::Bytes(data) => {
+            let opened_len = data.len() as u64;
             let (meta, layout) = py
                 .allow_threads(|| -> Result<(CoreMeta, Layout), IvtError> {
                     let meta = metadata::build_metadata(data.clone(), None, None)?;
@@ -1182,6 +1188,7 @@ pub fn open_ivt(
                 data: Mutex::new(Some(data)),
                 loaded: Mutex::new(None),
                 path: None,
+                opened_len,
                 maps: Mutex::new(None),
                 member_fields: Mutex::new(None),
                 table_id: Mutex::new(None),

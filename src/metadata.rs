@@ -12,7 +12,8 @@ use crate::header::{
     dim_slots, read_header, read_header_ex, HeaderLayout, DIM_SLOT_STRIDE, HDR_DESCRIPTOR_PTR,
     HDR_DIM_SLOT0, HDR_MASTER_PTR, HDR_STATUS_LEGEND,
 };
-use crate::io::IvtSource;
+use crate::io::{ByteRange, IvtSource, PlannedReader, ReadAt, METADATA_MERGE_GAP};
+use crate::metadata_directory::MetadataDirectory;
 
 static PID_FIRST: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[\w.-]+$").unwrap());
 static PID_FULL: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[\dA-Za-z][\w./-]*$").unwrap());
@@ -241,6 +242,11 @@ impl IvtMetadata {
         &self.desc
     }
 
+    /// Length of the source the metadata was parsed from.
+    pub fn source_len(&self) -> Result<u64, IvtError> {
+        self.source.len()
+    }
+
     pub fn io_metrics(&self) -> crate::io::IoMetrics {
         self.source.metrics()
     }
@@ -286,15 +292,66 @@ impl IvtMetadata {
 /// Flattened value page directory entries (offset, length and flags per page),
 /// read without touching the pages themselves.
 fn value_directory(source: &IvtSource) -> Result<Vec<u8>, IvtError> {
-    let mut header = source.read_prefix(576)?;
-    let table = crate::header::slot_table_range(&header)
+    let mut planned = planned_reader(source);
+    let header = slot_header(&planned, header_prefix(&planned)?)?;
+    plan_directories(&mut planned, &header, &[crate::header::HDR_DIR_PTR]);
+    MetadataDirectory::new(&header, crate::header::HDR_DIR_PTR)?.read(&planned)
+}
+
+/// Bytes loaded with the 576-byte header so the slot table, which usually
+/// follows it, arrives in the same read.
+const HEADER_READ_AHEAD: u64 = 4096;
+
+/// A reader that batches metadata reads for one parse. In-memory sources read
+/// directly; batching them would only add copies.
+fn planned_reader(source: &IvtSource) -> PlannedReader<'_, IvtSource> {
+    let mut planned = PlannedReader::new(source, source.as_memory_slice().is_none());
+    if let Ok(len) = source.len() {
+        let length = HEADER_READ_AHEAD.min(len) as usize;
+        planned.prefetch(&[ByteRange::new(0, length)], 0);
+    }
+    planned
+}
+
+fn header_prefix(reader: &impl ReadAt) -> Result<Vec<u8>, IvtError> {
+    let length = reader.len()?.min(576) as usize;
+    reader.read_range(0, length)
+}
+
+/// The header with the slot table copied to its conventional position, so
+/// slots are addressed the same way wherever the source stores the table.
+/// Record offsets inside the copied slots still refer to the source.
+fn slot_header(reader: &impl ReadAt, prefix: Vec<u8>) -> Result<Vec<u8>, IvtError> {
+    let table = crate::header::slot_table_range(&prefix)
         .ok_or(IvtError::InvalidDirectory("metadata slot table"))?;
-    let slots = source.read_range(table.start as u64, table.len())?;
+    let slots = reader.read_range(table.start as u64, table.len())?;
+    let mut header = prefix;
     header.resize(HDR_MASTER_PTR + slots.len(), 0);
     header[HDR_MASTER_PTR..].copy_from_slice(&slots);
     header[12..16].copy_from_slice(&(HDR_MASTER_PTR as u32).to_le_bytes());
-    crate::metadata_directory::MetadataDirectory::new(&header, crate::header::HDR_DIR_PTR)?
-        .read(source)
+    Ok(header)
+}
+
+/// Load the directories of `slots` in two coalesced rounds: flat entries and
+/// page indexes first, then the entry pages those indexes point to.
+fn plan_directories(planned: &mut PlannedReader<'_, IvtSource>, header: &[u8], slots: &[usize]) {
+    let Ok(file_len) = planned.len() else {
+        return;
+    };
+    let directories: Vec<MetadataDirectory> = slots
+        .iter()
+        .filter_map(|&slot| MetadataDirectory::new(header, slot).ok())
+        .collect();
+    let indexes: Vec<ByteRange> = directories
+        .iter()
+        .filter_map(|directory| directory.index_range(file_len))
+        .collect();
+    planned.prefetch(&indexes, METADATA_MERGE_GAP);
+    let pages: Vec<ByteRange> = directories
+        .iter()
+        .flat_map(|directory| directory.page_ranges(&*planned))
+        .collect();
+    planned.prefetch(&pages, METADATA_MERGE_GAP);
 }
 
 fn master_dir_entries(data: &[u8], max_entries: usize) -> Vec<(u32, u16)> {
@@ -1248,17 +1305,14 @@ fn metadata_catalog(
     descriptor: bool,
 ) -> Result<Vec<u8>, IvtError> {
     let file_len = source.len()? as usize;
-    let prefix = source.read_prefix(576)?;
+    // Reads are planned one pointer level at a time (header, directories,
+    // records) and coalesced, so a path open costs a few large reads instead
+    // of one round trip per record.
+    let mut planned = planned_reader(source);
+    let prefix = header_prefix(&planned)?;
     read_header_ex(&prefix, file_len)?;
-    let table = crate::header::slot_table_range(&prefix)
-        .ok_or(IvtError::InvalidDirectory("metadata slot table"))?;
-    let slot_bytes = source.read_range(table.start as u64, table.len())?;
     // Keep the catalog compact even if the source stores its slot table at EOF.
-    // All record offsets inside the copied slots still refer to the source.
-    let mut catalog = prefix;
-    catalog.resize(HDR_MASTER_PTR + slot_bytes.len(), 0);
-    catalog[HDR_MASTER_PTR..].copy_from_slice(&slot_bytes);
-    catalog[12..16].copy_from_slice(&(HDR_MASTER_PTR as u32).to_le_bytes());
+    let mut catalog = slot_header(&planned, prefix)?;
     let header = catalog.clone();
     let mut copied = HashMap::<(u32, u16), u32>::new();
     let mut slots = Vec::new();
@@ -1278,14 +1332,26 @@ fn metadata_catalog(
             slots.push((slot, u32(&header, slot + 8) as usize));
         }
     }
-    for (slot, count) in slots {
-        let ptr = u32(&header, slot) as usize;
-        if ptr == 0 || count == 0 {
-            continue;
-        }
-        let mut directory = crate::metadata_directory::MetadataDirectory::new(&header, slot)
-            .and_then(|directory| directory.read(source))
-            .map_err(|error| directory_context(error, &header, slot, file_len))?;
+    slots.retain(|&(slot, count)| u32(&header, slot) != 0 && count != 0);
+    let slot_offsets: Vec<usize> = slots.iter().map(|&(slot, _)| slot).collect();
+    plan_directories(&mut planned, &header, &slot_offsets);
+    // Errors surface below in slot order, exactly as an unplanned read would.
+    let directories: Vec<Result<Vec<u8>, IvtError>> = slot_offsets
+        .iter()
+        .map(|&slot| MetadataDirectory::new(&header, slot).and_then(|d| d.read(&planned)))
+        .collect();
+    let records: Vec<ByteRange> = directories
+        .iter()
+        .flatten()
+        .flat_map(|directory| directory.as_chunks::<8>().0.iter())
+        .map(|entry| (u64::from(u32(entry, 0)), usize::from(u16(entry, 4))))
+        .filter(|&(off, length)| off != 0 && length != 0 && off + length as u64 <= file_len as u64)
+        .map(|(off, length)| ByteRange::new(off, length))
+        .collect();
+    planned.prefetch(&records, METADATA_MERGE_GAP);
+    for ((slot, _), directory) in slots.into_iter().zip(directories) {
+        let mut directory =
+            directory.map_err(|error| directory_context(error, &header, slot, file_len))?;
         for i in (0..directory.len().saturating_sub(7)).step_by(8) {
             let off = u32(&directory, i);
             let length = u16(&directory, i + 4);
@@ -1319,7 +1385,7 @@ fn metadata_catalog(
             } else {
                 let at = u32::try_from(catalog.len())
                     .map_err(|_| IvtError::InvalidDirectory("metadata catalog size"))?;
-                catalog.extend_from_slice(&source.read_range(off as u64, length as usize)?);
+                catalog.extend_from_slice(&planned.read_range(off as u64, length as usize)?);
                 copied.insert((off, length), at);
                 at
             };

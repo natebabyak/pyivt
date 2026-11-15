@@ -171,6 +171,7 @@ is missing. Add `--language fr` to use French labels for enum names.
 
   The full 126,198,000-row 98100532 table (208 MB file) streams in about 3 seconds with a peak working set under 300 MB.
 - Both exports decode values in parallel without the GIL. By default they use one worker per hardware thread. Set the `RAYON_NUM_THREADS` environment variable before the first export to use fewer, for example `RAYON_NUM_THREADS=1` in each process of a multi-process job. The output is the same for any number of workers.
+- Exports from a path memory-map the file, so a selection reads only the pages it needs. Do not modify or truncate the file while an export or stream uses it: on Unix, truncating a mapped file ends the process. Set `PYIVT_MMAP=0` to read the whole file into memory instead.
 - `to_member_table()` returns one PyArrow table of member attributes, without decoding cells.
 - `pyivt.__version__` gives the package version.
 
