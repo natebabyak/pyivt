@@ -1,0 +1,454 @@
+{
+ "meta": {
+  "input": "98100532.ivt (held-out, sha256 c87d2a164e699496141bdacce00234a7e44b53245e4fe8ce55c057ea367a2236, 208,450,429 bytes)",
+  "export": "to_arrow(geography=1..40), 88,560,000 rows",
+  "machine": "Windows 11 x64, Intel Core i7-11800H (8 cores / 16 threads), 16 GB RAM",
+  "command": "python -m scripts.profile_arrow --path <ivt> --select <geography 1..40> --rss-cap-bytes 8000000000"
+ },
+ "records": [
+  {
+   "build": "main@f0e5a6a",
+   "rayon_num_threads": null,
+   "run": 1,
+   "mode": "compact",
+   "synthetic_cells": null,
+   "fraction": 1,
+   "peak_rss_bytes": 1686056960,
+   "termination": null,
+   "exit_code": 0,
+   "stages": {
+    "build_dimension_columns": {
+     "seconds": 2.907511,
+     "peak_rss_bytes": 1686056960,
+     "completed_calls": 1
+    },
+    "decode_values": {
+     "seconds": 0.291319,
+     "peak_rss_bytes": 1025642496,
+     "completed_calls": 1
+    },
+    "arrow_table": {
+     "seconds": 0.0092365,
+     "peak_rss_bytes": 1519239168,
+     "completed_calls": 1
+    }
+   },
+   "ready_rss_bytes": 42790912,
+   "pyarrow_version": "26.0.0",
+   "pyivt_version": "0.0.10",
+   "python_version": "3.13.3",
+   "platform": "win32",
+   "rows": 88560000,
+   "columns": 8,
+   "arrow_bytes": 1428030000,
+   "seconds": 3.0632611000000907
+  },
+  {
+   "build": "main@f0e5a6a",
+   "rayon_num_threads": null,
+   "run": 2,
+   "mode": "compact",
+   "synthetic_cells": null,
+   "fraction": 1,
+   "peak_rss_bytes": 1688649728,
+   "termination": null,
+   "exit_code": 0,
+   "stages": {
+    "build_dimension_columns": {
+     "seconds": 2.9363949,
+     "peak_rss_bytes": 1688649728,
+     "completed_calls": 1
+    },
+    "decode_values": {
+     "seconds": 0.2819472,
+     "peak_rss_bytes": 1035784192,
+     "completed_calls": 1
+    },
+    "arrow_table": {
+     "seconds": 0.0002355,
+     "peak_rss_bytes": 1476612096,
+     "completed_calls": 1
+    }
+   },
+   "ready_rss_bytes": 42721280,
+   "pyarrow_version": "26.0.0",
+   "pyivt_version": "0.0.10",
+   "python_version": "3.13.3",
+   "platform": "win32",
+   "rows": 88560000,
+   "columns": 8,
+   "arrow_bytes": 1428030000,
+   "seconds": 3.051583300000857
+  },
+  {
+   "build": "main@f0e5a6a",
+   "rayon_num_threads": null,
+   "run": 3,
+   "mode": "compact",
+   "synthetic_cells": null,
+   "fraction": 1,
+   "peak_rss_bytes": 1688072192,
+   "termination": null,
+   "exit_code": 0,
+   "stages": {
+    "build_dimension_columns": {
+     "seconds": 2.8933261,
+     "peak_rss_bytes": 1688072192,
+     "completed_calls": 1
+    },
+    "decode_values": {
+     "seconds": 0.2762973,
+     "peak_rss_bytes": 1035718656,
+     "completed_calls": 1
+    },
+    "arrow_table": {
+     "seconds": 0.0002473,
+     "peak_rss_bytes": 1509343232,
+     "completed_calls": 1
+    }
+   },
+   "ready_rss_bytes": 42708992,
+   "pyarrow_version": "26.0.0",
+   "pyivt_version": "0.0.10",
+   "python_version": "3.13.3",
+   "platform": "win32",
+   "rows": 88560000,
+   "columns": 8,
+   "arrow_bytes": 1428030000,
+   "seconds": 3.000389199998608
+  },
+  {
+   "build": "main@f0e5a6a",
+   "rayon_num_threads": 1,
+   "run": 1,
+   "mode": "compact",
+   "synthetic_cells": null,
+   "fraction": 1,
+   "peak_rss_bytes": 1681051648,
+   "termination": null,
+   "exit_code": 0,
+   "stages": {
+    "build_dimension_columns": {
+     "seconds": 2.9107951,
+     "peak_rss_bytes": 1681051648,
+     "completed_calls": 1
+    },
+    "decode_values": {
+     "seconds": 2.0886676,
+     "peak_rss_bytes": 1512419328,
+     "completed_calls": 1
+    },
+    "arrow_table": {
+     "seconds": 0.0003545,
+     "peak_rss_bytes": 1218822144,
+     "completed_calls": 1
+    }
+   },
+   "ready_rss_bytes": 42864640,
+   "pyarrow_version": "26.0.0",
+   "pyivt_version": "0.0.10",
+   "python_version": "3.13.3",
+   "platform": "win32",
+   "rows": 88560000,
+   "columns": 8,
+   "arrow_bytes": 1428030000,
+   "seconds": 3.0902979000002233
+  },
+  {
+   "build": "main@f0e5a6a",
+   "rayon_num_threads": 1,
+   "run": 2,
+   "mode": "compact",
+   "synthetic_cells": null,
+   "fraction": 1,
+   "peak_rss_bytes": 1683304448,
+   "termination": null,
+   "exit_code": 0,
+   "stages": {
+    "build_dimension_columns": {
+     "seconds": 2.8211576000000003,
+     "peak_rss_bytes": 1683304448,
+     "completed_calls": 1
+    },
+    "decode_values": {
+     "seconds": 1.8878916000000001,
+     "peak_rss_bytes": 1480818688,
+     "completed_calls": 1
+    },
+    "arrow_table": {
+     "seconds": 0.0002497,
+     "peak_rss_bytes": 1461940224,
+     "completed_calls": 1
+    }
+   },
+   "ready_rss_bytes": 42622976,
+   "pyarrow_version": "26.0.0",
+   "pyivt_version": "0.0.10",
+   "python_version": "3.13.3",
+   "platform": "win32",
+   "rows": 88560000,
+   "columns": 8,
+   "arrow_bytes": 1428030000,
+   "seconds": 2.927664200000436
+  },
+  {
+   "build": "main@f0e5a6a",
+   "rayon_num_threads": 1,
+   "run": 3,
+   "mode": "compact",
+   "synthetic_cells": null,
+   "fraction": 1,
+   "peak_rss_bytes": 1682202624,
+   "termination": null,
+   "exit_code": 0,
+   "stages": {
+    "build_dimension_columns": {
+     "seconds": 2.8190695999999997,
+     "peak_rss_bytes": 1682202624,
+     "completed_calls": 1
+    },
+    "decode_values": {
+     "seconds": 2.0380821,
+     "peak_rss_bytes": 1520873472,
+     "completed_calls": 1
+    },
+    "arrow_table": {
+     "seconds": 0.0002879,
+     "peak_rss_bytes": 1534681088,
+     "completed_calls": 1
+    }
+   },
+   "ready_rss_bytes": 42582016,
+   "pyarrow_version": "26.0.0",
+   "pyivt_version": "0.0.10",
+   "python_version": "3.13.3",
+   "platform": "win32",
+   "rows": 88560000,
+   "columns": 8,
+   "arrow_bytes": 1428030000,
+   "seconds": 2.919730499999787
+  },
+  {
+   "build": "nat-252",
+   "rayon_num_threads": null,
+   "run": 1,
+   "mode": "compact",
+   "synthetic_cells": null,
+   "fraction": 1,
+   "peak_rss_bytes": 1562607616,
+   "termination": null,
+   "exit_code": 0,
+   "stages": {
+    "build_dimension_columns": {
+     "seconds": 0.5140486,
+     "peak_rss_bytes": 1562607616,
+     "completed_calls": 1
+    },
+    "decode_values": {
+     "seconds": 0.3431974,
+     "peak_rss_bytes": 1330884608,
+     "completed_calls": 1
+    },
+    "arrow_table": {
+     "seconds": 0.0020358,
+     "peak_rss_bytes": 1551032320,
+     "completed_calls": 1
+    }
+   },
+   "ready_rss_bytes": 43016192,
+   "pyarrow_version": "26.0.0",
+   "pyivt_version": "0.0.10",
+   "python_version": "3.13.3",
+   "platform": "win32",
+   "rows": 88560000,
+   "columns": 8,
+   "arrow_bytes": 1428030000,
+   "seconds": 0.6251546000003145
+  },
+  {
+   "build": "nat-252",
+   "rayon_num_threads": null,
+   "run": 2,
+   "mode": "compact",
+   "synthetic_cells": null,
+   "fraction": 1,
+   "peak_rss_bytes": 1578176512,
+   "termination": null,
+   "exit_code": 0,
+   "stages": {
+    "build_dimension_columns": {
+     "seconds": 0.308462,
+     "peak_rss_bytes": 1578176512,
+     "completed_calls": 1
+    },
+    "decode_values": {
+     "seconds": 0.2889619,
+     "peak_rss_bytes": 1578176512,
+     "completed_calls": 1
+    },
+    "arrow_table": {
+     "seconds": 0.0003473,
+     "peak_rss_bytes": 1481863168,
+     "completed_calls": 1
+    }
+   },
+   "ready_rss_bytes": 42725376,
+   "pyarrow_version": "26.0.0",
+   "pyivt_version": "0.0.10",
+   "python_version": "3.13.3",
+   "platform": "win32",
+   "rows": 88560000,
+   "columns": 8,
+   "arrow_bytes": 1428030000,
+   "seconds": 0.42031849999875703
+  },
+  {
+   "build": "nat-252",
+   "rayon_num_threads": null,
+   "run": 3,
+   "mode": "compact",
+   "synthetic_cells": null,
+   "fraction": 1,
+   "peak_rss_bytes": 1482543104,
+   "termination": null,
+   "exit_code": 0,
+   "stages": {
+    "build_dimension_columns": {
+     "seconds": 0.2978815,
+     "peak_rss_bytes": 1482543104,
+     "completed_calls": 1
+    },
+    "decode_values": {
+     "seconds": 0.279815,
+     "peak_rss_bytes": 1433399296,
+     "completed_calls": 1
+    },
+    "arrow_table": {
+     "seconds": 0.0003127,
+     "peak_rss_bytes": 1482543104,
+     "completed_calls": 1
+    }
+   },
+   "ready_rss_bytes": 42770432,
+   "pyarrow_version": "26.0.0",
+   "pyivt_version": "0.0.10",
+   "python_version": "3.13.3",
+   "platform": "win32",
+   "rows": 88560000,
+   "columns": 8,
+   "arrow_bytes": 1428030000,
+   "seconds": 0.4220096000008198
+  },
+  {
+   "build": "nat-252",
+   "rayon_num_threads": 1,
+   "run": 1,
+   "mode": "compact",
+   "synthetic_cells": null,
+   "fraction": 1,
+   "peak_rss_bytes": 1663352832,
+   "termination": null,
+   "exit_code": 0,
+   "stages": {
+    "build_dimension_columns": {
+     "seconds": 1.9427349,
+     "peak_rss_bytes": 1663352832,
+     "completed_calls": 1
+    },
+    "decode_values": {
+     "seconds": 1.7617163,
+     "peak_rss_bytes": 1155072000,
+     "completed_calls": 1
+    },
+    "arrow_table": {
+     "seconds": 0.0003652,
+     "peak_rss_bytes": 1494052864,
+     "completed_calls": 1
+    }
+   },
+   "ready_rss_bytes": 42577920,
+   "pyarrow_version": "26.0.0",
+   "pyivt_version": "0.0.10",
+   "python_version": "3.13.3",
+   "platform": "win32",
+   "rows": 88560000,
+   "columns": 8,
+   "arrow_bytes": 1428030000,
+   "seconds": 2.0537893999990047
+  },
+  {
+   "build": "nat-252",
+   "rayon_num_threads": 1,
+   "run": 2,
+   "mode": "compact",
+   "synthetic_cells": null,
+   "fraction": 1,
+   "peak_rss_bytes": 1676845056,
+   "termination": null,
+   "exit_code": 0,
+   "stages": {
+    "build_dimension_columns": {
+     "seconds": 1.9003215,
+     "peak_rss_bytes": 1676845056,
+     "completed_calls": 1
+    },
+    "decode_values": {
+     "seconds": 1.7487965,
+     "peak_rss_bytes": 1174040576,
+     "completed_calls": 1
+    },
+    "arrow_table": {
+     "seconds": 0.000263,
+     "peak_rss_bytes": 1495138304,
+     "completed_calls": 1
+    }
+   },
+   "ready_rss_bytes": 42725376,
+   "pyarrow_version": "26.0.0",
+   "pyivt_version": "0.0.10",
+   "python_version": "3.13.3",
+   "platform": "win32",
+   "rows": 88560000,
+   "columns": 8,
+   "arrow_bytes": 1428030000,
+   "seconds": 2.0162942000006296
+  },
+  {
+   "build": "nat-252",
+   "rayon_num_threads": 1,
+   "run": 3,
+   "mode": "compact",
+   "synthetic_cells": null,
+   "fraction": 1,
+   "peak_rss_bytes": 1621516288,
+   "termination": null,
+   "exit_code": 0,
+   "stages": {
+    "build_dimension_columns": {
+     "seconds": 1.9065264,
+     "peak_rss_bytes": 1621516288,
+     "completed_calls": 1
+    },
+    "decode_values": {
+     "seconds": 1.7978483,
+     "peak_rss_bytes": 1192128512,
+     "completed_calls": 1
+    },
+    "arrow_table": {
+     "seconds": 0.0002882,
+     "peak_rss_bytes": 1593442304,
+     "completed_calls": 1
+    }
+   },
+   "ready_rss_bytes": 42528768,
+   "pyarrow_version": "26.0.0",
+   "pyivt_version": "0.0.10",
+   "python_version": "3.13.3",
+   "platform": "win32",
+   "rows": 88560000,
+   "columns": 8,
+   "arrow_bytes": 1428030000,
+   "seconds": 2.033495399999083
+  }
+ ]
+}

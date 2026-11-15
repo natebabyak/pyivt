@@ -8,6 +8,7 @@ use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use arrow::error::ArrowError;
 use arrow::record_batch::{RecordBatch, RecordBatchReader};
 use std::collections::HashMap;
+use std::mem::MaybeUninit;
 use std::sync::Arc;
 
 /// Internal cap on the estimated memory of one export; not user-configurable.
@@ -126,8 +127,9 @@ impl Plan {
         }
         let rows = end - start;
         // Column buffers are independent. Values decode on the bounded rayon
-        // pool while this thread builds code columns; ownership moves into
-        // Arrow with no full-size dimension IDs or metadata columns.
+        // pool while this thread fills code columns from runs on the same
+        // pool; ownership moves into Arrow with no full-size dimension IDs or
+        // metadata columns.
         let mut arrays: Vec<ArrayRef> = Vec::with_capacity(self.schema.fields().len());
         std::thread::scope(|scope| -> Result<(), IvtError> {
             let value_task = scope.spawn(|| {
@@ -143,15 +145,11 @@ impl Plan {
                 let choice = self.choices[axis].as_deref();
                 macro_rules! encoded {
                     ($array:ty, $native:ty) => {{
-                        let mut codes = Vec::<$native>::new();
-                        codes.try_reserve_exact(rows).map_err(|_| {
-                            limit_exceeded("memory allocation failed for member codes")
-                        })?;
-                        codes.extend((start..end).map(|row| {
-                            let index = row / stride % count;
-                            let code = choice.map_or(index, |c| c[index]) as u64 + 1;
-                            code as $native
-                        }));
+                        let table: Vec<$native> = (0..count)
+                            .map(|index| (choice.map_or(index, |c| c[index]) as u64 + 1) as $native)
+                            .collect();
+                        let codes =
+                            build_codes(&table, stride, start, end, column_chunk_rows(rows))?;
                         Arc::new(<$array>::from(codes)) as ArrayRef
                     }};
                 }
@@ -169,6 +167,78 @@ impl Plan {
             Ok(())
         })?;
         RecordBatch::try_new(Arc::clone(&self.schema), arrays).map_err(IvtError::from)
+    }
+}
+
+/// Rows per code-column chunk below which splitting costs more than it saves.
+const MIN_COLUMN_CHUNK_ROWS: usize = 65_536;
+
+fn column_chunk_rows(rows: usize) -> usize {
+    rows.div_ceil(rayon::current_num_threads().saturating_mul(4).max(1))
+        .max(MIN_COLUMN_CHUNK_ROWS)
+}
+
+/// Codes of one axis for selected rows `[start, end)`. Row `r` gets
+/// `table[r / stride % table.len()]`, written as runs of `stride` copies and
+/// then tiled by copying the first whole period, with no per-row division.
+/// Chunks of `chunk_rows` rows are filled independently on the rayon pool.
+fn build_codes<T: Copy + Send + Sync>(
+    table: &[T],
+    stride: usize,
+    start: usize,
+    end: usize,
+    chunk_rows: usize,
+) -> Result<Vec<T>, IvtError> {
+    let rows = end - start;
+    let mut codes = Vec::<T>::new();
+    codes
+        .try_reserve_exact(rows)
+        .map_err(|_| limit_exceeded("memory allocation failed for member codes"))?;
+    if rows == 0 {
+        return Ok(codes);
+    }
+    let out = &mut codes.spare_capacity_mut()[..rows];
+    let chunk_rows = chunk_rows.max(1);
+    if rows <= chunk_rows {
+        fill_codes(out, table, stride, start);
+    } else {
+        use rayon::prelude::*;
+        out.par_chunks_mut(chunk_rows)
+            .enumerate()
+            .for_each(|(chunk, part)| fill_codes(part, table, stride, start + chunk * chunk_rows));
+    }
+    // SAFETY: `fill_codes` writes every element of each disjoint chunk, and
+    // the chunks cover all `rows` reserved elements.
+    unsafe { codes.set_len(rows) };
+    Ok(codes)
+}
+
+/// Initialize every element of `out` with the codes of rows starting at `first`.
+fn fill_codes<T: Copy>(out: &mut [MaybeUninit<T>], table: &[T], stride: usize, first: usize) {
+    let count = table.len();
+    // The plan's checked row product bounds `stride * count`.
+    let period = stride * count;
+    let head = out.len().min(period);
+    let mut index = first / stride % count;
+    let mut offset = first % stride;
+    let mut pos = 0;
+    while pos < head {
+        let len = (stride - offset).min(head - pos);
+        out[pos..pos + len].fill(MaybeUninit::new(table[index]));
+        pos += len;
+        offset = 0;
+        index += 1;
+        if index == count {
+            index = 0;
+        }
+    }
+    // The sequence repeats every `period` rows, and `filled` stays a multiple
+    // of it, so doubling the filled prefix continues the pattern.
+    let mut filled = head;
+    while filled < out.len() {
+        let len = filled.min(out.len() - filled);
+        out.copy_within(..len, filled);
+        filled += len;
     }
 }
 
@@ -284,6 +354,125 @@ mod tests {
             (u64::from(u32::MAX) + 1, 8),
         ] {
             assert_eq!(code_bytes(code), bytes);
+        }
+    }
+
+    /// The per-row division the run fill replaced.
+    fn reference(
+        choice: Option<&[usize]>,
+        count: usize,
+        stride: usize,
+        start: usize,
+        end: usize,
+    ) -> Vec<u64> {
+        (start..end)
+            .map(|row| {
+                let index = row / stride % count;
+                choice.map_or(index, |c| c[index]) as u64 + 1
+            })
+            .collect()
+    }
+
+    #[test]
+    fn run_fill_matches_div_mod_on_every_axis() {
+        let full: [usize; 4] = [4, 3, 5, 2];
+        // Per axis: the full grid, one fixed member, and a sorted member list.
+        let pick = |count: usize| -> Vec<Option<Vec<usize>>> {
+            vec![
+                None,
+                Some(vec![count - 1]),
+                Some((0..count).filter(|i| i % 2 == 0).collect()),
+            ]
+        };
+        let options: Vec<_> = full.iter().map(|&c| pick(c)).collect();
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(4)
+            .build()
+            .unwrap();
+        let mut cases = 0;
+        for a in &options[0] {
+            for b in &options[1] {
+                for c in &options[2] {
+                    for d in &options[3] {
+                        let choices = [a, b, c, d];
+                        let counts: Vec<usize> = choices
+                            .iter()
+                            .zip(full)
+                            .map(|(choice, n)| choice.as_ref().map_or(n, Vec::len))
+                            .collect();
+                        let mut strides = [1usize; 4];
+                        for axis in (0..3).rev() {
+                            strides[axis] = strides[axis + 1] * counts[axis + 1];
+                        }
+                        let rows: usize = counts.iter().product();
+                        let ranges = [
+                            (0, rows),
+                            (1, rows),
+                            (0, rows - 1),
+                            (rows / 3, rows / 3 + rows / 2),
+                            (rows / 2, rows / 2),
+                        ];
+                        for axis in 0..4 {
+                            let choice = choices[axis].as_deref();
+                            let table: Vec<u16> = (0..counts[axis])
+                                .map(|i| (choice.map_or(i, |c| c[i]) + 1) as u16)
+                                .collect();
+                            for &(start, end) in &ranges {
+                                let expected =
+                                    reference(choice, counts[axis], strides[axis], start, end);
+                                for chunk in [1, 2, 3, 7, 64, usize::MAX] {
+                                    let got = pool.install(|| {
+                                        build_codes(&table, strides[axis], start, end, chunk)
+                                            .unwrap()
+                                    });
+                                    let got: Vec<u64> = got.into_iter().map(u64::from).collect();
+                                    assert_eq!(
+                                        got, expected,
+                                        "axis {axis} {choices:?} {start}..{end} chunk {chunk}"
+                                    );
+                                    cases += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(cases > 0);
+    }
+
+    #[test]
+    fn run_fill_matches_div_mod_for_long_columns() {
+        // Periods shorter and longer than a chunk, with ranges off chunk edges.
+        for (count, stride) in [
+            (1, 1),
+            (9, 1),
+            (10, 7),
+            (820, 1),
+            (57, 90_000),
+            (3, 1 << 20),
+        ] {
+            let table: Vec<u32> = (0..count).map(|i| i as u32 * 3 + 1).collect();
+            let choice: Vec<usize> = (0..count).map(|i| i * 3).collect();
+            let rows = count * stride;
+            for (start, end) in [
+                (0, rows),
+                (rows.min(12_345), rows.min(1_000_003)),
+                (rows - rows / 5, rows),
+            ] {
+                let expected = reference(Some(&choice), count, stride, start, end);
+                for chunk in [MIN_COLUMN_CHUNK_ROWS, 100_003, usize::MAX] {
+                    let got: Vec<u64> = build_codes(&table, stride, start, end, chunk)
+                        .unwrap()
+                        .into_iter()
+                        .map(u64::from)
+                        .collect();
+                    assert_eq!(
+                        got, expected,
+                        "count {count} stride {stride} {start}..{end}"
+                    );
+                }
+            }
         }
     }
 
