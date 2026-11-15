@@ -1,6 +1,6 @@
 //! PyO3 wrappers for the public Python API.
 
-use pyo3::exceptions::{PyKeyError, PyMemoryError, PyOSError, PyTypeError, PyValueError};
+use pyo3::exceptions::{PyKeyError, PyOSError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes, PyDict, PyList, PyString, PyTuple};
 use std::path::PathBuf;
@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use crate::arrow_export::stream_capsule;
 use crate::compact::AxisProjection;
 use crate::decode::{build_descriptor_layout, Layout};
-use crate::error::IvtError;
+use crate::error::{ErrorKind, IvtError};
 use crate::metadata::{
     self, Dimension as CoreDimension, Footnote as CoreFootnote, Geographies as CoreGeographies,
     IvtMetadata as CoreMeta, LocalizedText as CoreLocalized, MissingValue as CoreMissing,
@@ -18,11 +18,53 @@ use crate::stream::{preflight, BatchReader};
 use crate::tidy::TidySchema;
 use arrow::record_batch::{RecordBatch, RecordBatchIterator};
 
+/// Raise the `pyivt` exception class for the error's kind, with its
+/// structured fields as keyword attributes. The kind decides the class; the
+/// message text is never inspected.
 fn map_ivt_err(e: IvtError) -> PyErr {
-    match e {
-        IvtError::Io(io) => PyOSError::new_err(io.to_string()),
-        other => PyValueError::new_err(other.to_string()),
+    if let IvtError::Io(io) = e {
+        return PyOSError::new_err(io.to_string());
     }
+    Python::with_gil(|py| typed_error(py, &e).unwrap_or_else(|err| err))
+}
+
+fn typed_error(py: Python<'_>, e: &IvtError) -> PyResult<PyErr> {
+    let class = match e.kind() {
+        ErrorKind::Corrupt => "CorruptFileError",
+        ErrorKind::Unsupported => "UnsupportedFormatError",
+        ErrorKind::ResourceLimit => "ResourceLimitError",
+        ErrorKind::Io | ErrorKind::Other => "IvtError",
+    };
+    let kwargs = PyDict::new(py);
+    let context = e.context();
+    for (name, value) in [
+        ("offset", context.offset),
+        ("length", context.length),
+        ("file_len", context.file_len),
+        ("slot", context.slot.map(|v| v as u64)),
+        ("entry", context.entry.map(|v| v as u64)),
+        ("dimension", context.dimension.map(|v| v as u64)),
+    ] {
+        if let Some(value) = value {
+            kwargs.set_item(name, value)?;
+        }
+    }
+    if let IvtError::ResourceLimit {
+        estimate, limit, ..
+    } = e
+    {
+        kwargs.set_item("estimate", *estimate)?;
+        kwargs.set_item("limit", *limit)?;
+    }
+    let value = py
+        .import("pyivt._errors")?
+        .getattr(class)?
+        .call((e.to_string(),), Some(&kwargs))?;
+    Ok(PyErr::from_value(value))
+}
+
+fn resource_limit(message: &str, estimate: Option<u64>, limit: Option<u64>) -> PyErr {
+    map_ivt_err(IvtError::resource_limit(message, estimate, limit))
 }
 
 /// English and French versions of a metadata text field.
@@ -323,7 +365,7 @@ impl Geographies {
 ///
 /// Summary properties are available after open(). Dimensions, geographies,
 /// footnotes and missing_values are loaded on first access and cached. Accessing
-/// these lazy properties may raise ValueError if metadata cannot be read or
+/// these lazy properties may raise pyivt.IvtError if metadata cannot be read or
 /// parsed. Returned lists and nested objects are snapshots; modifying a Python
 /// list does not update the reader or source file. Optional fields use None
 /// when unavailable. Instances cannot be constructed directly.
@@ -449,10 +491,10 @@ impl IvtMetadata {
     /// Dimensions in file order, loaded on first access and cached.
     ///
     /// Returns a list of Dimension snapshots with member labels and notes.
-    /// Raises ValueError if the required metadata cannot be loaded or parsed.
+    /// Raises pyivt.IvtError if the required metadata cannot be loaded or parsed.
     fn dimensions(&self) -> PyResult<Vec<Dimension>> {
         let mut guard = self.inner.lock().unwrap();
-        let dims = guard.dimensions().map_err(PyValueError::new_err)?;
+        let dims = guard.dimensions().map_err(map_ivt_err)?;
         Ok(dims
             .iter()
             .cloned()
@@ -465,21 +507,17 @@ impl IvtMetadata {
     /// Geography member lists, loaded on first access and cached.
     ///
     /// Returns Geographies for the axis selected by the geographic dimension.
-    /// Unavailable fields are None. Raises ValueError on metadata loading errors.
+    /// Unavailable fields are None. Raises pyivt.IvtError on metadata loading errors.
     fn geographies(&self) -> PyResult<Geographies> {
         let mut guard = self.inner.lock().unwrap();
-        Ok(guard
-            .geographies()
-            .map_err(PyValueError::new_err)?
-            .clone()
-            .into())
+        Ok(guard.geographies().map_err(map_ivt_err)?.clone().into())
     }
 
     #[getter]
     /// Annotation legend entries, loaded on first access and cached.
     ///
     /// Returns one `Footnote` per legend entry, with a localized `description`,
-    /// or an empty list when no entries are found. Raises `ValueError` on errors.
+    /// or an empty list when no entries are found. Raises `pyivt.IvtError` on errors.
     ///
     /// ```python
     /// for note in ivt.metadata.footnotes:
@@ -487,7 +525,7 @@ impl IvtMetadata {
     /// ```
     fn footnotes(&self) -> PyResult<Vec<Footnote>> {
         let mut guard = self.inner.lock().unwrap();
-        let notes = guard.footnotes().map_err(PyValueError::new_err)?;
+        let notes = guard.footnotes().map_err(map_ivt_err)?;
         Ok(notes.iter().cloned().map(Footnote::from).collect())
     }
 
@@ -496,10 +534,10 @@ impl IvtMetadata {
     ///
     /// Returns MissingValue entries linking numeric codes to symbols and
     /// localized descriptions, or an empty list if none are found. Raises
-    /// ValueError on loading errors. Use the Arrow C stream for per-cell statuses.
+    /// pyivt.IvtError on loading errors. Use the Arrow C stream for per-cell statuses.
     fn missing_values(&self) -> PyResult<Vec<MissingValue>> {
         let mut guard = self.inner.lock().unwrap();
-        let vals = guard.missing_values().map_err(PyValueError::new_err)?;
+        let vals = guard.missing_values().map_err(map_ivt_err)?;
         Ok(vals.iter().cloned().map(MissingValue::from).collect())
     }
 
@@ -554,14 +592,6 @@ impl From<&Layout> for PyLayout {
             straddle: l.straddle,
             window_count: l.window_count,
         }
-    }
-}
-
-fn export_error(error: String) -> PyErr {
-    if error.contains("memory") || error.contains("allocation failed") {
-        PyMemoryError::new_err(error)
-    } else {
-        PyValueError::new_err(error)
     }
 }
 
@@ -647,18 +677,23 @@ impl Ivt {
             fixed,
             max_memory_bytes,
         )
-        .map_err(export_error)?;
+        .map_err(map_ivt_err)?;
         let schema = Arc::clone(&reader.maps.schema);
+        let mut reader = reader;
         let batches = py
             .allow_threads(|| {
                 let mut cache = self.cache.lock().unwrap();
                 if cache.is_none() {
-                    *cache = Some(reader.collect::<Result<Vec<_>, _>>()?);
+                    *cache = Some(std::iter::from_fn(|| reader.next_batch()).collect::<Result<
+                        Vec<_>,
+                        IvtError,
+                    >>(
+                    )?);
                 }
                 // RecordBatch clones only Arc buffers.
-                Ok::<_, arrow::error::ArrowError>(cache.as_ref().unwrap().clone())
+                Ok::<_, IvtError>(cache.as_ref().unwrap().clone())
             })
-            .map_err(|e| export_error(e.to_string()))?;
+            .map_err(map_ivt_err)?;
         let capsule = stream_capsule(
             py,
             Box::new(RecordBatchIterator::new(
@@ -690,7 +725,7 @@ impl Ivt {
         let data = this.compact_data(py, 0)?;
         let table_id = this.source_digest(py, &data)?;
         let batch = py
-            .allow_threads(|| -> Result<RecordBatch, String> {
+            .allow_threads(|| -> Result<RecordBatch, IvtError> {
                 let mut cache = this.compact_cache.lock().unwrap();
                 if let Some((cached_key, batch)) = cache.as_ref() {
                     if cached_key == &key {
@@ -707,7 +742,7 @@ impl Ivt {
                 *cache = Some((key, batch.clone()));
                 Ok(batch)
             })
-            .map_err(export_error)?;
+            .map_err(map_ivt_err)?;
         let schema = batch.schema();
         let capsule = stream_capsule(
             py,
@@ -777,11 +812,11 @@ impl Ivt {
                                 count as usize,
                             )?;
                         let (names, references) = metadata::member_display(&data, axis, &positions);
-                        Ok::<_, String>((fields, (axis_kinds[axis], names, references)))
+                        Ok::<_, IvtError>((fields, (axis_kinds[axis], names, references)))
                     })
                     .collect::<Result<Vec<_>, _>>()
             })
-            .map_err(export_error)?;
+            .map_err(map_ivt_err)?;
         let estimated = fields
             .iter()
             .flat_map(|(fields, _)| fields)
@@ -867,9 +902,12 @@ fn resolve_source(_py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<OpenSou
 }
 
 fn compact_preflight(file_size: usize, extra: usize) -> PyResult<()> {
-    if file_size.saturating_mul(4).saturating_add(extra) > crate::compact::MEMORY_LIMIT {
-        return Err(PyMemoryError::new_err(
+    let estimate = file_size.saturating_mul(4).saturating_add(extra);
+    if estimate > crate::compact::MEMORY_LIMIT {
+        return Err(resource_limit(
             "memory estimate exceeds the internal 2 GiB safety limit",
+            Some(estimate as u64),
+            Some(crate::compact::MEMORY_LIMIT as u64),
         ));
     }
     Ok(())
@@ -902,12 +940,13 @@ impl Ivt {
         let size = std::fs::metadata(self.path.as_ref().unwrap())
             .map_err(|e| PyOSError::new_err(e.to_string()))?
             .len();
-        usize::try_from(size).map_err(|_| PyMemoryError::new_err("file exceeds addressable memory"))
+        usize::try_from(size)
+            .map_err(|_| resource_limit("file exceeds addressable memory", Some(size), None))
     }
 
     fn batch_reader(&self, py: Python<'_>, limit: usize) -> PyResult<BatchReader> {
         let file_len = self.file_size()?;
-        preflight(0, 0, file_len.saturating_mul(4), limit).map_err(export_error)?;
+        preflight(0, 0, file_len.saturating_mul(4), limit).map_err(map_ivt_err)?;
         let data = py
             .allow_threads(|| self.ensure_data())
             .map_err(map_ivt_err)?;
@@ -918,7 +957,7 @@ impl Ivt {
             .lock()
             .unwrap()
             .missing_values()
-            .map_err(PyValueError::new_err)?
+            .map_err(map_ivt_err)?
             .clone();
         let maps = py
             .allow_threads(|| {
@@ -931,10 +970,10 @@ impl Ivt {
                         limit,
                     )?));
                 }
-                Ok::<_, String>(Arc::clone(maps.as_ref().unwrap()))
+                Ok::<_, IvtError>(Arc::clone(maps.as_ref().unwrap()))
             })
-            .map_err(export_error)?;
-        BatchReader::new(data, self.layout.clone(), maps, limit).map_err(export_error)
+            .map_err(map_ivt_err)?;
+        BatchReader::new(data, self.layout.clone(), maps, limit).map_err(map_ivt_err)
     }
 
     fn ensure_data(&self) -> Result<Arc<Vec<u8>>, IvtError> {
@@ -974,7 +1013,13 @@ impl Ivt {
 ///
 /// - `TypeError`: unsupported source, path representation or `read()` result.
 /// - `OSError`: the source path cannot be opened or read.
-/// - `ValueError`: invalid or unsupported IVT header, descriptor or layout.
+/// - `pyivt.CorruptFileError`: truncated file, bad signature or header, or a
+///   record or directory outside the file.
+/// - `pyivt.UnsupportedFormatError`: an IVT container version, descriptor or
+///   layout pyivt cannot read.
+/// - `pyivt.ResourceLimitError`: a memory estimate exceeds a safety limit.
+///
+/// All three subclass `pyivt.IvtError`, a `ValueError`.
 ///
 /// ### Notes
 ///
@@ -1013,7 +1058,7 @@ pub fn open_ivt(
             let (meta, layout) = py
                 .allow_threads(|| -> Result<(CoreMeta, Layout), IvtError> {
                     let meta = metadata::open_metadata_path(&path_clone)?;
-                    let layout = build_descriptor_layout(meta.desc()).map_err(IvtError::Parse)?;
+                    let layout = build_descriptor_layout(meta.desc())?;
                     Ok((meta, layout))
                 })
                 .map_err(map_ivt_err)?;
@@ -1042,9 +1087,8 @@ pub fn open_ivt(
         OpenSource::Bytes(data) => {
             let (meta, layout) = py
                 .allow_threads(|| -> Result<(CoreMeta, Layout), IvtError> {
-                    let meta = metadata::build_metadata(data.clone(), None, None)
-                        .map_err(IvtError::Parse)?;
-                    let layout = build_descriptor_layout(meta.desc()).map_err(IvtError::Parse)?;
+                    let meta = metadata::build_metadata(data.clone(), None, None)?;
+                    let layout = build_descriptor_layout(meta.desc())?;
                     Ok((meta, layout))
                 })
                 .map_err(map_ivt_err)?;

@@ -16,8 +16,6 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-CORRUPT = "Corrupt IVT file: "
-UNSUPPORTED = "Unsupported IVT file: "
 SUFFIXES = {".ivt", ".zip"}
 TAIL = 1024 * 1024
 
@@ -59,10 +57,12 @@ def evidence(path: Path, *, digest: bool) -> dict:
     return row
 
 
-def classify(message: str) -> str:
-    if message.startswith(CORRUPT):
+def classify(error: ValueError) -> str:
+    import pyivt
+
+    if isinstance(error, pyivt.CorruptFileError):
         return "corrupt"
-    if message.startswith(UNSUPPORTED):
+    if isinstance(error, pyivt.UnsupportedFormatError):
         return "unsupported"
     return "failed"
 
@@ -79,8 +79,7 @@ def triage(path: Path, *, digest: bool = True) -> dict:
         ivt = pyivt.open(path)
         dimensions = ivt.metadata.dimensions
     except ValueError as error:
-        message = str(error)
-        return row | {"status": classify(message), "message": message}
+        return row | {"status": classify(error), "message": str(error)}
     except OSError as error:
         return row | {"status": "unreadable", "message": str(error)}
     return row | {

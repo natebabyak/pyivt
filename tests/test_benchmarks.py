@@ -181,4 +181,4 @@ def test_benchmark_report_records_each_discovered_failure(tmp_path):
     assert {result["operation"] for result in results} == {"metadata", "arrow"}
     assert all(result["status"] == "failed" for result in results)
     assert all(result["file"] == str(source) for result in results)
-    assert all("ValueError" in result["reason"] for result in results)
+    assert all("CorruptFileError" in result["reason"] for result in results)

@@ -5,6 +5,7 @@
 //! its chunk index. Field names do not determine how values are decoded.
 
 use crate::bytes::{latin1, u16, u32};
+use crate::error::{corrupt_record, unsupported_record, Context, IvtError};
 use crate::header::{DIM_SLOT_STRIDE, HDR_DIM_SLOT0};
 use crate::metadata_directory::MetadataDirectory;
 
@@ -56,13 +57,17 @@ impl MemberValues {
         }
     }
 
-    fn append(&mut self, other: Self) -> Result<(), String> {
+    fn append(&mut self, other: Self) -> Result<(), IvtError> {
         match (self, other) {
             (Self::Utf8(a), Self::Utf8(b)) => a.extend(b),
             (Self::Int64(a), Self::Int64(b)) => a.extend(b),
             (Self::Float64(a), Self::Float64(b)) => a.extend(b),
             (Self::Date32(a), Self::Date32(b)) => a.extend(b),
-            _ => return Err("member field changes storage type between chunks".into()),
+            _ => {
+                return Err(corrupt_record(
+                    "member field changes storage type between chunks",
+                ))
+            }
         }
         Ok(())
     }
@@ -93,70 +98,95 @@ struct Directory<'a> {
     data: &'a [u8],
     directory: MetadataDirectory,
     entries: usize,
+    dimension: usize,
+    slot: usize,
 }
 
 impl<'a> Directory<'a> {
-    fn new(data: &'a [u8], dimension: usize) -> Result<Self, String> {
+    fn new(data: &'a [u8], dimension: usize) -> Result<Self, IvtError> {
         let slot = dimension
             .checked_mul(DIM_SLOT_STRIDE)
             .and_then(|n| HDR_DIM_SLOT0.checked_add(n))
-            .ok_or("dimension slot overflow")?;
-        let slot = crate::header::slot_offset(data, slot)
-            .ok_or_else(|| format!("missing directory for dimension {dimension}"))?;
-        let directory = MetadataDirectory::new(data, slot).map_err(|e| e.to_string())?;
+            .ok_or_else(|| corrupt_record("dimension slot overflow"))?;
+        let slot = crate::header::slot_offset(data, slot).ok_or_else(|| {
+            corrupt_record(format!("missing directory for dimension {dimension}"))
+                .with(Context::dimension(dimension))
+        })?;
+        let at = Context::dimension(dimension)
+            .and_file_len(data.len())
+            .and_slot(slot);
+        let directory = MetadataDirectory::new(data, slot).map_err(|e| e.with(at))?;
         let entries = directory.count;
         if entries == 0 {
-            return Err(format!("invalid directory for dimension {dimension}"));
+            return Err(
+                corrupt_record(format!("invalid directory for dimension {dimension}")).with(at),
+            );
         }
         directory
             .entry(data, entries - 1)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.with(at.and_entry(entries - 1)))?;
         Ok(Self {
             data,
             directory,
             entries,
+            dimension,
+            slot,
         })
     }
 
-    fn block(&self, index: usize) -> Result<Option<&'a [u8]>, String> {
+    fn block(&self, index: usize) -> Result<Option<&'a [u8]>, IvtError> {
         if index >= self.entries {
-            return Err(format!(
+            return Err(corrupt_record(format!(
                 "member directory index {index} exceeds {} entries",
                 self.entries
-            ));
+            ))
+            .with(self.at(index)));
         }
         let entry = self
             .directory
             .entry(self.data, index)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.with(self.at(index)))?;
         let offset = u32(entry, 0) as usize;
         let length = u16(entry, 4) as usize;
         if offset == 0 && length == 0 {
             return Ok(None);
         }
+        let at = self.at(index).and_offset(offset).and_length(length);
         self.data
             .get(
                 offset
                     ..offset
                         .checked_add(length)
-                        .ok_or("member block size overflow")?,
+                        .ok_or_else(|| corrupt_record("member block size overflow").with(at))?,
             )
             .map(Some)
-            .ok_or_else(|| format!("member block {index} is outside the IVT"))
+            .ok_or_else(|| {
+                corrupt_record(format!("member block {index} is outside the IVT")).with(at)
+            })
     }
 
-    fn record(&self, index: usize) -> Result<Option<Vec<u8>>, String> {
-        self.block(index)?.map(decompress_record).transpose()
+    fn at(&self, index: usize) -> Context {
+        Context::dimension(self.dimension)
+            .and_entry(index)
+            .and_file_len(self.data.len())
+            .and_slot(self.slot)
     }
 
-    fn chunks(&self, index: usize) -> Result<Vec<usize>, String> {
+    fn record(&self, index: usize) -> Result<Option<Vec<u8>>, IvtError> {
+        self.block(index)?
+            .map(|block| decompress_record(block).map_err(|e| e.with(self.at(index))))
+            .transpose()
+    }
+
+    fn chunks(&self, index: usize) -> Result<Vec<usize>, IvtError> {
         let Some(record) = self.record(index)? else {
             return Ok(Vec::new());
         };
         if record[0] & 15 != 4 || record[1] != 1 {
-            return Err(format!(
+            return Err(unsupported_record(format!(
                 "member chunk index {index} is not an integer vector"
-            ));
+            ))
+            .with(self.at(index)));
         }
         Ok(record[4..]
             .as_chunks::<4>()
@@ -175,13 +205,15 @@ fn optional_text(bytes: &[u8]) -> Option<String> {
     }
 }
 
-fn fixed_strings(record: &[u8]) -> Result<Vec<Option<String>>, String> {
+fn fixed_strings(record: &[u8]) -> Result<Vec<Option<String>>, IvtError> {
     if record[0] & 15 != 1 || record[1] != 2 {
-        return Err("member code storage is not a byte matrix".into());
+        return Err(unsupported_record(
+            "member code storage is not a byte matrix",
+        ));
     }
     let stride = u16(record, 4) as usize;
     if stride == 0 {
-        return Err("zero-width member code".into());
+        return Err(corrupt_record("zero-width member code"));
     }
     record[6..]
         .chunks_exact(stride)
@@ -189,38 +221,43 @@ fn fixed_strings(record: &[u8]) -> Result<Vec<Option<String>>, String> {
             let length = row[0] as usize;
             row.get(1..1 + length)
                 .map(optional_text)
-                .ok_or_else(|| "member code exceeds its row".into())
+                .ok_or_else(|| corrupt_record("member code exceeds its row"))
         })
         .collect()
 }
 
-fn variable_strings(record: &[u8]) -> Result<Vec<Option<String>>, String> {
+fn variable_strings(record: &[u8]) -> Result<Vec<Option<String>>, IvtError> {
     if record[0] & 15 != 1 || record[1] != 1 || record.len() < 6 {
-        return Err("member text storage is not a byte vector".into());
+        return Err(unsupported_record(
+            "member text storage is not a byte vector",
+        ));
     }
     let count = u16(record, 4) as usize;
     let mut cursor = 6;
     let mut values = Vec::with_capacity(count);
     for _ in 0..count {
-        let length = *record.get(cursor).ok_or("truncated member text length")? as usize;
+        let length = *record
+            .get(cursor)
+            .ok_or_else(|| corrupt_record("truncated member text length"))?
+            as usize;
         cursor += 1;
         let bytes = record
             .get(cursor..cursor + length)
-            .ok_or("truncated member text")?;
+            .ok_or_else(|| corrupt_record("truncated member text"))?;
         values.push(optional_text(bytes));
         cursor += length;
         if record.get(cursor) != Some(&0) {
-            return Err("missing member text terminator".into());
+            return Err(corrupt_record("missing member text terminator"));
         }
         cursor += 1;
     }
     Ok(values)
 }
 
-fn numeric_members(record: &[u8], signed: bool) -> Result<MemberValues, String> {
+fn numeric_members(record: &[u8], signed: bool) -> Result<MemberValues, IvtError> {
     let width = (record[0] & 15) as usize;
     if record[1] != 1 {
-        return Err("member numeric storage is not a vector".into());
+        return Err(unsupported_record("member numeric storage is not a vector"));
     }
     if signed && width == 8 {
         return Ok(MemberValues::Float64(
@@ -240,17 +277,19 @@ fn numeric_members(record: &[u8], signed: bool) -> Result<MemberValues, String> 
                 (false, 1) => i64::from(scalar[0]),
                 (false, 2) => i64::from(u16(scalar, 0)),
                 (false, 4) => i64::from(u32(scalar, 0)),
-                _ => return Err("unsupported member numeric width".into()),
+                _ => return Err(unsupported_record("unsupported member numeric width")),
             };
             Ok(Some(value))
         })
-        .collect::<Result<Vec<_>, String>>()?;
+        .collect::<Result<Vec<_>, IvtError>>()?;
     Ok(MemberValues::Int64(values))
 }
 
-fn reference_ordinals(record: &[u8]) -> Result<MemberValues, String> {
+fn reference_ordinals(record: &[u8]) -> Result<MemberValues, IvtError> {
     if record[0] & 15 != 4 || record[1] != 1 {
-        return Err("member text references are not an integer vector".into());
+        return Err(unsupported_record(
+            "member text references are not an integer vector",
+        ));
     }
     Ok(MemberValues::Int64(
         record[4..]
@@ -271,7 +310,7 @@ fn reference_ordinals(record: &[u8]) -> Result<MemberValues, String> {
 fn referenced_strings(
     dir: &Directory<'_>,
     ordinals: &[Option<i64>],
-) -> Result<Option<MemberValues>, String> {
+) -> Result<Option<MemberValues>, IvtError> {
     let mut values = Vec::with_capacity(ordinals.len());
     let mut expanded_bytes = values.capacity().saturating_mul(24);
     for ordinal in ordinals {
@@ -297,16 +336,22 @@ fn referenced_strings(
         let value = optional_text(bytes);
         expanded_bytes = expanded_bytes.saturating_add(value.as_ref().map_or(0, String::len));
         if expanded_bytes > MAX_MEMBER_MEMORY {
-            return Err("referenced member text exceeds the 256 MiB memory safety limit".into());
+            return Err(IvtError::resource_limit(
+                "referenced member text exceeds the 256 MiB memory safety limit",
+                None,
+                Some(MAX_MEMBER_MEMORY as u64),
+            ));
         }
         values.push(value);
     }
     Ok(Some(MemberValues::Utf8(values)))
 }
 
-fn time_members(record: &[u8]) -> Result<MemberValues, String> {
+fn time_members(record: &[u8]) -> Result<MemberValues, IvtError> {
     if record[0] & 15 != 1 || record[1] != 2 || u16(record, 4) != 8 {
-        return Err("time-series members are not eight-byte records".into());
+        return Err(unsupported_record(
+            "time-series members are not eight-byte records",
+        ));
     }
     let dates = record[6..]
         .as_chunks::<8>()
@@ -320,7 +365,7 @@ fn time_members(record: &[u8]) -> Result<MemberValues, String> {
             // Beyond's Gregorian day number is ordinal day + 306.
             i32::try_from(serial as i64 - 719_469)
                 .map(Some)
-                .map_err(|_| "time member exceeds Arrow Date32 range".to_string())
+                .map_err(|_| corrupt_record("time member exceeds Arrow Date32 range"))
         })
         .collect::<Result<Vec<_>, _>>()?;
     Ok(MemberValues::Date32(dates))
@@ -331,7 +376,7 @@ fn time_members(record: &[u8]) -> Result<MemberValues, String> {
 pub(crate) fn time_member_slots(
     data: &[u8],
     dimension: usize,
-) -> Result<Option<Vec<usize>>, String> {
+) -> Result<Option<Vec<usize>>, IvtError> {
     let dir = Directory::new(data, dimension)?;
     let Some(definitions) = dir.record(0)? else {
         return Ok(None);
@@ -346,7 +391,9 @@ pub(crate) fn time_member_slots(
         let mut slots = Vec::new();
         let mut base = 0;
         for index in dir.chunks(u32(field, 26) as usize)? {
-            let record = dir.record(index)?.ok_or("missing time member chunk")?;
+            let record = dir
+                .record(index)?
+                .ok_or_else(|| corrupt_record("missing time member chunk"))?;
             let MemberValues::Date32(dates) = time_members(&record)? else {
                 unreachable!()
             };
@@ -369,22 +416,28 @@ pub(crate) fn member_slots(
     data: &[u8],
     dimension: usize,
     count: usize,
-) -> Result<Option<Vec<usize>>, String> {
+) -> Result<Option<Vec<usize>>, IvtError> {
     if let Some(slots) = time_member_slots(data, dimension)? {
         if slots.len() != count {
-            return Err("time member count differs from the axis matrix".into());
+            return Err(corrupt_record(
+                "time member count differs from the axis matrix",
+            ));
         }
         return Ok(Some(slots));
     }
     let dir = Directory::new(data, dimension)?;
-    let definitions = dir.record(0)?.ok_or("missing member field definitions")?;
+    let definitions = dir
+        .record(0)?
+        .ok_or_else(|| corrupt_record("missing member field definitions"))?;
     if definitions.get(..2) != Some(&[1, 2]) || u16(&definitions, 4) != 34 {
-        return Err("unsupported member field definition layout".into());
+        return Err(unsupported_record(
+            "unsupported member field definition layout",
+        ));
     }
     for field in definitions[6..].as_chunks::<34>().0 {
         let length = field[0] as usize;
         if length > 17 {
-            return Err("member field name exceeds its definition".into());
+            return Err(corrupt_record("member field name exceeds its definition"));
         }
         if !latin1(&field[1..1 + length]).eq_ignore_ascii_case("code") || u16(field, 18) != 0x0140 {
             continue;
@@ -392,7 +445,9 @@ pub(crate) fn member_slots(
         let mut slots = Vec::new();
         let mut base = 0usize;
         for index in dir.chunks(u32(field, 26) as usize)? {
-            let record = dir.record(index)?.ok_or("missing member code chunk")?;
+            let record = dir
+                .record(index)?
+                .ok_or_else(|| corrupt_record("missing member code chunk"))?;
             let values = fixed_strings(&record)?;
             slots.extend(
                 values
@@ -402,16 +457,21 @@ pub(crate) fn member_slots(
             );
             base = base
                 .checked_add(values.len())
-                .ok_or("member slot overflow")?;
+                .ok_or_else(|| corrupt_record("member slot overflow"))?;
             if slots.len() > MAX_MEMBER_MEMORY / std::mem::size_of::<usize>() {
-                return Err("member slots exceed the 256 MiB memory safety limit".into());
+                return Err(IvtError::resource_limit(
+                    "member slots exceed the 256 MiB memory safety limit",
+                    None,
+                    Some(MAX_MEMBER_MEMORY as u64),
+                ));
             }
         }
         if slots.len() != count {
-            return Err(format!(
+            return Err(corrupt_record(format!(
                 "code member count {} differs from the axis matrix {count}",
                 slots.len()
-            ));
+            ))
+            .with(Context::dimension(dimension)));
         }
         return Ok((slots.iter().copied().ne(0..count)).then_some(slots));
     }
@@ -465,7 +525,7 @@ pub fn read_members(
     data: &[u8],
     dimension: usize,
     count: usize,
-) -> Result<Vec<MemberField>, String> {
+) -> Result<Vec<MemberField>, IvtError> {
     Ok(read_typed_members(data, dimension, count)?
         .into_iter()
         .map(|(name, values)| (name, values.into_strings()))
@@ -479,7 +539,7 @@ pub fn read_typed_members(
     data: &[u8],
     dimension: usize,
     count: usize,
-) -> Result<Vec<(String, MemberValues)>, String> {
+) -> Result<Vec<(String, MemberValues)>, IvtError> {
     read_typed_members_with_positions(data, dimension, count).map(|(fields, _)| fields)
 }
 
@@ -490,14 +550,16 @@ pub(crate) fn read_typed_members_with_positions(
     data: &[u8],
     dimension: usize,
     count: usize,
-) -> Result<(TypedFields, Vec<usize>), String> {
+) -> Result<(TypedFields, Vec<usize>), IvtError> {
     let slots = if data.first() == Some(&2) {
         member_slots(data, dimension, count)?
     } else {
         None
     };
     if slots.as_ref().is_some_and(|slots| slots.len() != count) {
-        return Err("time member count differs from the axis matrix".into());
+        return Err(corrupt_record(
+            "time member count differs from the axis matrix",
+        ));
     }
     let stored_count = slots
         .as_ref()
@@ -506,8 +568,9 @@ pub(crate) fn read_typed_members_with_positions(
     let slot = dimension
         .checked_mul(DIM_SLOT_STRIDE)
         .and_then(|offset| HDR_DIM_SLOT0.checked_add(offset))
-        .ok_or("dimension slot overflow")?;
-    let slot = crate::header::slot_offset(data, slot).ok_or("missing dimension slot")?;
+        .ok_or_else(|| corrupt_record("dimension slot overflow"))?;
+    let slot = crate::header::slot_offset(data, slot)
+        .ok_or_else(|| corrupt_record("missing dimension slot"))?;
     if data
         .get(slot..slot + DIM_SLOT_STRIDE)
         .is_some_and(|slot| slot.iter().all(|&byte| byte == 0))
@@ -515,9 +578,13 @@ pub(crate) fn read_typed_members_with_positions(
         return Ok((Vec::new(), Vec::new()));
     }
     let dir = Directory::new(data, dimension)?;
-    let definitions = dir.record(0)?.ok_or("missing member field definitions")?;
+    let definitions = dir
+        .record(0)?
+        .ok_or_else(|| corrupt_record("missing member field definitions"))?;
     if definitions[0] & 15 != 1 || definitions[1] != 2 || u16(&definitions, 4) != 34 {
-        return Err("unsupported member field definition layout".into());
+        return Err(unsupported_record(
+            "unsupported member field definition layout",
+        ));
     }
     let field_count = definitions[6..].len() / 34;
     if stored_count
@@ -525,7 +592,14 @@ pub(crate) fn read_typed_members_with_positions(
         .and_then(|n| n.checked_mul(32))
         .is_none_or(|n| n > MAX_MEMBER_MEMORY)
     {
-        return Err("member map estimate exceeds the 256 MiB memory safety limit".into());
+        return Err(IvtError::resource_limit(
+            "member map estimate exceeds the 256 MiB memory safety limit",
+            stored_count
+                .checked_mul(field_count)
+                .and_then(|n| n.checked_mul(32))
+                .map(|n| n as u64),
+            Some(MAX_MEMBER_MEMORY as u64),
+        ));
     }
     let mut fields = Vec::new();
     let mut positions = Vec::with_capacity(field_count);
@@ -533,7 +607,7 @@ pub(crate) fn read_typed_members_with_positions(
     for field in definitions[6..].as_chunks::<34>().0 {
         let name_len = field[0] as usize;
         if name_len > 17 {
-            return Err("member field name exceeds its definition".into());
+            return Err(corrupt_record("member field name exceeds its definition"));
         }
         let name = latin1(&field[1..1 + name_len]);
         let kind = u16(field, 18);
@@ -546,20 +620,27 @@ pub(crate) fn read_typed_members_with_positions(
                 break;
             }
             if index == 0 {
-                return Err(format!("missing chunk for member field {name}"));
+                return Err(corrupt_record(format!(
+                    "missing chunk for member field {name}"
+                )));
             }
-            let record = dir
-                .record(index)?
-                .ok_or_else(|| format!("empty chunk for member field {name}"))?;
+            let record = dir.record(index)?.ok_or_else(|| {
+                corrupt_record(format!("empty chunk for member field {name}")).with(dir.at(index))
+            })?;
             let chunk = match kind {
                 0x0140 => fixed_strings(&record).map(MemberValues::Utf8),
                 0x0180 => time_members(&record),
                 0x0001 => variable_strings(&record).map(MemberValues::Utf8),
                 0x0304 => reference_ordinals(&record),
                 0x0002 | 0x0302 => numeric_members(&record, kind == 0x0302),
-                _ => Err(format!("unsupported member field type 0x{kind:04x}")),
+                _ => Err(unsupported_record(format!(
+                    "unsupported member field type 0x{kind:04x}"
+                ))),
             }
-            .map_err(|e| format!("dimension {dimension}, field {name}: {e}"))?;
+            .map_err(|e| {
+                e.reword(|e| format!("dimension {dimension}, field {name}: {e}"))
+                    .with(dir.at(index))
+            })?;
             if kind == 0x0180 {
                 for row in record[6..].as_chunks::<8>().0 {
                     time_serials.push(Some(u32(row, 0) as i64));
@@ -572,7 +653,11 @@ pub(crate) fn read_typed_members_with_positions(
                 values = Some(chunk);
             }
             if values.as_ref().unwrap().memory_bytes() > MAX_MEMBER_MEMORY {
-                return Err("member field exceeds the 256 MiB memory safety limit".into());
+                return Err(IvtError::resource_limit(
+                    "member field exceeds the 256 MiB memory safety limit",
+                    None,
+                    Some(MAX_MEMBER_MEMORY as u64),
+                ));
             }
         }
         let mut values = match values {
@@ -581,14 +666,19 @@ pub(crate) fn read_typed_members_with_positions(
                 0x0140 | 0x0001 | 0x0304 => MemberValues::Utf8(vec![None; stored_count]),
                 0x0180 => MemberValues::Date32(vec![None; stored_count]),
                 0x0002 | 0x0302 => MemberValues::Int64(vec![None; stored_count]),
-                _ => return Err(format!("unsupported member field type 0x{kind:04x}")),
+                _ => {
+                    return Err(unsupported_record(format!(
+                        "unsupported member field type 0x{kind:04x}"
+                    )))
+                }
             },
         };
         if values.len() < stored_count {
-            return Err(format!(
+            return Err(corrupt_record(format!(
                 "dimension {dimension}, field {name}: only {} of {count} members",
                 values.len()
-            ));
+            ))
+            .with(Context::dimension(dimension)));
         }
         if let Some(slots) = &slots {
             values.select(slots);
@@ -597,9 +687,10 @@ pub(crate) fn read_typed_members_with_positions(
         }
         if kind == 0x0304 {
             if let MemberValues::Int64(ordinals) = &values {
-                if let Some(text) = referenced_strings(&dir, ordinals)
-                    .map_err(|e| format!("dimension {dimension}, field {name}: {e}"))?
-                {
+                if let Some(text) = referenced_strings(&dir, ordinals).map_err(|e| {
+                    e.reword(|e| format!("dimension {dimension}, field {name}: {e}"))
+                        .with(Context::dimension(dimension))
+                })? {
                     values = text;
                 }
             }
@@ -612,7 +703,11 @@ pub(crate) fn read_typed_members_with_positions(
             .saturating_add(time_serials.capacity().saturating_mul(16))
             .saturating_add(time_aux.capacity().saturating_mul(16));
         if expanded_bytes > MAX_MEMBER_MEMORY {
-            return Err("member maps exceed the 256 MiB memory safety limit".into());
+            return Err(IvtError::resource_limit(
+                "member maps exceed the 256 MiB memory safety limit",
+                None,
+                Some(MAX_MEMBER_MEMORY as u64),
+            ));
         }
         if kind == 0x0180 {
             if let Some(slots) = &slots {

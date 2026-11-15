@@ -9,12 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Rejected files report a verdict first. Messages start with `Corrupt IVT file:` for bad signatures or header words, truncation, and offsets outside the file, or `Unsupported IVT file:` for valid files in an unrecognised layout. The previous low-level text follows `Details:`. Exceptions remain `ValueError`.
+- Rejected files report a verdict first. Messages start with `Corrupt IVT file:` for bad signatures or header words, truncation, and offsets outside the file, or `Unsupported IVT file:` for valid files in an unrecognised layout. The previous low-level text follows `Details:`.
 - Descriptor errors name the reason and the variant found, such as the axis matrix component header, row width, axis count, or the failing axis. Directory errors name their slot, declared offset and entry count.
 - Signature errors show the leading bytes and note files that start with zero bytes or look like HTML.
 
 ### Added
 
+- Typed exceptions: `pyivt.IvtError` (a `ValueError`) and its subclasses `CorruptFileError`, `UnsupportedFormatError`, and `ResourceLimitError` (also a `MemoryError`). Each exception has `offset`, `length`, `file_len`, `slot`, `entry`, and `dimension` attributes when they are known. `ResourceLimitError` adds `estimate` and `limit`. Error kinds come from the Rust error type, not from the message text. Messages are unchanged, and `except ValueError` still catches every parse error.
 - `python -m scripts.triage_files PATH ...` records whether each IVT or ZIP opens, is corrupt, or is unsupported, with its size, SHA-256, header bytes and message.
 
 ## [0.0.10] - 2026-11-10
