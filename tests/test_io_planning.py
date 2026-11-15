@@ -80,7 +80,7 @@ def test_heldout_path_open_issues_few_read_ops(product_id):
 
 def _export(path: Path):
     ivt = pyivt.open(path)
-    return ivt.to_arrow(), ivt.to_arrow(**{ivt._layout.slugs[0]: [1]})
+    return ivt.to_arrow(), ivt.to_arrow(select={ivt._layout.slugs[0]: [1]})
 
 
 @pytest.mark.parametrize("name", ["heldout/98100036.ivt", "98100018-paged.ivt"])

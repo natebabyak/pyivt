@@ -243,7 +243,7 @@ def test_memory_limit_raises_resource_limit_error():
     assert isinstance(error, ValueError)
     assert error.limit == 2_147_483_648
     assert error.estimate is not None and error.estimate > error.limit
-    assert "2 GiB safety limit" in str(error)
+    assert "max_memory_bytes limit of 2 GiB" in str(error)
 
 
 def test_corrupt_value_page_raises_corrupt_file_error_on_decode():

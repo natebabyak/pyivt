@@ -104,12 +104,28 @@ def test_reader_does_not_expose_the_arrow_stream_protocol():
     assert not hasattr(pyivt.open(_typed_fixture()), "__arrow_c_stream__")
 
 
-def test_public_memory_knob_removed():
+def test_max_memory_bytes_bounds_exports():
     ivt = pyivt.open(_typed_fixture())
-    for method in (ivt.to_arrow, ivt.to_member_table):
-        with pytest.raises(ValueError, match="max_memory_bytes"):
-            method(max_memory_bytes=1)
-    assert ivt.to_arrow().num_rows == 12
+    for export in (ivt.to_arrow, ivt.iter_batches):
+        with pytest.raises(pyivt.ResourceLimitError, match="1000 bytes") as raised:
+            export(max_memory_bytes=1000)
+        assert raised.value.limit == 1000
+        for bad in (0, -1):
+            with pytest.raises(ValueError, match="must be positive"):
+                export(max_memory_bytes=bad)
+    roomy = 64 * 1024 * 1024
+    assert ivt.to_arrow(max_memory_bytes=roomy).equals(ivt.to_arrow())
+    assert ivt.iter_batches(max_memory_bytes=roomy).read_all().equals(ivt.to_arrow())
+
+
+def test_raising_max_memory_bytes_admits_larger_exports():
+    ivt = pyivt.open(cube((1000, 1000, 250), label_fields=0))
+    select = {"axis_0": list(range(1, 21))}
+    with pytest.raises(pyivt.ResourceLimitError) as raised:
+        ivt.to_arrow(select=select, max_memory_bytes=16 * 1024 * 1024)
+    needed = raised.value.estimate
+    assert needed is not None
+    assert ivt.to_arrow(select=select, max_memory_bytes=needed).num_rows == 5_000_000
 
 
 def test_streaming_large_table_keeps_dictionary_buffers_shared():
@@ -225,8 +241,8 @@ def test_local_files_stream_to_same_logical_table(path):
 
 
 def _assert_stream_matches(ivt, batch_size, **dims):
-    expected = ivt.to_arrow(**dims)
-    reader = ivt.iter_batches(batch_size=batch_size, **dims)
+    expected = ivt.to_arrow(select=dims)
+    reader = ivt.iter_batches(batch_size=batch_size, select=dims)
     assert isinstance(reader, pa.RecordBatchReader)
     assert reader.schema.equals(expected.schema, check_metadata=True)
     batches = list(reader)
@@ -273,9 +289,9 @@ def test_iter_batches_rejects_bad_arguments():
     with pytest.raises(ValueError, match="batch_size"):
         ivt.iter_batches(batch_size=0)
     with pytest.raises(ValueError, match="unknown dimension"):
-        ivt.iter_batches(nope=1)
-    with pytest.raises(ValueError, match="max_memory_bytes"):
-        ivt.iter_batches(max_memory_bytes=1)
+        ivt.iter_batches(select={"nope": 1})
+    with pytest.raises(ValueError, match="max_memory_bytes must be positive"):
+        ivt.iter_batches(max_memory_bytes=0)
 
 
 def test_iter_batches_streams_selections_too_large_to_materialize():
