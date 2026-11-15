@@ -352,7 +352,8 @@ class Ivt:
     Open a reader with pyivt.open(source). Metadata and member lookups are
     available without decoding cells. Each to_arrow() call builds a new
     table that the reader does not retain, so dropping the table releases
-    its buffers. The reader does not modify the source file.
+    its buffers. iter_batches() streams the same table in bounded memory.
+    The reader does not modify the source file.
 
     ```python
     import pyivt
@@ -386,6 +387,36 @@ class Ivt:
         reference to the result, so dropping it releases its memory; repeated
         identical calls return equal but independent tables. A reader opened
         from a path reads the file for each export and does not keep it.
+
+        The whole result must fit an internal 2 GiB memory estimate, which
+        counts the output and one copy of the file. Larger selections raise
+        pyivt.ResourceLimitError; stream them with iter_batches() instead.
+        """
+    def iter_batches(
+        self, /, *, batch_size: int = 1_048_576, **dims: object
+    ) -> pa.RecordBatchReader:
+        """Stream the to_arrow() table as record batches of at most batch_size rows.
+
+        Takes the same dimension keywords as to_arrow(). Batches arrive in file
+        order and share to_arrow()'s schema and metadata, so concatenating them
+        equals to_arrow(**dims). Each batch is decoded when the consumer asks
+        for it, without holding the GIL. Memory stays near one copy of the file
+        plus about two batches, whatever the total row count.
+
+        The reader implements the Arrow C stream protocol, so pyarrow,
+        polars.DataFrame(reader), DuckDB and other consumers read it without
+        copying. A stream can be read once. It keeps its own reference to
+        the file contents, so it outlives the Ivt and later changes to the
+        path. A corrupt page raises when its batch is read and ends the
+        stream. batch_size must be positive; a batch too large for the
+        internal 2 GiB estimate raises pyivt.ResourceLimitError.
+
+        ```python
+        with ivt.iter_batches(geography=[1, 2]) as reader:
+            for batch in reader:
+                ...
+        frame = polars.DataFrame(ivt.iter_batches())
+        ```
         """
     def to_member_table(
         self, /, *, language: Literal["en", "fr"] = "en", **dims: object
@@ -423,7 +454,8 @@ def open(
 
     ### Returns
 
-    An `Ivt` reader exposing `metadata`, `to_member_table()`, and `to_arrow()`. Summary
+    An `Ivt` reader exposing `metadata`, `to_member_table()`, `to_arrow()` and
+    `iter_batches()`. Summary
     metadata is parsed immediately. Cell decoding happens during
     export.
 

@@ -1,6 +1,7 @@
 """Streaming contracts, bounded allocation and page/range boundary coverage."""
 
 import gc
+import os
 import struct
 from concurrent.futures import ThreadPoolExecutor
 from math import prod
@@ -221,3 +222,122 @@ def test_local_files_stream_to_same_logical_table(path):
     streamed = expanded_table(ivt)
     assert streamed.num_rows == prod(ivt._layout.counts)
     assert streamed["value"].equals(ivt.to_arrow()["value"])
+
+
+def _assert_stream_matches(ivt, batch_size, **dims):
+    expected = ivt.to_arrow(**dims)
+    reader = ivt.iter_batches(batch_size=batch_size, **dims)
+    assert isinstance(reader, pa.RecordBatchReader)
+    assert reader.schema.equals(expected.schema, check_metadata=True)
+    batches = list(reader)
+    assert all(batch.num_rows <= batch_size for batch in batches)
+    assert all(
+        batch.schema.equals(expected.schema, check_metadata=True) for batch in batches
+    )
+    streamed = pa.Table.from_batches(batches, schema=reader.schema)
+    assert streamed.combine_chunks().equals(expected.combine_chunks())
+    assert streamed.schema.metadata == expected.schema.metadata
+
+
+@pytest.mark.parametrize("batch_size", [1, 5, 7, 12, 1_000])
+def test_iter_batches_matches_to_arrow_across_batch_sizes(batch_size):
+    _assert_stream_matches(pyivt.open(_typed_fixture()), batch_size)
+
+
+@pytest.mark.parametrize("batch_size", [1, 511, 3 * 2051 * 3 - 1, 4096, 1_048_576])
+def test_iter_batches_crosses_windows_and_selections(batch_size):
+    ivt = pyivt.open(_populated_cube())
+    _assert_stream_matches(ivt, batch_size)
+    slugs = ivt._layout.slugs
+    _assert_stream_matches(
+        ivt, batch_size, **{slugs[0]: [1, 3], slugs[1]: list(range(500, 1600, 3))}
+    )
+    _assert_stream_matches(ivt, batch_size, **{slugs[0]: 2, slugs[2]: [3]})
+
+
+def test_iter_batches_default_size_and_consumers():
+    ivt = pyivt.open(_populated_cube())
+    expected = ivt.to_arrow()
+    with ivt.iter_batches() as reader:
+        assert reader.read_all().combine_chunks().equals(expected.combine_chunks())
+    pl = pytest.importorskip("polars")
+    frame = pl.DataFrame(ivt.iter_batches(batch_size=4096))
+    assert frame.height == expected.num_rows
+    assert frame.equals(pl.from_arrow(expected))
+    batches = list(pl.DataFrame(ivt.iter_batches(batch_size=4096)).iter_slices())
+    assert sum(len(batch) for batch in batches) == expected.num_rows
+
+
+def test_iter_batches_rejects_bad_arguments():
+    ivt = pyivt.open(_typed_fixture())
+    with pytest.raises(ValueError, match="batch_size"):
+        ivt.iter_batches(batch_size=0)
+    with pytest.raises(ValueError, match="unknown dimension"):
+        ivt.iter_batches(nope=1)
+    with pytest.raises(ValueError, match="max_memory_bytes"):
+        ivt.iter_batches(max_memory_bytes=1)
+
+
+def test_iter_batches_streams_selections_too_large_to_materialize():
+    ivt = pyivt.open(cube((1000, 1000, 250), label_fields=0))
+    with pytest.raises(pyivt.ResourceLimitError, match="iter_batches"):
+        ivt.to_arrow()
+    with ivt.iter_batches() as reader:
+        first = reader.read_next_batch()
+    assert first.num_rows == 1_048_576
+    assert first.schema.equals(reader.schema)
+    with pytest.raises(pyivt.ResourceLimitError):
+        ivt.iter_batches(batch_size=250_000_000)
+
+
+def test_iter_batches_owns_source_and_releases_path_bytes(tmp_path):
+    path = tmp_path / "cube.ivt"
+    path.write_bytes(_populated_cube())
+    ivt = pyivt.open(path)
+    expected = ivt.to_arrow()
+    reader = ivt.iter_batches(batch_size=1000)
+    del ivt
+    gc.collect()
+    path.unlink()
+    assert reader.read_all().combine_chunks().equals(expected.combine_chunks())
+
+
+def test_iter_batches_corrupt_page_ends_stream():
+    data = bytearray(cube((2, 1000, 1000), label_fields=0))
+    directory = struct.unpack_from("<I", data, 558)[0]
+    struct.pack_into("<IHH", data, directory + 512 * 8, len(data) + 100, 8, 8)
+    with pyivt.open(bytes(data)).iter_batches(batch_size=1_000_000) as reader:
+        assert reader.read_next_batch().num_rows == 1_000_000
+        with pytest.raises(pa.ArrowException, match="outside file"):
+            reader.read_next_batch()
+        with pytest.raises(StopIteration):
+            reader.read_next_batch()
+
+
+@pytest.mark.parametrize(
+    "path", sorted((Path(__file__).resolve().parents[1] / "data").glob("*.ivt"))
+)
+def test_local_files_iter_batches_concatenate_to_to_arrow(path):
+    ivt = pyivt.open(path)
+    try:
+        expected = ivt.to_arrow()
+    except pyivt.ResourceLimitError:
+        pytest.skip("too large to materialize")
+    batch_size = max(1, expected.num_rows // 7)
+    with ivt.iter_batches(batch_size=batch_size) as reader:
+        streamed = reader.read_all()
+    assert streamed.schema.equals(expected.schema, check_metadata=True)
+    assert streamed.combine_chunks().equals(expected.combine_chunks())
+
+
+@pytest.mark.skipif(
+    "PYIVT_LARGE_IVT" not in os.environ,
+    reason="set PYIVT_LARGE_IVT to the held-out 98100532.ivt path",
+)
+def test_held_out_large_table_streams_in_full():
+    ivt = pyivt.open(os.environ["PYIVT_LARGE_IVT"])
+    rows = 0
+    with ivt.iter_batches() as reader:
+        for batch in reader:
+            rows += batch.num_rows
+    assert rows == prod(ivt._layout.counts) == 126_198_000

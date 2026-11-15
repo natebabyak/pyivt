@@ -154,7 +154,22 @@ is missing. Add `--language fr` to use French labels for enum names.
 ### Opening and exporting
 
 - `open(source, *, member=None)` returns an `Ivt`. It accepts a path, IVT or ZIP bytes, a `bytearray`, an object with `__bytes__`, or a binary file object. `member` selects an IVT inside a ZIP with several tables.
-- `to_arrow()` returns rows in file order with unsigned member codes and a nullable `float64` column named `value`.
+- `to_arrow()` returns rows in file order with unsigned member codes and a nullable `float64` column named `value`. It builds the whole table at once, so the result plus one copy of the file must fit an internal 2 GiB memory estimate; larger exports raise `pyivt.ResourceLimitError`.
+- `iter_batches(*, batch_size=1_048_576, **dims)` streams the same table as a `pyarrow.RecordBatchReader`. It takes the same selection keywords, keeps file order, and has the same schema and metadata, so its batches concatenate to `to_arrow(**dims)`. Batches are decoded on demand without the GIL, so memory stays near one copy of the file plus two batches. Use it for tables too large to materialize:
+
+  ```python
+  import polars as pl
+  import pyarrow.parquet as pq
+
+  with ivt.iter_batches() as reader:
+      with pq.ParquetWriter("table.parquet", reader.schema) as writer:
+          for batch in reader:
+              writer.write_batch(batch)
+
+  frame = pl.DataFrame(ivt.iter_batches(geography=[1, 2]))
+  ```
+
+  The full 126,198,000-row 98100532 table (208 MB file) streams in about 5 seconds with a peak working set under 300 MB.
 - `to_member_table()` returns one PyArrow table of member attributes, without decoding cells.
 - `pyivt.__version__` gives the package version.
 
@@ -166,7 +181,7 @@ Files that cannot be read raise a subclass of `pyivt.IvtError`. `IvtError` subcl
 | --- | --- | --- |
 | `pyivt.CorruptFileError` | The file is truncated, its signature or header is damaged, or a record or directory points outside the file. | `IvtError` |
 | `pyivt.UnsupportedFormatError` | The file is an IVT, but its container version, descriptor, or record layout is not supported. | `IvtError` |
-| `pyivt.ResourceLimitError` | A memory estimate exceeds a safety limit. Narrow the export with a selection. | `IvtError`, `MemoryError` |
+| `pyivt.ResourceLimitError` | A memory estimate exceeds a safety limit. Narrow the export with a selection, or stream it with `iter_batches()`. | `IvtError`, `MemoryError` |
 
 Messages lead with a plain explanation (`Corrupt IVT file: ...` or `Unsupported IVT file: ...`). Each exception also has location attributes, which are `None` when not known: `offset`, `length`, and `file_len` (bytes), `slot` (header slot), `entry` (directory entry), and `dimension` (zero-based axis). `ResourceLimitError` adds `estimate` and `limit` in bytes.
 

@@ -679,7 +679,8 @@ pub fn decode_selected(
     choices: &[Option<Vec<usize>>],
     selected_counts: &[usize],
     selected_strides: &[usize],
-    rows: usize,
+    start: usize,
+    end: usize,
 ) -> Result<arrow::array::Float64Array, IvtError> {
     let _profile = crate::profile::Stage::new("decode_values");
     use arrow::array::BooleanBufferBuilder;
@@ -705,6 +706,7 @@ pub fn decode_selected(
     for axis in (0..lay.n_dim - 1).rev() {
         native_strides[axis] = native_strides[axis + 1] * lay.counts[axis + 1] as usize;
     }
+    let rows = end.saturating_sub(start);
     let mut values = reserved(rows)?;
     let mut valid = BooleanBufferBuilder::new(rows);
     let mut cached: Option<(usize, PageCells)> = None;
@@ -713,7 +715,7 @@ pub fn decode_selected(
     let full_grid = choices.iter().all(Option::is_none);
     let mapped = lay.member_slots.iter().any(Option::is_some);
     let mut coords = vec![0usize; lay.n_dim];
-    for row in 0..rows {
+    for row in start..end {
         let native_row = if full_grid {
             row
         } else {
