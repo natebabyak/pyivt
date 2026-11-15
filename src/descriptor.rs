@@ -5,7 +5,7 @@ use regex::Regex;
 use std::collections::HashSet;
 
 use crate::bytes::{latin1, u16, u32};
-use crate::error::IvtError;
+use crate::error::{Context, IvtError};
 
 static SLUG_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"[^A-Za-z0-9]+").unwrap());
 
@@ -85,6 +85,13 @@ pub fn structured_descriptor(data: &[u8]) -> Result<Descriptor, IvtError> {
                     data.len()
                 ),
                 NO_FALLBACK,
+            )
+            .with(
+                Context::offset(offset)
+                    .and_length(length)
+                    .and_file_len(data.len())
+                    .and_slot(HDR_MASTER_PTR)
+                    .and_entry(1),
             )
         })?;
     let decoded = crate::decode::decompress_component(raw).map_err(|error| {

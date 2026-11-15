@@ -1,6 +1,7 @@
 //! Long/tidy table construction from decoded cells + metadata.
 
 use crate::decode::{CellBatch, Layout};
+use crate::error::{corrupt_record, IvtError};
 use crate::members::{read_typed_members, MemberValues};
 use crate::metadata::MissingValue;
 use arrow::array::builder::StringDictionaryBuilder;
@@ -75,7 +76,7 @@ struct MemberArray {
 }
 
 impl MemberArray {
-    fn new(values: ArrayRef) -> Result<Self, String> {
+    fn new(values: ArrayRef) -> Result<Self, IvtError> {
         let Some(text) = values.as_any().downcast_ref::<StringArray>() else {
             return Ok(Self {
                 data: values,
@@ -86,7 +87,7 @@ impl MemberArray {
         for value in text {
             match value {
                 Some(value) => {
-                    builder.append(value).map_err(|e| e.to_string())?;
+                    builder.append(value).map_err(IvtError::from)?;
                 }
                 None => builder.append_null(),
             }
@@ -105,27 +106,27 @@ impl MemberArray {
         })
     }
 
-    fn array(&self, keys: &Int32Array) -> Result<ArrayRef, String> {
+    fn array(&self, keys: &Int32Array) -> Result<ArrayRef, IvtError> {
         let Some(map) = self
             .data
             .as_any()
             .downcast_ref::<DictionaryArray<Int32Type>>()
         else {
-            return take(self.data.as_ref(), keys, None).map_err(|e| e.to_string());
+            return take(self.data.as_ref(), keys, None).map_err(IvtError::from);
         };
         let mapped = if self.identity {
             keys.clone()
         } else {
-            let lookup = take(map.keys(), keys, None).map_err(|e| e.to_string())?;
+            let lookup = take(map.keys(), keys, None).map_err(IvtError::from)?;
             lookup
                 .as_any()
                 .downcast_ref::<Int32Array>()
-                .ok_or("invalid dictionary key type")?
+                .ok_or_else(|| IvtError::Parse("invalid dictionary key type".into()))?
                 .clone()
         };
         DictionaryArray::<Int32Type>::try_new(mapped, Arc::clone(map.values()))
             .map(|a| Arc::new(a) as ArrayRef)
-            .map_err(|e| e.to_string())
+            .map_err(IvtError::from)
     }
 }
 
@@ -135,7 +136,7 @@ impl TidySchema {
         lay: &Layout,
         legends: &[MissingValue],
         memory_limit: usize,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, IvtError> {
         let _profile = crate::profile::Stage::new("prepare_member_arrays");
         let mut used: HashSet<String> =
             ["value", "status_code", "symbol", "status", "footnote_raw"]
@@ -144,7 +145,9 @@ impl TidySchema {
                 .collect();
         for slug in &lay.slugs {
             if !used.insert(slug.clone()) {
-                return Err(format!("dimension column name collision: {slug}"));
+                return Err(IvtError::Parse(format!(
+                    "dimension column name collision: {slug}"
+                )));
             }
         }
         let mut fields = Vec::new();
@@ -164,9 +167,10 @@ impl TidySchema {
                     MemberValues::Date32(v) => Arc::new(Date32Array::from(v)),
                 };
                 if values.len() != lay.counts[axis] as usize {
-                    return Err(format!(
+                    return Err(corrupt_record(format!(
                         "dimension {slug}, field {name}: incomplete member map"
-                    ));
+                    ))
+                    .with(crate::error::Context::dimension(axis)));
                 }
                 let field_slug = crate::descriptor::dim_slugs(&[name])[0].clone();
                 let base = format!("{slug}_{field_slug}");
@@ -193,7 +197,7 @@ impl TidySchema {
                     .saturating_add(dictionary_bytes.saturating_mul(4))
                     > memory_limit
                 {
-                    return Err(format!("member dictionaries exceed max_memory_bytes={memory_limit}; increase the memory budget"));
+                    return Err(IvtError::resource_limit(format!("member dictionaries exceed max_memory_bytes={memory_limit}; increase the memory budget"), None, Some(memory_limit as u64)));
                 }
                 fields.push(Field::new(name, kind, true));
                 arrays.push(values);
@@ -246,7 +250,7 @@ impl TidySchema {
         })
     }
 
-    pub fn record_batch(&self, mut cells: CellBatch) -> Result<RecordBatch, String> {
+    pub fn record_batch(&self, mut cells: CellBatch) -> Result<RecordBatch, IvtError> {
         let _profile = crate::profile::Stage::new("attach_metadata");
         let mut arrays: Vec<ArrayRef> = Vec::new();
         for (ids, fields) in cells.ids.into_iter().zip(&self.members) {
@@ -291,9 +295,9 @@ impl TidySchema {
                 Arc::new(UInt16Array::from(cells.notes)),
                 None,
             )
-            .map_err(|e| e.to_string())?,
+            .map_err(IvtError::from)?,
         ));
-        RecordBatch::try_new(Arc::clone(&self.schema), arrays).map_err(|e| e.to_string())
+        RecordBatch::try_new(Arc::clone(&self.schema), arrays).map_err(IvtError::from)
     }
 }
 

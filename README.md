@@ -154,6 +154,29 @@ is missing. Add `--language fr` to use French labels for enum names.
 - `to_member_table()` returns one PyArrow table of member attributes, without decoding cells.
 - `pyivt.__version__` gives the package version.
 
+### Errors
+
+Files that cannot be read raise a subclass of `pyivt.IvtError`. `IvtError` subclasses `ValueError`, so `except ValueError` still catches every parse error.
+
+| Exception | Raised when | Also a |
+| --- | --- | --- |
+| `pyivt.CorruptFileError` | The file is truncated, its signature or header is damaged, or a record or directory points outside the file. | `IvtError` |
+| `pyivt.UnsupportedFormatError` | The file is an IVT, but its container version, descriptor, or record layout is not supported. | `IvtError` |
+| `pyivt.ResourceLimitError` | A memory estimate exceeds a safety limit. Narrow the export with a selection. | `IvtError`, `MemoryError` |
+
+Messages lead with a plain explanation (`Corrupt IVT file: ...` or `Unsupported IVT file: ...`). Each exception also has location attributes, which are `None` when not known: `offset`, `length`, and `file_len` (bytes), `slot` (header slot), `entry` (directory entry), and `dimension` (zero-based axis). `ResourceLimitError` adds `estimate` and `limit` in bytes.
+
+```python
+try:
+    ivt = pyivt.open("table.ivt")
+except pyivt.CorruptFileError as error:
+    print(f"damaged at byte {error.offset} of {error.file_len}: {error}")
+except pyivt.UnsupportedFormatError as error:
+    print(f"not supported: {error}")
+```
+
+An unreadable path still raises `OSError`. Invalid arguments, such as an unknown dimension name in `to_arrow()`, raise `ValueError`.
+
 ### Member lookup table
 
 - `dimension` is the first column and contains dictionary-encoded dimension slugs. Rows follow dimension order and then member order in the IVT file.

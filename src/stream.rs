@@ -1,6 +1,7 @@
 //! Bounded native reader for the detailed Arrow export.
 
 use crate::decode::{decode_range, row_count, Layout};
+use crate::error::IvtError;
 use crate::tidy::TidySchema;
 use arrow::datatypes::SchemaRef;
 use arrow::error::ArrowError;
@@ -23,15 +24,19 @@ pub fn preflight(
     bytes_per_row: usize,
     fixed: usize,
     limit: usize,
-) -> Result<(), String> {
+) -> Result<(), IvtError> {
     let estimated = rows
         .checked_mul(bytes_per_row)
         .and_then(|n| n.checked_mul(2))
         .and_then(|n| n.checked_add(fixed));
     if estimated.is_none_or(|n| n > limit) {
-        return Err(format!(
-            "memory estimate for {rows} rows exceeds max_memory_bytes={limit} (estimated {} bytes)",
-            estimated.map_or_else(|| "more than addressable memory".into(), |n| n.to_string())
+        return Err(IvtError::resource_limit(
+            format!(
+                "memory estimate for {rows} rows exceeds max_memory_bytes={limit} (estimated {} bytes)",
+                estimated.map_or_else(|| "more than addressable memory".into(), |n| n.to_string())
+            ),
+            estimated.map(|n| n as u64),
+            Some(limit as u64),
         ));
     }
     Ok(())
@@ -43,7 +48,7 @@ impl BatchReader {
         layout: Layout,
         maps: Arc<TidySchema>,
         limit: usize,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, IvtError> {
         const TARGET_ROWS: usize = 1_000_000;
         let total = row_count(&layout)?;
         // Prefer boundaries along the outermost dimension. Split an oversized
@@ -70,9 +75,9 @@ impl BatchReader {
     }
 }
 
-impl Iterator for BatchReader {
-    type Item = Result<RecordBatch, ArrowError>;
-    fn next(&mut self) -> Option<Self::Item> {
+impl BatchReader {
+    /// Next batch with its typed error; the Arrow iterator wraps this.
+    pub fn next_batch(&mut self) -> Option<Result<RecordBatch, IvtError>> {
         if self.position >= self.total {
             return None;
         }
@@ -81,10 +86,17 @@ impl Iterator for BatchReader {
             .saturating_add(self.batch_size)
             .min(self.total);
         let result = decode_range(&self.data, &self.layout, self.position, end)
-            .and_then(|cells| self.maps.record_batch(cells))
-            .map_err(ArrowError::ParseError);
+            .and_then(|cells| self.maps.record_batch(cells));
         self.position = if result.is_ok() { end } else { self.total };
         Some(result)
+    }
+}
+
+impl Iterator for BatchReader {
+    type Item = Result<RecordBatch, ArrowError>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next_batch()
+            .map(|result| result.map_err(|e| ArrowError::ParseError(e.to_string())))
     }
 }
 

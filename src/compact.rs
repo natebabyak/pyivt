@@ -1,5 +1,6 @@
 //! Compact materialization: one unsigned code column per included axis and owned value buffers.
 use crate::decode::{decode_selected, Layout};
+use crate::error::{limit_exceeded, IvtError};
 use arrow::array::{ArrayRef, UInt16Array, UInt32Array, UInt64Array, UInt8Array};
 use arrow::datatypes::{Field, Schema};
 use arrow::record_batch::RecordBatch;
@@ -27,9 +28,11 @@ pub fn export(
     layout: &Layout,
     selection: Vec<AxisProjection>,
     metadata: HashMap<String, String>,
-) -> Result<RecordBatch, String> {
+) -> Result<RecordBatch, IvtError> {
     if selection.len() != layout.n_dim {
-        return Err("selection does not match the layout".into());
+        return Err(IvtError::Parse(
+            "selection does not match the layout".into(),
+        ));
     }
     let mut choices = Vec::with_capacity(layout.n_dim);
     let mut counts = Vec::with_capacity(layout.n_dim);
@@ -40,10 +43,10 @@ pub fn export(
             if indices.last().is_some_and(|&index| index >= count)
                 || indices.windows(2).any(|pair| pair[0] >= pair[1])
             {
-                return Err(format!(
+                return Err(IvtError::Parse(format!(
                     "dimension {}: invalid or unsorted member positions",
                     layout.slugs[axis]
-                ));
+                )));
             }
             indices.len()
         } else {
@@ -61,9 +64,9 @@ pub fn export(
     let mut rows = 1usize;
     for axis in (0..layout.n_dim).rev() {
         strides[axis] = rows;
-        rows = rows
-            .checked_mul(counts[axis])
-            .ok_or("selected dimension product exceeds addressable memory")?;
+        rows = rows.checked_mul(counts[axis]).ok_or_else(|| {
+            limit_exceeded("selected dimension product exceeds addressable memory")
+        })?;
     }
     // The compact path constructs its final owned buffers directly.
     let bytes_per_row = 9 + widths.iter().sum::<usize>();
@@ -73,13 +76,19 @@ pub fn export(
         .and_then(|n| n.checked_add(fixed))
         .is_none_or(|n| n > MEMORY_LIMIT)
     {
-        return Err(format!("memory estimate for {rows} rows exceeds the internal 2 GiB safety limit; reduce the selection"));
+        return Err(IvtError::resource_limit(
+            format!("memory estimate for {rows} rows exceeds the internal 2 GiB safety limit; reduce the selection"),
+            rows.checked_mul(bytes_per_row)
+                .and_then(|n| n.checked_add(fixed))
+                .map(|n| n as u64),
+            Some(MEMORY_LIMIT as u64),
+        ));
     }
 
     // Column buffers are independent. Bound native concurrency and transfer
     // ownership into Arrow; no full-size dimension IDs or metadata columns.
     let mut columns: Vec<(Field, ArrayRef)> = Vec::new();
-    std::thread::scope(|scope| -> Result<(), String> {
+    std::thread::scope(|scope| -> Result<(), IvtError> {
         let value_task =
             scope.spawn(|| decode_selected(data, layout, &choices, &counts, &strides, rows));
         let columns_profile = crate::profile::Stage::new("build_dimension_columns");
@@ -94,7 +103,7 @@ pub fn export(
                     let mut codes = Vec::<$native>::new();
                     codes
                         .try_reserve_exact(rows)
-                        .map_err(|_| "memory allocation failed for member codes")?;
+                        .map_err(|_| limit_exceeded("memory allocation failed for member codes"))?;
                     codes.extend((0..rows).map(|row| {
                         let index = row / stride % count;
                         let code = choices[axis].as_ref().map_or(index, |c| c[index]) as u64 + 1;
@@ -118,7 +127,7 @@ pub fn export(
         let values: ArrayRef = Arc::new(
             value_task
                 .join()
-                .map_err(|_| "value decoder thread panicked")??,
+                .map_err(|_| IvtError::Parse("value decoder thread panicked".into()))??,
         );
         columns.push((
             Field::new("value", values.data_type().clone(), true),
@@ -131,7 +140,7 @@ pub fn export(
         Arc::new(Schema::new_with_metadata(fields, metadata)),
         arrays,
     )
-    .map_err(|e| e.to_string())
+    .map_err(IvtError::from)
 }
 
 #[cfg(test)]

@@ -206,7 +206,7 @@ class IvtMetadata:
 
     Summary properties are available after open(). Dimensions, geographies,
     footnotes and missing_values are loaded on first access and cached. Accessing
-    these lazy properties may raise ValueError if metadata cannot be read or
+    these lazy properties may raise pyivt.IvtError if metadata cannot be read or
     parsed. Returned lists and nested objects are snapshots; modifying a Python
     list does not update the reader or source file. Optional fields use None
     when unavailable. Instances cannot be constructed directly.
@@ -282,21 +282,21 @@ class IvtMetadata:
         """Dimensions in file order, loaded on first access and cached.
 
         Returns a list of Dimension snapshots with member labels and notes.
-        Raises ValueError if the required metadata cannot be loaded or parsed.
+        Raises pyivt.IvtError if the required metadata cannot be loaded or parsed.
         """
     @property
     def geographies(self) -> Geographies:
         """Geography member lists, loaded on first access and cached.
 
         Returns Geographies for the axis selected by the geographic dimension.
-        Unavailable fields are None. Raises ValueError on metadata loading errors.
+        Unavailable fields are None. Raises pyivt.IvtError on metadata loading errors.
         """
     @property
     def footnotes(self) -> list[Footnote]:
         """Annotation legend entries, loaded on first access and cached.
 
         Returns one `Footnote` per legend entry, with a localized `description`,
-        or an empty list when no entries are found. Raises `ValueError` on errors.
+        or an empty list when no entries are found. Raises `pyivt.IvtError` on errors.
 
         ```python
         for note in ivt.metadata.footnotes:
@@ -309,7 +309,7 @@ class IvtMetadata:
 
         Returns MissingValue entries linking numeric codes to symbols and
         localized descriptions, or an empty list if none are found. Raises
-        ValueError on loading errors. Use the Arrow C stream for per-cell statuses.
+        pyivt.IvtError on loading errors. Use the Arrow C stream for per-cell statuses.
         """
     def _loaded(self, name: str) -> bool:
         """Internal diagnostic: whether a named lazy metadata field is cached."""
@@ -423,11 +423,17 @@ def open(
 
     - `TypeError`: unsupported source, path representation or `read()` result.
     - `OSError`: the source path cannot be opened or read.
-    - `ValueError`: invalid or unsupported IVT header, descriptor or layout.
-      Messages for rejected files start with `Corrupt IVT file:` (bad
-      signature or header, truncation, or offsets outside the file) or
-      `Unsupported IVT file:` (a valid file in a layout pyivt cannot read).
-      Low-level details follow `Details:`.
+    - `pyivt.CorruptFileError`: bad signature or header, truncation, or
+      offsets outside the file. Messages start with `Corrupt IVT file:`.
+    - `pyivt.UnsupportedFormatError`: a valid file in a container version,
+      descriptor or layout pyivt cannot read. Messages start with
+      `Unsupported IVT file:`.
+    - `pyivt.ResourceLimitError`: a memory estimate exceeds a safety limit.
+      Also a `MemoryError`.
+
+    All three subclass `pyivt.IvtError`, itself a `ValueError`, and carry
+    `offset`, `length`, `file_len`, `slot`, `entry` and `dimension` attributes
+    (`None` when unknown). Low-level details follow `Details:`.
 
     ### Notes
 

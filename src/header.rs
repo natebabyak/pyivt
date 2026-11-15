@@ -1,7 +1,7 @@
 //! Fixed header offsets and page-directory anchoring.
 
 use crate::bytes::{u16, u32};
-use crate::error::IvtError;
+use crate::error::{Context, IvtError};
 
 pub const HDR_DESCRIPTOR_PTR: usize = 32;
 pub const HDR_TITLE_FR_PTR: usize = 40;
@@ -81,7 +81,8 @@ pub fn read_header_ex(data: &[u8], file_len: usize) -> Result<HeaderLayout, IvtE
                 "the file is truncated or not an IVT file: an IVT header needs at least {HEADER_LEN} bytes but the file is {file_len} bytes"
             ),
             "IVT file too small to contain a header",
-        ));
+        )
+        .with(Context::offset(0u64).and_length(HEADER_LEN).and_file_len(file_len)));
     }
     let container_version = u16(data, 0);
     if data[2..4] == [0x20, 0] && ![2, 4].contains(&container_version) {
@@ -90,7 +91,8 @@ pub fn read_header_ex(data: &[u8], file_len: usize) -> Result<HeaderLayout, IvtE
                 "unsupported IVT container version {container_version}; supported versions are 2 and 4"
             ),
             format!("first bytes are {}", hex(&data[..4])),
-        ));
+        )
+        .with(Context::offset(0u64).and_file_len(file_len)));
     }
     if data[2..4] != [0x20, 0] {
         return Err(IvtError::corrupt(
@@ -100,7 +102,8 @@ pub fn read_header_ex(data: &[u8], file_len: usize) -> Result<HeaderLayout, IvtE
                 content_hint(data)
             ),
             format!("unrecognised IVT signature: {:02x?}", &data[..4]),
-        ));
+        )
+        .with(Context::offset(0u64).and_file_len(file_len)));
     }
     for (offset, expected) in [(8, 0x40), (10, 8), (16, 0x20), (18, 14), (20, 0x1000)] {
         let actual = u16(data, offset);
@@ -110,7 +113,8 @@ pub fn read_header_ex(data: &[u8], file_len: usize) -> Result<HeaderLayout, IvtE
                     "the header is corrupted: the fixed header word at byte {offset} is {actual:#x}, but every IVT file stores {expected:#x} there"
                 ),
                 format!("invalid IVT header at byte {offset}: expected {expected}, got {actual}"),
-            ));
+            )
+            .with(Context::offset(offset).and_file_len(file_len)));
         }
     }
     let slots = slot_table_range(data).ok_or_else(|| {
@@ -126,7 +130,8 @@ pub fn read_header_ex(data: &[u8], file_len: usize) -> Result<HeaderLayout, IvtE
                 slots.start
             ),
             format!("invalid IVT slot table offset: {}", slots.start),
-        ));
+        )
+        .with(Context::offset(slots.start).and_file_len(file_len)));
     }
     if slots.end > file_len {
         return Err(IvtError::corrupt(
@@ -138,6 +143,11 @@ pub fn read_header_ex(data: &[u8], file_len: usize) -> Result<HeaderLayout, IvtE
                 "IVT slot table extends past EOF: expected bytes {}..{}, file_len={file_len}",
                 slots.start, slots.end
             ),
+        )
+        .with(
+            Context::offset(slots.start)
+                .and_length(slots.len())
+                .and_file_len(file_len),
         ));
     }
     let fr = u32(data, HDR_TITLE_FR_PTR);

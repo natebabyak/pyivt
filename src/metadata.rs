@@ -7,7 +7,7 @@ use std::path::Path;
 
 use crate::bytes::{latin1, u16, u32};
 use crate::descriptor::{parse_descriptor, Descriptor, DimDesc};
-use crate::error::IvtError;
+use crate::error::{Context, IvtError};
 use crate::header::{
     dim_slots, read_header, read_header_ex, HeaderLayout, DIM_SLOT_STRIDE, HDR_DESCRIPTOR_PTR,
     HDR_DIM_SLOT0, HDR_MASTER_PTR, HDR_STATUS_LEGEND,
@@ -159,33 +159,33 @@ pub struct IvtMetadata {
 }
 
 impl IvtMetadata {
-    pub fn dimensions(&mut self) -> Result<&Vec<Dimension>, String> {
-        self.ensure_dimensions().map_err(|e| e.to_string())?;
+    pub fn dimensions(&mut self) -> Result<&Vec<Dimension>, IvtError> {
+        self.ensure_dimensions()?;
         Ok(self.dimensions.as_ref().unwrap())
     }
 
-    pub fn geographies(&mut self) -> Result<&Geographies, String> {
-        self.ensure_geographies().map_err(|e| e.to_string())?;
+    pub fn geographies(&mut self) -> Result<&Geographies, IvtError> {
+        self.ensure_geographies()?;
         Ok(self.geographies.as_ref().unwrap())
     }
 
-    pub fn footnotes(&mut self) -> Result<&Vec<Footnote>, String> {
+    pub fn footnotes(&mut self) -> Result<&Vec<Footnote>, IvtError> {
         if self.footnotes.is_none() {
             self.footnotes = Some(if let Some(data) = &self.metadata_image {
                 footnotes(data)
             } else {
-                footnotes_from_source(&self.source).map_err(|e| e.to_string())?
+                footnotes_from_source(&self.source)?
             });
         }
         Ok(self.footnotes.as_ref().unwrap())
     }
 
-    pub fn missing_values(&mut self) -> Result<&Vec<MissingValue>, String> {
+    pub fn missing_values(&mut self) -> Result<&Vec<MissingValue>, IvtError> {
         if self.missing_values.is_none() {
             self.missing_values = Some(if let Some(data) = &self.metadata_image {
                 missing_values(data)
             } else {
-                missing_values_from_source(&self.source).map_err(|e| e.to_string())?
+                missing_values_from_source(&self.source)?
             });
         }
         Ok(self.missing_values.as_ref().unwrap())
@@ -964,9 +964,9 @@ pub fn build_metadata(
     data: Vec<u8>,
     desc: Option<Descriptor>,
     hdr: Option<HeaderLayout>,
-) -> Result<IvtMetadata, String> {
+) -> Result<IvtMetadata, IvtError> {
     let source = IvtSource::from_bytes(data);
-    build_metadata_from_source(source, desc, hdr).map_err(|e| e.to_string())
+    build_metadata_from_source(source, desc, hdr)
 }
 
 /// Path-based entry: open a file without reading it entirely for summary metadata.
@@ -1078,6 +1078,7 @@ fn directory_context(error: IvtError, header: &[u8], slot: usize, file_len: usiz
         ),
         format!("invalid directory: {what}; slot={slot} offset={offset} count={count} paged={paged} file_len={file_len}"),
     )
+    .with(Context::offset(offset).and_file_len(file_len).and_slot(slot))
 }
 
 /// Materialize only metadata directories and their declared records. Relocating
@@ -1148,6 +1149,13 @@ fn metadata_catalog(
                         i / 8,
                         u16(&directory, i + 6),
                     ),
+                )
+                .with(
+                    Context::offset(off)
+                        .and_length(length)
+                        .and_file_len(file_len)
+                        .and_slot(slot)
+                        .and_entry(i / 8),
                 ));
             }
             let relocated = if let Some(&at) = copied.get(&(off, length)) {

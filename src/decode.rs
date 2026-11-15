@@ -2,6 +2,7 @@
 
 use crate::bytes::{nextpow2, u16, u32};
 use crate::descriptor::{dim_slugs, DimDesc};
+use crate::error::{corrupt_record, limit_exceeded, unsupported_record, Context, IvtError};
 use crate::header::{HDR_DIR_PTR, HDR_MASTER_PTR, MARKER_WIDTHS};
 use crate::metadata_directory::MetadataDirectory;
 use std::collections::HashSet;
@@ -29,18 +30,19 @@ pub struct Layout {
     page_strides: Vec<i64>,
 }
 
-pub fn build_descriptor_layout(desc: &crate::descriptor::Descriptor) -> Result<Layout, String> {
+pub fn build_descriptor_layout(desc: &crate::descriptor::Descriptor) -> Result<Layout, IvtError> {
     let mut physical = desc.dims.clone();
     for (dim, slots) in physical.iter_mut().zip(&desc.member_slots) {
         if let Some(slots) = slots {
             if slots.len() != dim.count as usize || slots.windows(2).any(|s| s[0] >= s[1]) {
-                return Err("member slots do not match the axis matrix".into());
+                return Err(corrupt_record("member slots do not match the axis matrix"));
             }
             dim.count = slots
                 .last()
-                .ok_or("empty member slot map")?
+                .ok_or_else(|| corrupt_record("empty member slot map"))?
                 .checked_add(1)
-                .ok_or("member slot overflow")? as i64;
+                .ok_or_else(|| corrupt_record("member slot overflow"))?
+                as i64;
         }
     }
     let allocations = desc
@@ -55,11 +57,13 @@ pub fn build_descriptor_layout(desc: &crate::descriptor::Descriptor) -> Result<L
 }
 
 #[cfg(test)]
-fn value_trailer(b0: u8, b2: u8, b3: u8) -> Result<usize, String> {
+fn value_trailer(b0: u8, b2: u8, b3: u8) -> Result<usize, IvtError> {
     let w = b0 & 0x0F;
     let hi = b0 & 0xF0;
     if !MARKER_WIDTHS.contains(&w) || (hi != 0x80 && hi != 0xA0) || !(0x08..0x0F).contains(&b3) {
-        return Err(format!("unrecognised page marker 0x{b0:02x} .. 0x{b3:02x}"));
+        return Err(unsupported_record(format!(
+            "unrecognised page marker 0x{b0:02x} .. 0x{b3:02x}"
+        )));
     }
     let head = 32 * (b3 as usize - 8);
     if b2 == 0 {
@@ -138,12 +142,12 @@ fn cell_grid(counts: &[i64], stride: &[i64]) -> (Vec<Vec<i32>>, Vec<i32>) {
 }
 
 #[cfg(test)]
-pub fn build_layout(dims: &[DimDesc]) -> Result<Layout, String> {
+pub fn build_layout(dims: &[DimDesc]) -> Result<Layout, IvtError> {
     build_layout_with_geo(dims, crate::descriptor::geo_dim_index(dims))
 }
 
 #[cfg(any(test, feature = "fuzzing"))]
-pub fn build_layout_with_geo(dims: &[DimDesc], gd: Option<usize>) -> Result<Layout, String> {
+pub fn build_layout_with_geo(dims: &[DimDesc], gd: Option<usize>) -> Result<Layout, IvtError> {
     build_layout_with_allocations(dims, gd, None)
 }
 
@@ -151,17 +155,21 @@ fn build_layout_with_allocations(
     dims: &[DimDesc],
     gd: Option<usize>,
     allocations: Option<&[i64]>,
-) -> Result<Layout, String> {
+) -> Result<Layout, IvtError> {
     if dims.is_empty() || dims.iter().any(|dim| dim.count <= 0) {
-        return Err("descriptor must have dimensions with positive item counts".into());
+        return Err(corrupt_record(
+            "descriptor must have dimensions with positive item counts",
+        ));
     }
     let cnt: Vec<i64> = dims.iter().map(|d| d.count).collect();
     if cnt.iter().any(|&c| c > i32::MAX as i64) {
-        return Err("dimension member count exceeds int32 member IDs".into());
+        return Err(unsupported_record(
+            "dimension member count exceeds int32 member IDs",
+        ));
     }
     cnt.iter()
         .try_fold(1usize, |n, &c| n.checked_mul(c as usize))
-        .ok_or("dimension product exceeds addressable memory")?;
+        .ok_or_else(|| limit_exceeded("dimension product exceeds addressable memory"))?;
     let m = cnt.len();
     let didx: Vec<usize> = (1..=m).filter(|&i| Some(i) != gd).collect();
     let names: Vec<String> = didx.iter().map(|&i| dims[i - 1].name.clone()).collect();
@@ -210,7 +218,9 @@ fn build_layout_with_allocations(
             .zip(&cnt)
             .any(|(&capacity, &count)| capacity < count || capacity & (capacity - 1) != 0)
     {
-        return Err("axis allocation does not contain its declared members".into());
+        return Err(corrupt_record(
+            "axis allocation does not contain its declared members",
+        ));
     }
     let mut blk = 1i64;
     let mut straddle = 1usize;
@@ -258,7 +268,7 @@ fn build_layout_with_allocations(
         estride.push(eb);
         eb = ep
             .checked_mul(eb)
-            .ok_or("padded data directory size overflow")?;
+            .ok_or_else(|| corrupt_record("padded data directory size overflow"))?;
     }
 
     Ok(Layout {
@@ -311,33 +321,38 @@ struct PageCells {
 /// Decode the native component's zero suppression. Bitmap bits describe stored
 /// bytes, not data validity. Brwpro.exe 0x1402b5740 consumes little-endian u16
 /// words most-significant-bit first and supplies zero for an unset bit.
-pub fn decompress_component(data: &[u8]) -> Result<Vec<u8>, String> {
+pub fn decompress_component(data: &[u8]) -> Result<Vec<u8>, IvtError> {
     if data.len() < 2 {
-        return Err("truncated component header".into());
+        return Err(corrupt_record("truncated component header"));
     }
     let width = (data[0] & 15) as usize;
     let rank = data[1] as usize;
     if ![1, 2, 4, 8].contains(&width) || rank > 2 || data[0] & 0x50 != 0 {
-        return Err(format!("unsupported component header {:02x?}", &data[..2]));
+        return Err(unsupported_record(format!(
+            "unsupported component header {:02x?}",
+            &data[..2]
+        )));
     }
     let header = 2 + rank * 2;
     if data.len() < header {
-        return Err("truncated component extents".into());
+        return Err(corrupt_record("truncated component extents"));
     }
     let mut count = 1usize;
     for dim in 0..rank {
         count = count
             .checked_mul(u16(data, 2 + dim * 2) as usize)
-            .ok_or("component extent overflow")?;
+            .ok_or_else(|| corrupt_record("component extent overflow"))?;
     }
     let bytes = count
         .checked_mul(width)
         .and_then(|n| n.checked_add(header))
-        .ok_or("component size overflow")?;
+        .ok_or_else(|| corrupt_record("component size overflow"))?;
     // A native directory record has a u16 encoded length. Refuse adversarial
     // standalone extents before expansion, including all-zero compressed data.
     if bytes > 64 * 1024 * 1024 {
-        return Err("component expansion exceeds the 64 MiB safety limit".into());
+        return Err(limit_exceeded(
+            "component expansion exceeds the 64 MiB safety limit",
+        ));
     }
     // Rank-two byte components can declare huge extents. Validate encoded
     // input before allocating its expanded destination.
@@ -345,28 +360,28 @@ pub fn decompress_component(data: &[u8]) -> Result<Vec<u8>, String> {
         return data
             .get(..bytes)
             .map(|b| b.to_vec())
-            .ok_or_else(|| "truncated uncompressed component".into());
+            .ok_or_else(|| corrupt_record("truncated uncompressed component"));
     }
     let bitmap_len = count.div_ceil(16) * 2;
     let bitmap_end = header
         .checked_add(bitmap_len)
-        .ok_or("component size overflow")?;
+        .ok_or_else(|| corrupt_record("component size overflow"))?;
     if bitmap_end > data.len() {
-        return Err("truncated component bitmap".into());
+        return Err(corrupt_record("truncated component bitmap"));
     }
     let stored: usize = (0..count)
         .filter(|&i| u16(data, header + (i / 16) * 2) & (0x8000 >> (i % 16)) != 0)
         .count();
     let encoded_end = bitmap_end
         .checked_add(stored * width)
-        .ok_or("component size overflow")?;
+        .ok_or_else(|| corrupt_record("component size overflow"))?;
     if encoded_end > data.len() {
-        return Err("truncated component values".into());
+        return Err(corrupt_record("truncated component values"));
     }
     let mut result = Vec::new();
     result
         .try_reserve_exact(bytes)
-        .map_err(|_| "component allocation failed")?;
+        .map_err(|_| limit_exceeded("component allocation failed"))?;
     result.resize(bytes, 0);
     result[..header].copy_from_slice(&data[..header]);
     result[0] &= 0x7f;
@@ -381,18 +396,18 @@ pub fn decompress_component(data: &[u8]) -> Result<Vec<u8>, String> {
     Ok(result)
 }
 
-fn missing_mode(data: &[u8]) -> Result<u16, String> {
+fn missing_mode(data: &[u8]) -> Result<u16, IvtError> {
     let master = crate::header::slot_offset(data, HDR_MASTER_PTR)
-        .ok_or("missing or truncated table settings slot")?;
+        .ok_or_else(|| corrupt_record("missing or truncated table settings slot"))?;
     let raw = crate::metadata_directory::record(data, master, 2)
-        .ok_or("missing or truncated table settings")?;
+        .ok_or_else(|| corrupt_record("missing or truncated table settings"))?;
     let decoded = decompress_component(raw)?;
     if decoded.len() < 8 || decoded[..4] != [1, 1, 32, 0] {
-        return Err("unsupported table settings component".into());
+        return Err(unsupported_record("unsupported table settings component"));
     }
     let mode = u16(&decoded, 6);
     if ![0, 1, 3].contains(&mode) {
-        return Err(format!("invalid missing-value mode {mode}"));
+        return Err(corrupt_record(format!("invalid missing-value mode {mode}")));
     }
     Ok(mode)
 }
@@ -404,7 +419,7 @@ fn decode_page(
     _lay: &Layout,
     size: usize,
     mode: u16,
-) -> Result<PageCells, String> {
+) -> Result<PageCells, IvtError> {
     decode_page_impl(data, off, _lay, size, mode, true)
 }
 
@@ -415,19 +430,27 @@ fn decode_page_impl(
     size: usize,
     mode: u16,
     keep_notes: bool,
-) -> Result<PageCells, String> {
+) -> Result<PageCells, IvtError> {
     let raw = data
-        .get(off..off.checked_add(size).ok_or("page size overflow")?)
-        .ok_or("truncated page")?;
+        .get(
+            off..off
+                .checked_add(size)
+                .ok_or_else(|| corrupt_record("page size overflow"))?,
+        )
+        .ok_or_else(|| corrupt_record("truncated page"))?;
     let page = decompress_component(raw)?;
     let width = (page[0] & 15) as usize;
     if page[1] != 1 || !MARKER_WIDTHS.contains(&(width as u8)) {
-        return Err("data component must be a rank-one signed integer or double array".into());
+        return Err(unsupported_record(
+            "data component must be a rank-one signed integer or double array",
+        ));
     }
     let count = u16(&page, 2) as usize;
     // The browser represents an entirely zero page with a zero-length short.
     if count != 0 && count < PRES_BITS as usize {
-        return Err(format!("data component contains only {count} cells"));
+        return Err(corrupt_record(format!(
+            "data component contains only {count} cells"
+        )));
     }
     let scalar = |cell: usize| -> f64 {
         if count == 0 {
@@ -452,27 +475,32 @@ fn decode_page_impl(
     let trailer = page.get(4 + PRES_BITS as usize * width..).unwrap_or(&[]);
     if page[0] & 0x20 != 0 {
         if trailer.is_empty() {
-            return Err("missing extended page records".into());
+            return Err(corrupt_record("missing extended page records"));
         }
         let n = trailer[0] as usize;
         if !(1..=2).contains(&n) || trailer.len() < 1 + 2 * n {
-            return Err("invalid extended page record directory".into());
+            return Err(corrupt_record("invalid extended page record directory"));
         }
         let mut start = 1 + 2 * n;
         for index in 0..n {
             let size = u16(trailer, 1 + 2 * index) as usize;
             let record = trailer
-                .get(start..start.checked_add(size).ok_or("record size overflow")?)
-                .ok_or("truncated extended page record")?;
+                .get(
+                    start
+                        ..start
+                            .checked_add(size)
+                            .ok_or_else(|| corrupt_record("record size overflow"))?,
+                )
+                .ok_or_else(|| corrupt_record("truncated extended page record"))?;
             start += size;
             if record.len() < 2 {
-                return Err("truncated extended page record header".into());
+                return Err(corrupt_record("truncated extended page record header"));
             }
             match record[0] {
                 1 => {
                     let bits = record[1] as usize;
                     if ![1, 2, 4, 8].contains(&bits) || record.len() < 2 + 256 * bits {
-                        return Err("invalid packed missing-value record".into());
+                        return Err(corrupt_record("invalid packed missing-value record"));
                     }
                     for (cell, code) in codes.iter_mut().enumerate() {
                         let shift = 8 - bits - (cell * bits % 8);
@@ -482,17 +510,17 @@ fn decode_page_impl(
                 }
                 2 => {
                     if record.len() < 4 {
-                        return Err("truncated footnote record".into());
+                        return Err(corrupt_record("truncated footnote record"));
                     }
                     let n = u16(record, 2) as usize;
                     if record.len() < 4 + 2 * n {
-                        return Err("truncated footnote indices".into());
+                        return Err(corrupt_record("truncated footnote indices"));
                     }
                     for i in 0..n {
                         let packed = u16(record, 4 + i * 2);
                         let cell = (packed >> 5) as usize;
                         if cell >= codes.len() {
-                            return Err("footnote cell outside page".into());
+                            return Err(corrupt_record("footnote cell outside page"));
                         }
                         // Keep the recorded packed annotation reference intact.
                         if keep_notes {
@@ -500,12 +528,16 @@ fn decode_page_impl(
                         }
                     }
                 }
-                value => return Err(format!("unknown extended page record {value}")),
+                value => {
+                    return Err(unsupported_record(format!(
+                        "unknown extended page record {value}"
+                    )))
+                }
             }
         }
     } else {
         if !trailer.is_empty() && trailer.len() < 256 {
-            return Err("truncated legacy missing-value bitmap".into());
+            return Err(corrupt_record("truncated legacy missing-value bitmap"));
         }
         // Without a mask every stored value is published, including zero.
         if !trailer.is_empty() {
@@ -542,7 +574,7 @@ pub(crate) fn fuzz_page(data: &[u8]) {
     }
 }
 
-fn entry_index(coords: &[i64], estride: &[i64]) -> Result<usize, String> {
+fn entry_index(coords: &[i64], estride: &[i64]) -> Result<usize, IvtError> {
     coords
         .iter()
         .zip(estride)
@@ -552,7 +584,7 @@ fn entry_index(coords: &[i64], estride: &[i64]) -> Result<usize, String> {
                 .zip(usize::try_from(s).ok())
                 .and_then(|(c, s)| c.checked_mul(s))
                 .and_then(|index| sum.checked_add(index))
-                .ok_or_else(|| "data directory entry index overflow".into())
+                .ok_or_else(|| corrupt_record("data directory entry index overflow"))
         })
 }
 
@@ -562,7 +594,7 @@ fn directory_page(
     index: usize,
     lay: &Layout,
     mode: u16,
-) -> Result<PageCells, String> {
+) -> Result<PageCells, IvtError> {
     directory_page_impl(data, directory, index, lay, mode, true)
 }
 
@@ -573,8 +605,8 @@ fn directory_page_impl(
     lay: &Layout,
     mode: u16,
     keep_notes: bool,
-) -> Result<PageCells, String> {
-    let context = |position: Option<usize>, reason: &str| {
+) -> Result<PageCells, IvtError> {
+    let context = |position: Option<usize>, error: IvtError| {
         let position_text = position.map_or_else(|| "unresolved".into(), |p| p.to_string());
         let raw = position.and_then(|o| o.checked_add(8).and_then(|end| data.get(o..end)));
         let details = raw.map_or_else(String::new, |entry| {
@@ -583,20 +615,34 @@ fn directory_page_impl(
                 u32(entry, 0), u32(entry, 0), u16(entry, 4), u16(entry, 6),
             )
         });
-        format!(
-            "invalid data directory entry {index} at byte {position_text}: directory_start={}, expected_entry_count={}, file_size={}{}; reason={reason}",
-            directory.offset, directory.count, data.len(), details,
-        )
+        let page = raw.map(|entry| (u32(entry, 0), u16(entry, 4)));
+        error
+            .reword(|reason| format!(
+                "invalid data directory entry {index} at byte {position_text}: directory_start={}, expected_entry_count={}, file_size={}{}; reason={reason}",
+                directory.offset, directory.count, data.len(), details,
+            ))
+            .with(Context {
+                offset: page.map(|(offset, _)| u64::from(offset)),
+                length: page.map(|(_, length)| u64::from(length)),
+                file_len: Some(data.len() as u64),
+                slot: Some(HDR_DIR_PTR),
+                entry: Some(index),
+                dimension: None,
+            })
     };
     let position = directory
         .entry_offset(data, index)
-        .map_err(|err| context(None, &err.to_string()))?;
+        .map_err(|err| context(None, err))?;
     let entry = &data[position..position + 8];
     if entry.iter().all(|&v| v == 0) {
         return decode_page_impl(&[2, 1, 0, 0], 0, lay, 4, mode, keep_notes);
     }
-    let target = usize::try_from(u32(entry, 0))
-        .map_err(|_| context(Some(position), "page offset conversion overflow"))?;
+    let target = usize::try_from(u32(entry, 0)).map_err(|_| {
+        context(
+            Some(position),
+            corrupt_record("page offset conversion overflow"),
+        )
+    })?;
     let size = usize::from(u16(entry, 4));
     let allocated = usize::from(u16(entry, 6));
     // Brwpro.exe 0x1402b6e2a reads the first length as content size; +6 is
@@ -604,14 +650,19 @@ fn directory_page_impl(
     if target == 0 || size == 0 || size > allocated {
         return Err(context(
             Some(position),
-            "nonblank page requires a nonzero offset and 0 < content_length <= allocated_length",
+            corrupt_record(
+                "nonblank page requires a nonzero offset and 0 < content_length <= allocated_length",
+            ),
         ));
     }
     if target.checked_add(size).is_none_or(|end| end > data.len()) {
-        return Err(context(Some(position), "page content outside file"));
+        return Err(context(
+            Some(position),
+            corrupt_record("page content outside file"),
+        ));
     }
     decode_page_impl(data, target, lay, size, mode, keep_notes)
-        .map_err(|err| context(Some(position), &err))
+        .map_err(|err| context(Some(position), err))
 }
 
 /// Materialize only selected cells into the final value and validity buffers.
@@ -623,23 +674,25 @@ pub fn decode_selected(
     selected_counts: &[usize],
     selected_strides: &[usize],
     rows: usize,
-) -> Result<arrow::array::Float64Array, String> {
+) -> Result<arrow::array::Float64Array, IvtError> {
     let _profile = crate::profile::Stage::new("decode_values");
     use arrow::array::BooleanBufferBuilder;
     use arrow::buffer::{NullBuffer, ScalarBuffer};
-    let slot =
-        crate::header::slot_offset(data, HDR_DIR_PTR).ok_or("missing data directory slot")?;
-    let directory =
-        MetadataDirectory::new(data, slot).map_err(|e| format!("invalid data directory: {e}"))?;
+    let slot = crate::header::slot_offset(data, HDR_DIR_PTR)
+        .ok_or_else(|| corrupt_record("missing data directory slot"))?;
+    let directory = MetadataDirectory::new(data, slot).map_err(|e| {
+        e.reword(|e| format!("invalid data directory: {e}"))
+            .with(Context::slot(HDR_DIR_PTR).and_file_len(data.len()))
+    })?;
     if u16(data, slot + 12) & 1 != 0 && u16(data, 20) != 4096 {
-        return Err(format!(
+        return Err(unsupported_record(format!(
             "invalid data directory: unsupported directory page size {}",
             u16(data, 20)
-        ));
+        )));
     }
     let capacity = u32(data, slot + 4) as usize;
     if directory.count > capacity {
-        return Err(format!("invalid data directory: expected_entry_count={}, allocated_capacity={capacity}; reason=entry count exceeds capacity", directory.count));
+        return Err(corrupt_record(format!("invalid data directory: expected_entry_count={}, allocated_capacity={capacity}; reason=entry count exceeds capacity", directory.count)));
     }
     let mode = missing_mode(data)?;
     let mut native_strides = vec![1usize; lay.n_dim];
@@ -714,20 +767,20 @@ pub struct CellBatch {
     pub notes: Vec<u16>,
 }
 
-pub fn row_count(lay: &Layout) -> Result<usize, String> {
+pub fn row_count(lay: &Layout) -> Result<usize, IvtError> {
     lay.counts
         .iter()
         .try_fold(1usize, |n, &count| {
             usize::try_from(count).ok().and_then(|c| n.checked_mul(c))
         })
-        .ok_or_else(|| "dimension product exceeds addressable memory".into())
+        .ok_or_else(|| limit_exceeded("dimension product exceeds addressable memory"))
 }
 
-fn reserved<T>(n: usize) -> Result<Vec<T>, String> {
+fn reserved<T>(n: usize) -> Result<Vec<T>, IvtError> {
     let mut result = Vec::new();
     result
         .try_reserve_exact(n)
-        .map_err(|_| "memory allocation failed for cell batch")?;
+        .map_err(|_| limit_exceeded("memory allocation failed for cell batch"))?;
     Ok(result)
 }
 
@@ -738,25 +791,27 @@ pub fn decode_range(
     lay: &Layout,
     start: usize,
     end: usize,
-) -> Result<CellBatch, String> {
+) -> Result<CellBatch, IvtError> {
     let _profile = crate::profile::Stage::new("decode_rows");
     let total = row_count(lay)?;
     if start > end || end > total {
-        return Err("cell batch range outside grid".into());
+        return Err(IvtError::Parse("cell batch range outside grid".into()));
     }
-    let slot =
-        crate::header::slot_offset(data, HDR_DIR_PTR).ok_or("missing data directory slot")?;
-    let directory = MetadataDirectory::new(data, slot)
-        .map_err(|err| format!("invalid data directory: {err}"))?;
+    let slot = crate::header::slot_offset(data, HDR_DIR_PTR)
+        .ok_or_else(|| corrupt_record("missing data directory slot"))?;
+    let directory = MetadataDirectory::new(data, slot).map_err(|e| {
+        e.reword(|e| format!("invalid data directory: {e}"))
+            .with(Context::slot(HDR_DIR_PTR).and_file_len(data.len()))
+    })?;
     if u16(data, slot + 12) & 1 != 0 && u16(data, 20) != 4096 {
-        return Err(format!(
+        return Err(unsupported_record(format!(
             "invalid data directory: unsupported directory page size {}",
             u16(data, 20)
-        ));
+        )));
     }
     let capacity = u32(data, slot + 4) as usize;
     if directory.count > capacity {
-        return Err(format!("invalid data directory: expected_entry_count={}, allocated_capacity={capacity}; reason=entry count exceeds capacity", directory.count));
+        return Err(corrupt_record(format!("invalid data directory: expected_entry_count={}, allocated_capacity={capacity}; reason=entry count exceeds capacity", directory.count)));
     }
     let mode = missing_mode(data)?;
     let n = end - start;
@@ -796,7 +851,7 @@ pub fn decode_range(
             batch.notes.extend_from_slice(&page.footnotes[bit]);
             batch.note_offsets.push(
                 i32::try_from(batch.notes.len())
-                    .map_err(|_| "too many annotations in one batch")?,
+                    .map_err(|_| limit_exceeded("too many annotations in one batch"))?,
             );
         }
         return Ok(batch);
@@ -826,11 +881,11 @@ pub fn decode_range(
             batch
                 .notes
                 .try_reserve(page.footnotes[bit].len())
-                .map_err(|_| "memory allocation failed for annotations")?;
+                .map_err(|_| limit_exceeded("memory allocation failed for annotations"))?;
             batch.notes.extend_from_slice(&page.footnotes[bit]);
             batch.note_offsets.push(
                 i32::try_from(batch.notes.len())
-                    .map_err(|_| "too many annotations in one batch")?,
+                    .map_err(|_| limit_exceeded("too many annotations in one batch"))?,
             );
         }
         row += length;
@@ -971,6 +1026,9 @@ mod tests {
         let error = directory_page(&data, &directory, 8194, &lay, 3)
             .err()
             .unwrap();
+        assert_eq!(error.kind(), crate::error::ErrorKind::Corrupt);
+        assert_eq!(error.context().entry, Some(8194));
+        let error = error.to_string();
         assert!(error.contains("entry 8194"), "{error}");
         assert!(error.contains("expected_entry_count=8194"), "{error}");
     }
@@ -995,6 +1053,12 @@ mod tests {
             let error = directory_page(&data, &directory, 4096, &lay, 3)
                 .err()
                 .unwrap();
+            assert_eq!(error.kind(), crate::error::ErrorKind::Corrupt);
+            let context = error.context();
+            assert_eq!(context.entry, Some(4096));
+            assert_eq!(context.offset, Some(u64::from(offset)));
+            assert_eq!(context.file_len, Some(data.len() as u64));
+            let error = error.to_string();
             for expected in [
                 "entry 4096 at byte 66560",
                 "raw_offset=0x",
@@ -1191,6 +1255,7 @@ mod tests {
         assert!(decode_page(&page, 0, &lay, page.len(), 3)
             .err()
             .unwrap()
+            .to_string()
             .contains("extended page record directory"));
 
         let mut short = vec![0u8; 4 + 2047 * 2];
@@ -1198,11 +1263,13 @@ mod tests {
         assert!(decode_page(&short, 0, &lay, short.len(), 3)
             .err()
             .unwrap()
+            .to_string()
             .contains("only 2047 cells"));
-        assert!(decompress_component(&[0x88, 2, 255, 255, 255, 255])
+        let limit = decompress_component(&[0x88, 2, 255, 255, 255, 255])
             .err()
-            .unwrap()
-            .contains("safety limit"));
+            .unwrap();
+        assert_eq!(limit.kind(), crate::error::ErrorKind::ResourceLimit);
+        assert!(limit.to_string().contains("safety limit"));
     }
 
     #[test]
