@@ -5,6 +5,7 @@ use regex::Regex;
 use std::collections::HashSet;
 
 use crate::bytes::{latin1, u16, u32};
+use crate::error::IvtError;
 
 static SLUG_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"[^A-Za-z0-9]+").unwrap());
 
@@ -29,40 +30,113 @@ pub struct Descriptor {
 
 /// Only the native master axis matrix is authoritative. Missing or malformed
 /// matrices are rejected; scanning prose for plausible dimensions is unsafe.
-pub fn parse_descriptor(data: &[u8]) -> Option<Descriptor> {
+pub fn parse_descriptor(data: &[u8]) -> Result<Descriptor, IvtError> {
     structured_descriptor(data)
 }
 
-pub fn structured_descriptor(data: &[u8]) -> Option<Descriptor> {
+const NO_FALLBACK: &str =
+    "native axis matrix is missing or invalid; unverified descriptor fallback is disabled";
+const MATRIX_ROW: usize = 82;
+
+/// An envelope-valid file whose axis matrix this reader does not recognise.
+fn unrecognised(data: &[u8], reason: String) -> IvtError {
+    let version = data.first().copied().unwrap_or(0);
+    IvtError::unsupported(
+        format!("descriptor layout not recognised (container version {version}): {reason}"),
+        NO_FALLBACK,
+    )
+}
+
+fn hex_prefix(raw: &[u8]) -> String {
+    raw.iter()
+        .take(8)
+        .map(|b| format!("{b:02x}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+pub fn structured_descriptor(data: &[u8]) -> Result<Descriptor, IvtError> {
     use crate::header::HDR_MASTER_PTR;
-    let master = crate::header::slot_offset(data, HDR_MASTER_PTR)?;
-    if u32(data, master + 8) < 2 {
-        return None;
+    let fail = |reason: String| unrecognised(data, reason);
+    let master = crate::header::slot_offset(data, HDR_MASTER_PTR)
+        .ok_or_else(|| fail("the header has no master directory slot".into()))?;
+    let entries = u32(data, master + 8);
+    if entries < 2 {
+        return Err(fail(format!(
+            "the master directory has {entries} entries, so it has no axis matrix at entry 1"
+        )));
     }
-    let directory = crate::metadata_directory::MetadataDirectory::new(data, master).ok()?;
-    let offset = u32(directory.entry(data, 1).ok()?, 0);
-    let raw = crate::metadata_directory::record(data, master, 1)?;
-    let decoded = crate::decode::decompress_component(raw).ok()?;
-    if decoded.get(..2) != Some(&[1, 2]) || decoded.len() < 6 || u16(&decoded, 4) != 82 {
-        return None;
+    let directory = crate::metadata_directory::MetadataDirectory::new(data, master)?;
+    let entry = directory.entry(data, 1)?;
+    let (offset, length) = (u32(entry, 0), usize::from(u16(entry, 4)));
+    if offset == 0 || length == 0 {
+        return Err(fail(format!(
+            "master directory entry 1 is empty (offset={offset} length={length})"
+        )));
+    }
+    let raw = (offset as usize)
+        .checked_add(length)
+        .and_then(|end| data.get(offset as usize..end))
+        .ok_or_else(|| {
+            IvtError::corrupt(
+                format!(
+                    "the axis matrix record points outside the file: it needs bytes {offset}..{} but the file is {} bytes",
+                    offset as u64 + length as u64,
+                    data.len()
+                ),
+                NO_FALLBACK,
+            )
+        })?;
+    let decoded = crate::decode::decompress_component(raw).map_err(|error| {
+        fail(format!(
+            "the axis matrix record could not be decoded ({error}); its first bytes are {}",
+            hex_prefix(raw)
+        ))
+    })?;
+    if decoded.len() < 6 {
+        return Err(fail(format!(
+            "the axis matrix is {} bytes, shorter than its 6-byte heading",
+            decoded.len()
+        )));
+    }
+    let (tag, width) = (&decoded[..2], usize::from(u16(&decoded, 4)));
+    if tag != [1, 2] || width != MATRIX_ROW {
+        return Err(fail(format!(
+            "the axis matrix has component header {:02x} {:02x} and {width}-byte rows; supported matrices have header 01 02 (byte rows) and {MATRIX_ROW}-byte rows",
+            tag[0], tag[1]
+        )));
     }
     let count = u16(&decoded, 2) as usize;
     if !(1..=32).contains(&count) {
-        return None;
+        return Err(fail(format!(
+            "the axis matrix declares {count} axes; supported tables have 1 to 32"
+        )));
     }
     let mut dims = Vec::with_capacity(count);
     let mut allocation_bits = Vec::with_capacity(count);
-    for row in decoded[6..].as_chunks::<82>().0 {
+    for (axis, row) in decoded[6..].as_chunks::<82>().0.iter().enumerate() {
         let items = u32(row, 0);
         let kind = u16(row, 6);
         let bits = u16(row, 4);
         let end = row[12..30].iter().position(|&b| b == 0).unwrap_or(18);
         let name = latin1(&row[12..12 + end]);
-        if items == 0 || items > i32::MAX as u32 || name.is_empty() || kind > 2 {
-            return None;
+        let axis_error = |what: &str| {
+            fail(format!(
+                "axis {} ({name:?}) {what}: items={items} kind={kind} allocation_bits={bits}",
+                axis + 1
+            ))
+        };
+        if items == 0 || items > i32::MAX as u32 {
+            return Err(axis_error("has an out-of-range member count"));
+        }
+        if name.is_empty() {
+            return Err(axis_error("has no name"));
+        }
+        if kind > 2 {
+            return Err(axis_error("has an unrecognised axis kind"));
         }
         if data.first() == Some(&2) && (bits > 30 || (1u32 << bits) < items) {
-            return None;
+            return Err(axis_error("allocates fewer slots than its member count"));
         }
         allocation_bits.push(bits);
         dims.push(DimDesc {
@@ -76,31 +150,41 @@ pub fn structured_descriptor(data: &[u8]) -> Option<Descriptor> {
             double01: kind == 1,
         });
     }
-    if dims.len() != count
-        || dims
-            .iter()
-            .try_fold(1usize, |n, d| n.checked_mul(d.count as usize))
-            .is_none()
+    if dims.len() != count {
+        return Err(fail(format!(
+            "the axis matrix declares {count} axes but holds {} complete {MATRIX_ROW}-byte rows",
+            dims.len()
+        )));
+    }
+    if dims
+        .iter()
+        .try_fold(1usize, |n, d| n.checked_mul(d.count as usize))
+        .is_none()
     {
-        return None;
+        let counts = dims.iter().map(|d| d.count.to_string()).collect::<Vec<_>>();
+        return Err(fail(format!(
+            "the product of its axis member counts ({}) overflows",
+            counts.join(" x ")
+        )));
     }
     let geo_dim = geo_dim_index(&dims).or_else(|| {
         (0..dims.len())
             .find(|&axis| crate::members::has_geo_uid_field(data, axis))
             .map(|axis| axis + 1)
     });
-    Some(Descriptor {
+    let member_slots = (0..dims.len())
+        .map(|axis| {
+            if data.first() == Some(&2) {
+                crate::members::member_slots(data, axis, dims[axis].count as usize)
+                    .map_err(|error| fail(format!("axis {} member slots: {error}", axis + 1)))
+            } else {
+                Ok(None)
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(Descriptor {
         offset,
-        member_slots: (0..dims.len())
-            .map(|axis| {
-                if data.first() == Some(&2) {
-                    crate::members::member_slots(data, axis, dims[axis].count as usize)
-                } else {
-                    Ok(None)
-                }
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .ok()?,
+        member_slots,
         allocation_bits: (data.first() == Some(&2)).then_some(allocation_bits),
         dims,
         geo_dim,

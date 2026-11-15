@@ -991,11 +991,11 @@ fn build_metadata_memory(
 ) -> Result<IvtMetadata, IvtError> {
     let hdr = match hdr {
         Some(h) => h,
-        None => read_header(data).map_err(IvtError::Parse)?,
+        None => read_header(data)?,
     };
     let desc = match desc {
         Some(d) => d,
-        None => parse_descriptor(data).ok_or(IvtError::DescriptorNotFound)?,
+        None => parse_descriptor(data)?,
     };
     let master_entries = master_dir_entries(data, 32);
     let info = parse_table_identity(data);
@@ -1044,6 +1044,42 @@ fn build_metadata_memory(
     })
 }
 
+/// Name a header slot by its conventional position for error messages.
+fn slot_name(slot: usize) -> String {
+    match slot {
+        HDR_MASTER_PTR => "master (axis matrix)".into(),
+        HDR_STATUS_LEGEND => "status legend".into(),
+        s if s == HDR_STATUS_LEGEND + DIM_SLOT_STRIDE => "footnote".into(),
+        s if s >= HDR_DIM_SLOT0 && (s - HDR_DIM_SLOT0).is_multiple_of(DIM_SLOT_STRIDE) => {
+            format!(
+                "dimension {} member",
+                (s - HDR_DIM_SLOT0) / DIM_SLOT_STRIDE + 1
+            )
+        }
+        s => format!("header slot {s}"),
+    }
+}
+
+/// Explain a failed directory read with the slot's declared geometry.
+fn directory_context(error: IvtError, header: &[u8], slot: usize, file_len: usize) -> IvtError {
+    let IvtError::InvalidDirectory(what) = error else {
+        return error;
+    };
+    let (offset, count, paged) = (
+        u32(header, slot),
+        u32(header, slot + 8),
+        u16(header, slot + 12) & 1 != 0,
+    );
+    let layout = if paged { "paged" } else { "flat" };
+    IvtError::corrupt(
+        format!(
+            "the {} directory points outside the file: it declares {count} entries ({layout}) at byte {offset}, but the file is {file_len} bytes",
+            slot_name(slot)
+        ),
+        format!("invalid directory: {what}; slot={slot} offset={offset} count={count} paged={paged} file_len={file_len}"),
+    )
+}
+
 /// Materialize only metadata directories and their declared records. Relocating
 /// their offsets keeps the bytes and path parsers identical without allocating
 /// a buffer as large as the source file or touching the cube's value pages.
@@ -1056,7 +1092,7 @@ fn metadata_catalog(
 ) -> Result<Vec<u8>, IvtError> {
     let file_len = source.len()? as usize;
     let prefix = source.read_prefix(576)?;
-    read_header_ex(&prefix, file_len).map_err(IvtError::Parse)?;
+    read_header_ex(&prefix, file_len)?;
     let table = crate::header::slot_table_range(&prefix)
         .ok_or(IvtError::InvalidDirectory("metadata slot table"))?;
     let slot_bytes = source.read_range(table.start as u64, table.len())?;
@@ -1090,8 +1126,9 @@ fn metadata_catalog(
         if ptr == 0 || count == 0 {
             continue;
         }
-        let mut directory =
-            crate::metadata_directory::MetadataDirectory::new(&header, slot)?.read(source)?;
+        let mut directory = crate::metadata_directory::MetadataDirectory::new(&header, slot)
+            .and_then(|directory| directory.read(source))
+            .map_err(|error| directory_context(error, &header, slot, file_len))?;
         for i in (0..directory.len().saturating_sub(7)).step_by(8) {
             let off = u32(&directory, i);
             let length = u16(&directory, i + 4);
@@ -1099,12 +1136,19 @@ fn metadata_catalog(
                 continue;
             }
             if off as usize + length as usize > file_len {
-                return Err(IvtError::Parse(format!(
-                    "IVT metadata record extends past EOF: slot={slot} ordinal={} offset={off} content_len={length} allocation_len={} expected_end={} file_len={file_len}",
-                    i / 8,
-                    u16(&directory, i + 6),
-                    off as u64 + u64::from(length),
-                )));
+                let end = off as u64 + u64::from(length);
+                return Err(IvtError::corrupt(
+                    format!(
+                        "the file appears truncated: the {} record at entry {} needs at least {end} bytes but the file is {file_len} bytes (likely an incomplete copy)",
+                        slot_name(slot),
+                        i / 8,
+                    ),
+                    format!(
+                        "IVT metadata record extends past EOF: slot={slot} ordinal={} offset={off} content_len={length} allocation_len={} expected_end={end} file_len={file_len}",
+                        i / 8,
+                        u16(&directory, i + 6),
+                    ),
+                ));
             }
             let relocated = if let Some(&at) = copied.get(&(off, length)) {
                 at
@@ -1129,9 +1173,7 @@ fn metadata_catalog(
         catalog[slot + 12..slot + 14].copy_from_slice(&flags.to_le_bytes());
     }
     if descriptor {
-        if crate::descriptor::structured_descriptor(&catalog).is_none() {
-            return Err(IvtError::DescriptorNotFound);
-        }
+        crate::descriptor::structured_descriptor(&catalog)?;
         catalog[HDR_DESCRIPTOR_PTR..HDR_DESCRIPTOR_PTR + 4].fill(0);
     }
     // Value-directory offsets do not apply to this relocated metadata image.
@@ -1155,7 +1197,7 @@ fn build_metadata_selective(
     // only the selected metadata records.
     let hdr = match hdr {
         Some(hdr) => hdr,
-        None => read_header_ex(&catalog, source.len()? as usize).map_err(IvtError::Parse)?,
+        None => read_header_ex(&catalog, source.len()? as usize)?,
     };
     let mut metadata = build_metadata_memory(&catalog, source, desc, Some(hdr))?;
     metadata.metadata_image = Some(catalog);

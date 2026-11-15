@@ -424,6 +424,10 @@ def open(
     - `TypeError`: unsupported source, path representation or `read()` result.
     - `OSError`: the source path cannot be opened or read.
     - `ValueError`: invalid or unsupported IVT header, descriptor or layout.
+      Messages for rejected files start with `Corrupt IVT file:` (bad
+      signature or header, truncation, or offsets outside the file) or
+      `Unsupported IVT file:` (a valid file in a layout pyivt cannot read).
+      Low-level details follow `Details:`.
 
     ### Notes
 
