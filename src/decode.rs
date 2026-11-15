@@ -32,6 +32,12 @@ pub struct Layout {
 
 pub fn build_descriptor_layout(desc: &crate::descriptor::Descriptor) -> Result<Layout, IvtError> {
     let mut physical = desc.dims.clone();
+    // Slugs come from the full English title; the axis name is truncated.
+    for (dim, [title, _]) in physical.iter_mut().zip(&desc.titles) {
+        if let Some(title) = title {
+            dim.name = title.clone();
+        }
+    }
     for (dim, slots) in physical.iter_mut().zip(&desc.member_slots) {
         if let Some(slots) = slots {
             if slots.len() != dim.count as usize || slots.windows(2).any(|s| s[0] >= s[1]) {
@@ -910,6 +916,7 @@ mod tests {
                     double01: false,
                 })
                 .collect(),
+            titles: Vec::new(),
             geo_dim: None,
             member_slots: slots,
             allocation_bits: None,

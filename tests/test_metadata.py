@@ -153,10 +153,31 @@ def snapshot_comparable(meta: IvtMetadata, path: Path) -> dict:
     return {key: full[key] for key in COMPARED_KEYS}
 
 
+def _beyond_dimension_text(actual: dict, expected: dict) -> dict:
+    """Shorten full dimension titles to Beyond File Summary's stored short text.
+
+    Beyond's File Summary shows the truncated axis name; pyivt reports the full
+    title from the notes ``Variable List``. A full title must extend the stored
+    text, never replace it.
+    """
+    result = dict(actual)
+    for key in ("name_en", "name_fr", "description_en", "description_fr"):
+        full, short = actual[key], expected[key]
+        if full and short and full != short and full.startswith(short.rstrip()):
+            result[key] = short
+    return result
+
+
 def test_metadata_matches_expected(demo_ivt):
-    expect = _load_expect(demo_ivt)
+    expect = _expect_slice(_load_expect(demo_ivt))
     meta = open_ivt(demo_ivt.path).metadata
-    assert snapshot_comparable(meta, demo_ivt.path) == _expect_slice(expect)
+    actual = snapshot_comparable(meta, demo_ivt.path)
+    if len(actual["dimensions"]) == len(expect["dimensions"]):
+        actual["dimensions"] = [
+            _beyond_dimension_text(full, short)
+            for full, short in zip(actual["dimensions"], expect["dimensions"])
+        ]
+    assert actual == expect
     # Summary datapoints are the product of Beyond Items (may exceed decode cube).
     assert prod(d.items for d in meta.dimensions) == meta.number_of_datapoints
 

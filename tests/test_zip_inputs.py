@@ -87,7 +87,11 @@ def test_real_statcan_zip_matches_extracted_ivt_and_every_official_csv_cell(rout
     table = ivt.to_arrow().to_pydict()
     actual = dict(
         zip(
-            zip(table["geography"], table["population_and"], strict=True),
+            zip(
+                table["geography"],
+                table["population_and_dwelling_counts_11"],
+                strict=True,
+            ),
             table["value"],
             strict=True,
         )

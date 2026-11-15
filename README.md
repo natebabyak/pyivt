@@ -65,8 +65,12 @@ for dimension in ivt.metadata.dimensions:
 
 Use the slugs as Arrow column names, selection keywords, and values in the
 member table's `dimension` column.
-The geography axis uses `geography`. Other axes follow their IVT dimension names,
-so a time dimension may be named `census_year`, `reference_period`, or `time`.
+The geography axis uses `geography`. Other axes follow their full IVT dimension
+titles, so a time dimension may be named `census_year`, `reference_period`, or `time`.
+IVT files store axis names cut to 15 characters; pyivt takes the full English and
+French titles from the table notes' variable list when the file has one, so
+`Population and` becomes `Population and dwelling counts (11)` and its slug
+`population_and_dwelling_counts_11`. Slugs are at most 40 characters.
 
 ### Export to Parquet
 

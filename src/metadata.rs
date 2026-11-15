@@ -30,6 +30,12 @@ static PRODUCT_ID_HEAD: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"Product ID:\s*([^\r\n]+)").unwrap());
 static TITLE_EN_HEAD: Lazy<Regex> = Lazy::new(|| Regex::new(r"Title:\s*([^\r\n]+)").unwrap());
 static TITLE_FR_HEAD: Lazy<Regex> = Lazy::new(|| Regex::new(r"Titre\s*:\s*([^\r\n]+)").unwrap());
+static VARIABLE_LIST_EN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?m)^Variable List\s*:[ \t]*([^\r\n]+)").unwrap());
+static VARIABLE_LIST_FR: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?m)^Liste de variables\s*:[ \t]*([^\r\n]+)").unwrap());
+/// A list item ends with its member-count token, such as `(128)` or `(3a)`.
+static COUNT_TOKEN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\(\d+[A-Za-z]*\)").unwrap());
 static UNIVERSE_HEAD: Lazy<Regex> = Lazy::new(|| Regex::new(r"Universe:\s*([^\r\n]+)").unwrap());
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -564,6 +570,89 @@ fn dim_title(
     (name_en, name_fr, description_en, description_fr)
 }
 
+/// Resolve full dimension titles from a notes `Variable List` line.
+///
+/// Axis names are stored truncated (15 characters in StatCan tables). The
+/// table notes list each full title followed by its member-count token, as in
+/// `Age (in single years), average age and median age (128), Gender (3a)`.
+/// Titles themselves may contain `", "`, so an item is the shortest text that
+/// starts at an item boundary with the stored short name and ends with a count
+/// token. Ambiguous or absent matches yield `None`; callers keep the short name.
+fn variable_list_titles(list: &str, keys: &[Option<&str>]) -> Vec<Option<String>> {
+    let list = list.trim();
+    let starts: Vec<usize> = std::iter::once(0)
+        .chain(list.match_indices(", ").map(|(at, sep)| at + sep.len()))
+        .collect();
+    let ends: Vec<usize> = COUNT_TOKEN
+        .find_iter(list)
+        .map(|m| m.end())
+        .filter(|&end| end == list.len() || list[end..].starts_with(", "))
+        .collect();
+    let mut titles: Vec<Option<String>> = keys
+        .iter()
+        .map(|key| {
+            let key = key.map(str::trim).filter(|key| !key.is_empty())?;
+            let mut found = starts.iter().filter_map(|&start| {
+                list[start..].starts_with(key).then(|| {
+                    let end = ends.iter().find(|&&end| end >= start + key.len())?;
+                    Some(list[start..*end].trim().to_string())
+                })?
+            });
+            let title = found.next()?;
+            found.next().is_none().then_some(title)
+        })
+        .collect();
+    // Two axes resolving to one item cannot both be right.
+    let duplicate: Vec<bool> = titles
+        .iter()
+        .map(|title| {
+            title
+                .as_ref()
+                .is_some_and(|title| titles.iter().flatten().filter(|t| *t == title).count() > 1)
+        })
+        .collect();
+    for (title, duplicate) in titles.iter_mut().zip(duplicate) {
+        if duplicate {
+            *title = None;
+        }
+    }
+    titles
+}
+
+/// Full English and French dimension titles from the table notes, per axis.
+pub(crate) fn full_dimension_titles(data: &[u8], dims: &[DimDesc]) -> Vec<[Option<String>; 2]> {
+    let mut out = vec![[None, None]; dims.len()];
+    let names: Vec<_> = (0..dims.len()).map(|axis| dim_title(data, axis)).collect();
+    for (lang, (pattern, language)) in [(&*VARIABLE_LIST_EN, 1), (&*VARIABLE_LIST_FR, 2)]
+        .into_iter()
+        .enumerate()
+    {
+        let Some(notes) = summary_text(data, language, 8) else {
+            continue;
+        };
+        let Some(list) = pattern.captures(&notes).map(|m| m[1].to_string()) else {
+            continue;
+        };
+        let keys: Vec<Option<&str>> = names
+            .iter()
+            .zip(dims)
+            .map(|((en, fr, _, _), dim)| {
+                if lang == 0 {
+                    en.as_deref()
+                        .filter(|name| !name.is_empty())
+                        .or(Some(&dim.name))
+                } else {
+                    fr.as_deref().filter(|name| !name.is_empty())
+                }
+            })
+            .collect();
+        for (axis, title) in variable_list_titles(&list, &keys).into_iter().enumerate() {
+            out[axis][lang] = title;
+        }
+    }
+    out
+}
+
 /// The native summary rows supply the localized dimension titles and display
 /// field references. Field indices refer to the original member definitions.
 pub(crate) fn member_display(
@@ -922,12 +1011,28 @@ pub fn build_dimensions(data: &[u8], desc: &Descriptor) -> Vec<Dimension> {
         let (members_en, members_fr) = dim_dir_labels(data, d, i, is_geo);
         let items = d.count;
         let (short, title_name_fr, description_en, description_fr) = dim_title(data, i);
+        let [full_en, full_fr] = desc.titles.get(i).cloned().unwrap_or_default();
+        // A stored description that is only a prefix of the full title is the
+        // same truncated text; the full title replaces it.
+        let widen = |description: Option<String>, full: &Option<String>| match full {
+            Some(full)
+                if description
+                    .as_deref()
+                    .is_none_or(|text| full.starts_with(text.trim())) =>
+            {
+                Some(full.clone())
+            }
+            _ => description,
+        };
         // Prefer dim-title code (COOKIE TYPE) over descriptor name when present.
-        let name_en = short
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| d.name.clone());
-        let description_en = description_en.or_else(|| Some(name_en.clone()));
-        let mut name_fr = title_name_fr.or_else(|| description_fr.clone());
+        let name_en = full_en.clone().unwrap_or_else(|| {
+            short
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| d.name.clone())
+        });
+        let description_en = widen(description_en, &full_en).or_else(|| Some(name_en.clone()));
+        let description_fr = widen(description_fr, &full_fr);
+        let mut name_fr = full_fr.or(title_name_fr).or_else(|| description_fr.clone());
         if is_geo && name_en.eq_ignore_ascii_case("Geography") && name_fr.is_none() {
             name_fr = Some("Géographie".into());
         }
@@ -1402,5 +1507,63 @@ mod tests {
             };
             assert_eq!(dimension_type_for(&dim).as_str(), expected);
         }
+    }
+
+    #[test]
+    fn variable_list_titles_extend_truncated_names() {
+        let list =
+            "Age (in single years), average age and median age (128), Census year (2), Gender (3a)";
+        let titles = variable_list_titles(
+            list,
+            &[
+                Some("Geography"),
+                Some("Census year (2)"),
+                Some("Age (in single"),
+                Some("Gender (3a)"),
+            ],
+        );
+        assert_eq!(
+            titles,
+            [
+                None,
+                Some("Census year (2)".into()),
+                Some("Age (in single years), average age and median age (128)".into()),
+                Some("Gender (3a)".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn variable_list_titles_reject_unsafe_matches() {
+        // An unlisted axis keeps its own name; a listed neighbour is not absorbed.
+        assert_eq!(
+            variable_list_titles("Population counts (6)", &[Some("Population cent")]),
+            [None]
+        );
+        assert_eq!(
+            variable_list_titles("A (2), B (3)", &[Some("A")]),
+            [Some("A (2)".into())]
+        );
+        // Without a count token there is no reliable item end.
+        assert_eq!(variable_list_titles("Age, Sex", &[Some("Age")]), [None]);
+        // A short name at two item boundaries is ambiguous.
+        assert_eq!(
+            variable_list_titles("Income (5), Income groups (7)", &[Some("Income")]),
+            [None]
+        );
+        // Two axes resolving to the same item cannot both be right.
+        assert_eq!(
+            variable_list_titles("Statistics (3)", &[Some("Statistics"), Some("Stat")]),
+            [None, None]
+        );
+        // A name only matches at an item boundary.
+        assert_eq!(
+            variable_list_titles("Total age (2)", &[Some("age")]),
+            [None]
+        );
+        assert_eq!(
+            variable_list_titles("Age (2)", &[None, Some("  ")]),
+            [None, None]
+        );
     }
 }
