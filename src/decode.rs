@@ -19,7 +19,6 @@ pub struct Layout {
     pub ipc: Vec<i64>,
     pub window_count: i64,
     pub inpage_idx: Vec<usize>,
-    pub tuples: Vec<Vec<i32>>,
     pub bit: Vec<i32>,
     pub rec_bytes: usize,
     pub ent_idx: Vec<usize>,
@@ -94,57 +93,27 @@ pub fn bit_layout(counts: &[i64]) -> (Vec<i64>, usize) {
     (stride, (block[0] / 8) as usize)
 }
 
-fn cell_grid(counts: &[i64], stride: &[i64]) -> (Vec<Vec<i32>>, Vec<i32>) {
-    let k = counts.len();
+/// In-page bit index of every cell of the in-page grid, in row-major order.
+fn cell_bits(counts: &[i64], stride: &[i64]) -> Vec<i32> {
     let n: i64 = if counts.is_empty() {
         0
     } else {
         counts.iter().product()
     };
     if n == 0 {
-        return (vec![Vec::new(); k], Vec::new());
+        return Vec::new();
     }
-    let n = n as usize;
-    let mut tuples = vec![vec![0i32; n]; k];
-    let mut bits = vec![vec![0i32; n]; k];
-    let mut rin: i64 = 1;
-    for i in (0..k).rev() {
-        let ci = counts[i] as usize;
-        let rin_u = rin as usize;
-        let tile = n / (ci * rin_u);
-        let mut col = Vec::with_capacity(n);
-        for _ in 0..tile {
-            for idx in 0..ci {
-                for _ in 0..rin_u {
-                    col.push(idx as i32);
-                }
-            }
-        }
-        tuples[i] = col.clone();
-        bits[i] = col;
-        rin *= counts[i];
+    let mut bit = vec![0i32];
+    // Expand axis by axis: each existing prefix is followed by every member
+    // of the next axis, which yields row-major order.
+    for (&count, &stride) in counts.iter().zip(stride) {
+        let stride = stride as i32;
+        bit = bit
+            .iter()
+            .flat_map(|&base| (0..count as i32).map(move |idx| base + idx * stride))
+            .collect();
     }
-    let mut bit = vec![0i32; n];
-    for row in 0..n {
-        let mut s = 0i32;
-        for i in 0..k {
-            s += bits[i][row] * stride[i] as i32;
-        }
-        bit[row] = s;
-    }
-    for col in &mut tuples {
-        for v in col.iter_mut() {
-            *v += 1;
-        }
-    }
-    // transpose to row-major list of member-id rows for easier page use
-    let mut rows = vec![vec![0i32; k]; n];
-    for i in 0..k {
-        for row in 0..n {
-            rows[row][i] = tuples[i][row];
-        }
-    }
-    (rows, bit)
+    bit
 }
 
 #[cfg(test)]
@@ -249,8 +218,7 @@ fn build_layout_with_allocations(
     let mut ipc_ext: Vec<i64> = inpage_idx.iter().map(|&i| pad[i - 1]).collect();
     ipc_ext[0] = ipc_straddle;
     let (stride, rec_bytes) = bit_layout(&ipc_ext);
-    let grid_counts = ipc.clone();
-    let (tuples, bit) = cell_grid(&grid_counts, &stride);
+    let bit = cell_bits(&ipc, &stride);
 
     let ws = if allocations.is_some() {
         (pad[straddle - 1] / ipc_straddle).max(1)
@@ -286,7 +254,6 @@ fn build_layout_with_allocations(
         ipc,
         window_count: win,
         inpage_idx,
-        tuples,
         bit,
         rec_bytes,
         ent_idx,
@@ -296,6 +263,27 @@ fn build_layout_with_allocations(
         member_slots: vec![None; m],
         page_strides: stride,
     })
+}
+
+#[cfg(test)]
+impl Layout {
+    /// One-based member IDs of every in-page cell, row-major, matching `bit`.
+    fn tuples(&self) -> Vec<Vec<i32>> {
+        let mut rows = vec![Vec::new()];
+        for &count in &self.ipc {
+            rows = rows
+                .iter()
+                .flat_map(|row: &Vec<i32>| {
+                    (1..=count as i32).map(move |id| {
+                        let mut next = row.clone();
+                        next.push(id);
+                        next
+                    })
+                })
+                .collect();
+        }
+        rows
+    }
 }
 
 fn mapped_cell(lay: &Layout, coordinate: impl Fn(usize) -> usize) -> (usize, usize) {
@@ -375,9 +363,19 @@ pub fn decompress_component(data: &[u8]) -> Result<Vec<u8>, IvtError> {
     if bitmap_end > data.len() {
         return Err(corrupt_record("truncated component bitmap"));
     }
-    let stored: usize = (0..count)
-        .filter(|&i| u16(data, header + (i / 16) * 2) & (0x8000 >> (i % 16)) != 0)
-        .count();
+    // Bit `i` is the `i % 16`-th most significant bit of word `i / 16`. Bits
+    // past `count` in the final word are padding and must be ignored.
+    let word = |w: usize| {
+        let bits = u16(data, header + w * 2);
+        let tail = count - w * 16;
+        if tail >= 16 {
+            bits
+        } else {
+            bits & !(u16::MAX >> tail)
+        }
+    };
+    let words = count.div_ceil(16);
+    let stored: usize = (0..words).map(|w| word(w).count_ones() as usize).sum();
     let encoded_end = bitmap_end
         .checked_add(stored * width)
         .ok_or_else(|| corrupt_record("component size overflow"))?;
@@ -392,8 +390,11 @@ pub fn decompress_component(data: &[u8]) -> Result<Vec<u8>, IvtError> {
     result[..header].copy_from_slice(&data[..header]);
     result[0] &= 0x7f;
     let mut pos = bitmap_end;
-    for i in 0..count {
-        if u16(data, header + (i / 16) * 2) & (0x8000 >> (i % 16)) != 0 {
+    for w in 0..words {
+        let mut bits = word(w);
+        while bits != 0 {
+            let i = w * 16 + bits.leading_zeros() as usize;
+            bits &= !(0x8000 >> (i % 16));
             let dest = header + i * width;
             result[dest..dest + width].copy_from_slice(&data[pos..pos + width]);
             pos += width;
@@ -1474,7 +1475,7 @@ mod tests {
             let page = directory_page(&data, &directory, index, &lay, 3).unwrap();
             assert_eq!(page.vals[..2], [value, -value]);
             assert_eq!(page.statuses[..2], [0, 0]);
-            assert_eq!(lay.tuples[..2], [vec![1], vec![2]]);
+            assert_eq!(lay.tuples()[..2], [vec![1], vec![2]]);
         }
         let error = directory_page(&data, &directory, 8194, &lay, 3)
             .err()
@@ -1593,6 +1594,83 @@ mod tests {
         assert_eq!(u16(&decoded, 6), 0);
         assert_eq!(u16(&decoded, 34), 7);
         assert_eq!(u16(&decoded, 36), 9);
+    }
+
+    /// The previous per-bit expansion, kept as the oracle for the word scan.
+    fn decompress_reference(data: &[u8]) -> Option<Vec<u8>> {
+        let width = (data[0] & 15) as usize;
+        let rank = data[1] as usize;
+        let header = 2 + rank * 2;
+        let count: usize = (0..rank).map(|d| u16(data, 2 + d * 2) as usize).product();
+        let bitmap_end = header + count.div_ceil(16) * 2;
+        let set = |i: usize| u16(data, header + (i / 16) * 2) & (0x8000 >> (i % 16)) != 0;
+        let stored = (0..count).filter(|&i| set(i)).count();
+        if bitmap_end + stored * width > data.len() {
+            return None;
+        }
+        let mut result = vec![0u8; header + count * width];
+        result[..header].copy_from_slice(&data[..header]);
+        result[0] &= 0x7f;
+        let mut pos = bitmap_end;
+        for i in (0..count).filter(|&i| set(i)) {
+            let dest = header + i * width;
+            result[dest..dest + width].copy_from_slice(&data[pos..pos + width]);
+            pos += width;
+        }
+        Some(result)
+    }
+
+    #[test]
+    fn component_word_scan_matches_per_bit_reference() {
+        let mut state = 0x2545_f491_4f6c_dd1du64;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        for case in 0..2000 {
+            let width = [1u8, 2, 4, 8][case % 4];
+            // Cover partial final words (with padding bits set) and exact multiples.
+            let count = (next() % 70) as u16;
+            let mut data = vec![0x80 | width, 1];
+            data.extend_from_slice(&count.to_le_bytes());
+            for _ in 0..count.div_ceil(16) {
+                let word = match next() % 4 {
+                    0 => 0,
+                    1 => u16::MAX,
+                    _ => next() as u16,
+                };
+                data.extend_from_slice(&word.to_le_bytes());
+            }
+            let payload = (next() % (count as u64 * width as u64 + 2)) as usize;
+            data.extend((0..payload).map(|_| next() as u8));
+            let actual = decompress_component(&data).ok();
+            assert_eq!(
+                actual,
+                decompress_reference(&data),
+                "case {case}: {data:02x?}"
+            );
+        }
+    }
+
+    #[test]
+    fn cell_bits_follow_row_major_page_strides() {
+        let counts = [3i64, 5, 2];
+        let (stride, _) = bit_layout(&[4, 8, 2]);
+        let bits = cell_bits(&counts, &stride);
+        assert_eq!(bits.len(), 30);
+        let mut row = 0;
+        for a in 0..3 {
+            for b in 0..5 {
+                for c in 0..2 {
+                    let expected = a * stride[0] + b * stride[1] + c * stride[2];
+                    assert_eq!(i64::from(bits[row]), expected);
+                    row += 1;
+                }
+            }
+        }
+        assert!(cell_bits(&[], &[]).is_empty());
     }
 
     #[test]
