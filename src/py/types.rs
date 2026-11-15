@@ -621,7 +621,7 @@ pub struct Ivt {
     cache: Mutex<Option<Vec<RecordBatch>>>,
     maps: Mutex<Option<Arc<TidySchema>>>,
     member_fields: Mutex<Option<Py<PyAny>>>,
-    source_digest: Mutex<Option<String>>,
+    table_id: Mutex<Option<String>>,
     compact_cache: Mutex<Option<(Vec<AxisProjection>, RecordBatch)>>,
 }
 
@@ -723,7 +723,7 @@ impl Ivt {
             .extract()?;
         let key = projection.clone();
         let data = this.compact_data(py, 0)?;
-        let table_id = this.source_digest(py, &data)?;
+        let table_id = this.table_id(py)?;
         let batch = py
             .allow_threads(|| -> Result<RecordBatch, IvtError> {
                 let mut cache = this.compact_cache.lock().unwrap();
@@ -786,20 +786,21 @@ impl Ivt {
         let member_estimate = self.layout.counts.iter().fold(0usize, |n, &count| {
             n.saturating_add((count as usize).saturating_mul(128))
         });
-        let data = self.compact_data(py, member_estimate)?;
-        let axis_kinds = self
-            .metadata
-            .borrow(py)
-            .inner
-            .lock()
-            .unwrap()
-            .desc()
-            .dims
-            .iter()
-            .map(|dimension| dimension.type_code == 6)
-            .collect::<Vec<_>>();
+        compact_preflight(0, member_estimate)?;
+        let metadata = self.metadata.borrow(py);
+        let inner = &metadata.inner;
         let fields = py
             .allow_threads(|| {
+                // Member records live in the metadata catalog built at open;
+                // value pages are never needed here.
+                let guard = inner.lock().unwrap();
+                let data = guard.catalog()?;
+                let axis_kinds = guard
+                    .desc()
+                    .dims
+                    .iter()
+                    .map(|dimension| dimension.type_code == 6)
+                    .collect::<Vec<_>>();
                 self.layout
                     .counts
                     .iter()
@@ -807,24 +808,26 @@ impl Ivt {
                     .map(|(axis, &count)| {
                         let (fields, positions) =
                             crate::members::read_typed_members_with_positions(
-                                &data,
+                                data,
                                 axis,
                                 count as usize,
                             )?;
-                        let (names, references) = metadata::member_display(&data, axis, &positions);
-                        Ok::<_, IvtError>((fields, (axis_kinds[axis], names, references)))
+                        let (names, references) = metadata::member_display(data, axis, &positions);
+                        let is_time = axis_kinds.get(axis).copied().unwrap_or(false);
+                        Ok::<_, IvtError>((fields, (is_time, names, references)))
                     })
                     .collect::<Result<Vec<_>, _>>()
             })
             .map_err(map_ivt_err)?;
+        drop(metadata);
         let estimated = fields
             .iter()
             .flat_map(|(fields, _)| fields)
             .fold(0usize, |n, (_, values)| {
                 n.saturating_add(values.len().saturating_mul(128))
             });
-        compact_preflight(data.len(), estimated)?;
-        let digest = self.source_digest(py, &data)?;
+        compact_preflight(0, estimated)?;
+        let digest = self.table_id(py)?;
         let axes = PyList::empty(py);
         let displays = PyList::empty(py);
         for (axis, display) in fields {
@@ -920,16 +923,18 @@ impl Ivt {
         py.allow_threads(|| self.ensure_data()).map_err(map_ivt_err)
     }
 
-    fn source_digest(&self, py: Python<'_>, data: &[u8]) -> PyResult<String> {
-        if let Some(digest) = self.source_digest.lock().unwrap().as_ref() {
+    /// `pyivt.table_id`, computed once from header and metadata bytes in Rust
+    /// with the GIL released. Shared by `to_arrow()` and `to_member_table()`.
+    fn table_id(&self, py: Python<'_>) -> PyResult<String> {
+        if let Some(digest) = self.table_id.lock().unwrap().as_ref() {
             return Ok(digest.clone());
         }
-        let hasher = py.import("hashlib")?.getattr("sha256")?.call0()?;
-        for chunk in data.chunks(1_048_576) {
-            hasher.call_method1("update", (PyBytes::new(py, chunk),))?;
-        }
-        let digest: String = hasher.call_method0("hexdigest")?.extract()?;
-        *self.source_digest.lock().unwrap() = Some(digest.clone());
+        let metadata = self.metadata.borrow(py);
+        let inner = &metadata.inner;
+        let digest = py
+            .allow_threads(|| inner.lock().unwrap().table_identity())
+            .map_err(map_ivt_err)?;
+        *self.table_id.lock().unwrap() = Some(digest.clone());
         Ok(digest)
     }
 
@@ -1080,7 +1085,7 @@ pub fn open_ivt(
                 cache: Mutex::new(None),
                 maps: Mutex::new(None),
                 member_fields: Mutex::new(None),
-                source_digest: Mutex::new(None),
+                table_id: Mutex::new(None),
                 compact_cache: Mutex::new(None),
             })
         }
@@ -1110,7 +1115,7 @@ pub fn open_ivt(
                 cache: Mutex::new(None),
                 maps: Mutex::new(None),
                 member_fields: Mutex::new(None),
-                source_digest: Mutex::new(None),
+                table_id: Mutex::new(None),
                 compact_cache: Mutex::new(None),
             })
         }

@@ -187,7 +187,7 @@ An unreadable path still raises `OSError`. Invalid arguments, such as an unknown
 - `code` contains 1-based member positions. The member table uses one unsigned integer type wide enough for the source table's largest dimension. Each fact column still uses the width of its own dimension.
 - `label` is a nullable string in English by default. Use `to_member_table(language="fr")` for French labels. Time-axis labels use ISO dates.
 - Native attributes use Arrow strings, integers, floats, or `date32` dates. The native `Code` field, when present, is a separate text column (typically `native_Code`) and preserves leading zeros and duplicate values. Attributes are null where they are absent. Names that collide with `dimension`, `code`, or `label` receive a `native_` prefix. Incompatible attributes with the same name receive numeric suffixes.
-- Export schemas use `pyivt.dimension_encoding=one_based_index`. The fact schema and member exports with retained dimensions also carry `pyivt.table_id` to identify the source table.
+- Export schemas use `pyivt.dimension_encoding=one_based_index`. The fact schema and member exports with retained dimensions also carry `pyivt.table_id` to identify the source table. It is a SHA-256 over the file's length, its metadata (header, members, labels, notes and legends) and its value page directory, so `to_arrow()` and `to_member_table()` carry the same ID for the same file without reading value pages. It is not the SHA-256 of the file bytes. Use it to match a member table with its fact table, not to check a file's integrity.
 
 ### Metadata
 
