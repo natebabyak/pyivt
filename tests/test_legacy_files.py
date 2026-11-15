@@ -179,7 +179,7 @@ def test_real_v2_path_bytes_metadata_members_and_every_value(entry):
         ]
         assert {data[offset] & 15 for offset in offsets if offset} == {4, 8}
     slug = file._layout.slugs[-1]
-    selected = file.to_arrow(**{slug: [1, file._layout.counts[-1]]})
+    selected = file.to_arrow(select={slug: [1, file._layout.counts[-1]]})
     expected = table.filter(pc.is_in(table[slug], value_set=selected[slug].unique()))
     assert selected.equals(expected, check_metadata=True)
 
@@ -191,7 +191,9 @@ def test_time_holes_preserve_public_codes_and_nonchronological_dates():
     assert [
         (r["code"], r["label"]) for r in members if r["dimension"] == "annual_rate"
     ] == [(1, "1996-01-01"), (2, "1997-01-01"), (3, "1995-01-01")]
-    assert ivt.to_arrow(cause=1, sex=1, region=1)["value"].to_pylist() == [
+    assert ivt.to_arrow(select={"cause": 1, "sex": 1, "region": 1})[
+        "value"
+    ].to_pylist() == [
         860.5,
         843.9,
         877.0,
@@ -240,13 +242,13 @@ def test_native_browser_csv_every_exported_cell(name):
 
     if name == "00060104":
         row_slug, column_slug = "region", "periods"
-        selected = ivt.to_arrow(quantifier=1)
+        selected = ivt.to_arrow(select={"quantifier": 1})
     elif name == "tb611996":
         row_slug, column_slug = "region", "annual_rate"
-        selected = ivt.to_arrow(cause=1, sex=1)
+        selected = ivt.to_arrow(select={"cause": 1, "sex": 1})
     else:
         row_slug, column_slug = "industry_groups", "empclass"
-        selected = ivt.to_arrow(prov_can=codes("prov_can")["Newfoundland"])
+        selected = ivt.to_arrow(select={"prov_can": codes("prov_can")["Newfoundland"]})
     row_codes, column_codes = codes(row_slug), codes(column_slug)
     actual = {(r[row_slug], r[column_slug]): r["value"] for r in selected.to_pylist()}
     with path.open(encoding="cp1252", newline="") as source:

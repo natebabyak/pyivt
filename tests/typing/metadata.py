@@ -8,10 +8,12 @@ from typing_extensions import assert_type
 
 
 def check_metadata(ivt: pyivt.Ivt) -> None:
-    assert_type(ivt.to_arrow(geography=[1]), pa.Table)
+    assert_type(ivt.to_arrow(select={"geography": [1]}), pa.Table)
     assert_type(ivt.to_arrow(), pa.Table)
-    assert_type(ivt.iter_batches(batch_size=10, geography=[1]), pa.RecordBatchReader)
-    assert_type(ivt.to_member_table(geography=[1]), pa.Table)
+    assert_type(
+        ivt.iter_batches(batch_size=10, select={"geography": [1]}), pa.RecordBatchReader
+    )
+    assert_type(ivt.to_member_table(select={"geography": [1]}), pa.Table)
     assert_type(ivt.to_member_table(language="fr"), pa.Table)
     assert_type(
         ivt.metadata.frequency,

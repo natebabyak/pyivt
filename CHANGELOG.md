@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `to_arrow()`, `iter_batches()` and `to_member_table()` take the dimension selection as `select={slug: code_or_codes}`, for example `ivt.to_arrow(select={"geography": 2, "census_year": [1, 2]})`. Codes and their meaning are unchanged. Keyword selection could collide with options such as `batch_size`. Generated `Dimensions` typed dictionaries are passed the same way: `select=Dimensions(...)`. Combining `select` with keyword dimensions raises `TypeError`, and a `select` that is not a mapping raises `TypeError`.
+- `ResourceLimitError` messages for exports name the `max_memory_bytes` limit that was exceeded, for example `exceeds the max_memory_bytes limit of 2 GiB`.
 - The public API is now written down in [docs/api.md](docs/api.md): exactly the names in `pyivt.__all__` plus `pyivt.__version__`, with a quick start, a reference for every public item, and a stability and deprecation policy for v0.1.0 onward. A test keeps the documented list, `__all__` and the stubs in sync.
 - The type stubs no longer show private members: `Ivt._layout`, `Ivt._member_fields()`, `Ivt._arrow_c_stream()`, `IvtMetadata._loaded()`, `IvtMetadata._io_metrics()`, and the `_source_owner` argument of the native `open()`. They still exist at runtime for pyivt's own code and tests, and remain private.
 - `pyivt.__version__` is read from the installed package metadata. The version is declared once, in `Cargo.toml`; `pyproject.toml` takes it from there.
@@ -34,9 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `Ivt.iter_batches(*, batch_size=1_048_576, **dims)` streams the compact `to_arrow()` table as a `pyarrow.RecordBatchReader`. Batches keep file order and the same schema and metadata, are decoded on demand without the GIL, and hold about one copy of the file plus two batches. The full 126,198,000-row 98100532 table, which `to_arrow()` refuses, streams in about 5 seconds with a peak working set of 286 MB. The 2 GiB limit stays internal.
+- `max_memory_bytes` is public again on `to_arrow()` and `iter_batches()`. It is the memory estimate in bytes that an export may use and defaults to 2 GiB (2,147,483,648), the previous internal limit. Raise it to materialize larger tables at once, or lower it to fail early. Values that are not positive raise `ValueError`.
+- `Ivt.iter_batches(*, batch_size=1_048_576, **dims)` streams the compact `to_arrow()` table as a `pyarrow.RecordBatchReader`. Batches keep file order and the same schema and metadata, are decoded on demand without the GIL, and hold about one copy of the file plus two batches. The full 126,198,000-row 98100532 table, which `to_arrow()` refuses, streams in about 5 seconds with a peak working set of 286 MB.
 - Typed exceptions: `pyivt.IvtError` (a `ValueError`) and its subclasses `CorruptFileError`, `UnsupportedFormatError`, and `ResourceLimitError` (also a `MemoryError`). Each exception has `offset`, `length`, `file_len`, `slot`, `entry`, and `dimension` attributes when they are known. `ResourceLimitError` adds `estimate` and `limit`. Error kinds come from the Rust error type, not from the message text. Messages are unchanged, and `except ValueError` still catches every parse error.
 - `python -m scripts.triage_files PATH ...` records whether each IVT or ZIP opens, is corrupt, or is unsupported, with its size, SHA-256, header bytes and message.
+
+### Deprecated
+
+- Passing dimensions as keyword arguments, as in `ivt.to_arrow(geography=2)`, still works but emits a `DeprecationWarning` that points at the calling line. It will be removed in a later minor release. **Migration:** wrap the keywords in a dictionary, `ivt.to_arrow(select={"geography": 2})`, or replace `**selection` with `select=selection`.
 
 ### Fixed
 

@@ -707,24 +707,26 @@ impl Ivt {
     }
 
     /// Export 1-based member positions and nullable float64 values in file order.
-    /// Each call builds new buffers that the reader does not retain. Path opens
-    /// read the file for the export and release it afterwards.
-    #[pyo3(signature = (**dims))]
+    ///
+    /// `select` maps dimension slugs to member codes: an int fixes the
+    /// dimension and drops its column, a list keeps it limited to those codes.
+    /// The result plus one copy of the file must fit `max_memory_bytes`
+    /// (default 2 GiB), or pyivt.ResourceLimitError is raised. Each call builds
+    /// new buffers that the reader does not retain.
+    #[pyo3(signature = (*, select=None, max_memory_bytes=DEFAULT_MEMORY_LIMIT, **dims))]
     fn to_arrow<'py>(
         slf: Bound<'py, Self>,
         py: Python<'py>,
+        select: Option<Bound<'py, PyAny>>,
+        max_memory_bytes: i64,
         dims: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let (plan, data) = Self::compact_plan(&slf, py, dims)?;
+        let limit = memory_limit(max_memory_bytes)?;
+        let (plan, data) = Self::compact_plan(&slf, py, select, dims, limit)?;
         let this: &Self = &slf.borrow();
         let batch = py
             .allow_threads(|| -> Result<RecordBatch, IvtError> {
-                crate::compact::preflight(
-                    plan.rows,
-                    plan.bytes_per_row(),
-                    data.len(),
-                    crate::compact::MEMORY_LIMIT,
-                )?;
+                crate::compact::preflight(plan.rows, plan.bytes_per_row(), data.len(), limit)?;
                 let pages = crate::decode::DataPages::open(&data)?;
                 plan.batch(&data, &this.layout, &pages, 0, plan.rows)
             })
@@ -747,21 +749,33 @@ impl Ivt {
 
     /// Stream the to_arrow() table as a pyarrow.RecordBatchReader of at most
     /// batch_size rows per batch, in file order, with the same schema and
-    /// metadata. Batches are decoded on demand without the GIL; the stream
-    /// keeps one reference to the file contents and no earlier batches.
-    #[pyo3(signature = (*, batch_size=DEFAULT_BATCH_ROWS, **dims))]
+    /// metadata. `select` works as in to_arrow(). One copy of the file plus two
+    /// batches must fit `max_memory_bytes` (default 2 GiB). Batches are decoded
+    /// on demand without the GIL; the stream keeps one reference to the file
+    /// contents and no earlier batches.
+    #[pyo3(signature = (
+        *,
+        select=None,
+        batch_size=DEFAULT_BATCH_ROWS,
+        max_memory_bytes=DEFAULT_MEMORY_LIMIT,
+        **dims
+    ))]
     fn iter_batches<'py>(
         slf: Bound<'py, Self>,
         py: Python<'py>,
+        select: Option<Bound<'py, PyAny>>,
         batch_size: usize,
+        max_memory_bytes: i64,
         dims: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         if batch_size == 0 {
             return Err(PyValueError::new_err("batch_size must be positive"));
         }
-        let (plan, data) = Self::compact_plan(&slf, py, dims)?;
+        let limit = memory_limit(max_memory_bytes)?;
+        let (plan, data) = Self::compact_plan(&slf, py, select, dims, limit)?;
         let layout = slf.borrow().layout.clone();
-        let reader = CompactReader::new(data, layout, plan, batch_size).map_err(map_ivt_err)?;
+        let reader =
+            CompactReader::new(data, layout, plan, batch_size, limit).map_err(map_ivt_err)?;
         let capsule = stream_capsule(py, Box::new(reader))?;
         py.import("pyarrow")?
             .getattr("RecordBatchReader")?
@@ -769,10 +783,14 @@ impl Ivt {
     }
 
     /// Export one Arrow member lookup with a dictionary-encoded dimension column.
-    #[pyo3(signature = (*, language="en", **dims))]
+    ///
+    /// `select` picks the same members as in to_arrow(). Labels use `language`,
+    /// "en" or "fr". No cells are decoded.
+    #[pyo3(signature = (*, select=None, language="en", **dims))]
     fn to_member_table<'py>(
         slf: Bound<'py, Self>,
         py: Python<'py>,
+        select: Option<Bound<'py, PyAny>>,
         language: &str,
         dims: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, PyAny>> {
@@ -784,7 +802,7 @@ impl Ivt {
         let projection: Vec<AxisProjection> = py
             .import("pyivt._export")?
             .getattr("prepare")?
-            .call1((&slf, dims.unwrap_or_else(|| PyDict::new(py))))?
+            .call1((&slf, select, dims.unwrap_or_else(|| PyDict::new(py))))?
             .extract()?;
         let this: &Self = &slf.borrow();
         // A lookup without retained dimensions needs no members or table id.
@@ -1004,6 +1022,33 @@ fn resolve_source(_py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<OpenSou
 const DEFAULT_BATCH_ROWS: usize = 1_048_576;
 
 /// Coarse check before reading a path open: one copy of the source plus `extra`.
+/// Default for the public `max_memory_bytes` export option: 2 GiB.
+const DEFAULT_MEMORY_LIMIT: i64 = crate::compact::MEMORY_LIMIT as i64;
+
+/// Validate a public `max_memory_bytes` value.
+fn memory_limit(max_memory_bytes: i64) -> PyResult<usize> {
+    if max_memory_bytes <= 0 {
+        return Err(PyValueError::new_err("max_memory_bytes must be positive"));
+    }
+    usize::try_from(max_memory_bytes)
+        .map_err(|_| PyValueError::new_err("max_memory_bytes exceeds addressable memory"))
+}
+
+/// Refuse an export whose source alone exceeds the caller's limit.
+fn preflight_limit(file_size: usize, limit: usize) -> PyResult<()> {
+    if file_size > limit {
+        return Err(resource_limit(
+            &format!(
+                "memory estimate exceeds the max_memory_bytes limit of {}",
+                crate::compact::describe_bytes(limit)
+            ),
+            Some(file_size as u64),
+            Some(limit as u64),
+        ));
+    }
+    Ok(())
+}
+
 fn compact_preflight(file_size: usize, extra: usize) -> PyResult<()> {
     let estimate = file_size.saturating_add(extra);
     if estimate > crate::compact::MEMORY_LIMIT {
@@ -1021,12 +1066,14 @@ impl Ivt {
     fn compact_plan<'py>(
         slf: &Bound<'py, Self>,
         py: Python<'py>,
+        select: Option<Bound<'py, PyAny>>,
         dims: Option<Bound<'py, PyDict>>,
+        limit: usize,
     ) -> PyResult<(Plan, SharedBytes)> {
         let projection: Vec<AxisProjection> = py
             .import("pyivt._export")?
             .getattr("prepare")?
-            .call1((slf, dims.unwrap_or_else(|| PyDict::new(py))))?
+            .call1((slf, select, dims.unwrap_or_else(|| PyDict::new(py))))?
             .extract()?;
         let this: &Self = &slf.borrow();
         let table_id = this.table_id(py)?;
@@ -1035,14 +1082,11 @@ impl Ivt {
             ("pyivt.dimension_encoding".into(), "one_based_index".into()),
         ]);
         let plan = Plan::new(&this.layout, projection, metadata).map_err(map_ivt_err)?;
-        let data = this.compact_data(py, 0)?;
+        preflight_limit(this.file_size()?, limit)?;
+        let data = py
+            .allow_threads(|| this.ensure_data())
+            .map_err(map_ivt_err)?;
         Ok((plan, data))
-    }
-
-    fn compact_data(&self, py: Python<'_>, extra: usize) -> PyResult<SharedBytes> {
-        let size = self.file_size()?;
-        compact_preflight(size, extra)?;
-        py.allow_threads(|| self.ensure_data()).map_err(map_ivt_err)
     }
 
     /// `pyivt.table_id`, computed once from header and metadata bytes in Rust

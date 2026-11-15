@@ -19,7 +19,7 @@ pq.write_table(table, "table.parquet")
 pq.write_table(members, "table.members.parquet")
 
 # Select by dimension slug: an int fixes a dimension, a list keeps a subset.
-subset = ivt.to_arrow(geography=1, **{meta.dimensions[1].slug: [1, 2]})
+subset = ivt.to_arrow(select={"geography": 1, meta.dimensions[1].slug: [1, 2]})
 
 # Stream tables too large to build at once.
 with ivt.iter_batches(batch_size=500_000) as reader:
@@ -89,23 +89,36 @@ Returned by `open()`; it cannot be constructed directly and needs no
 | Member | Returns | Notes |
 | --- | --- | --- |
 | `metadata` | `IvtMetadata` | The same object on every access. |
-| `to_arrow(**dims)` | `pyarrow.Table` | The whole selection at once. |
-| `iter_batches(*, batch_size=1_048_576, **dims)` | `pyarrow.RecordBatchReader` | The same table, streamed. |
-| `to_member_table(*, language="en", **dims)` | `pyarrow.Table` | Member lookup. No cells are decoded. |
+| `to_arrow(*, select=None, max_memory_bytes=2**31)` | `pyarrow.Table` | The whole selection at once. |
+| `iter_batches(*, select=None, batch_size=1_048_576, max_memory_bytes=2**31)` | `pyarrow.RecordBatchReader` | The same table, streamed. |
+| `to_member_table(*, select=None, language="en")` | `pyarrow.Table` | Member lookup. No cells are decoded. |
 
 ### Selecting dimensions
 
-All three export methods take dimension slugs (`Dimension.slug`) as keyword
-arguments. Codes are **1-based member positions** in file order.
+All three export methods take `select`, a mapping from dimension slugs
+(`Dimension.slug`) to member codes. Codes are **1-based member positions**
+in file order.
 
 - An `int` fixes the dimension at one member and drops its column.
 - A `list[int]` keeps the column and limits it to those members. An empty list gives zero rows.
 - An omitted dimension keeps all members.
 
 An unknown slug, an unknown or duplicate code, or a non-integer code raises
-`ValueError` before anything is decoded.
+`ValueError` before anything is decoded. A `select` that is not a mapping
+raises `TypeError`.
 
-### `to_arrow(**dims)`
+```python
+ivt.to_arrow(select={"geography": 2, "census_year": [1, 2]})
+ivt.to_member_table(select={"geography": 2, "census_year": [1, 2]})
+```
+
+**Deprecated:** passing dimensions as keyword arguments, as in
+`to_arrow(geography=2)`, still works but emits a `DeprecationWarning` and
+will be removed in a later minor release. Combining keyword dimensions with
+`select` raises `TypeError`. Keyword selection was replaced because a slug
+could collide with an option such as `batch_size`.
+
+### `to_arrow(*, select=None, max_memory_bytes=2_147_483_648)`
 
 Returns one row per selected cell in file order. There is one unsigned
 integer column per retained dimension, named by its slug and holding member
@@ -113,29 +126,31 @@ codes, then a nullable `float64` column named `value`. The schema metadata
 carries `pyivt.dimension_encoding=one_based_index` and `pyivt.table_id`.
 Each call builds a new table that the reader does not retain.
 
-The result plus one copy of the file must fit an internal 2 GiB estimate.
-Larger selections raise `ResourceLimitError`; stream them with
-`iter_batches()`. The limit is not configurable.
+The result plus one copy of the file must fit `max_memory_bytes`, an
+estimate in bytes that defaults to 2 GiB. Larger selections raise
+`ResourceLimitError`; raise the limit, or stream them with `iter_batches()`.
+A limit that is not positive raises `ValueError`.
 
-### `iter_batches(*, batch_size=1_048_576, **dims)`
+### `iter_batches(*, select=None, batch_size=1_048_576, max_memory_bytes=2_147_483_648)`
 
-Streams the `to_arrow(**dims)` table as a `pyarrow.RecordBatchReader` of at
-most `batch_size` rows per batch. Batches keep file order and the same
-schema and metadata, so concatenating them equals `to_arrow(**dims)`.
-Memory stays near one copy of the file plus about two batches. The reader
+Streams the `to_arrow(select=...)` table as a `pyarrow.RecordBatchReader` of
+at most `batch_size` rows per batch. Batches keep file order and the same
+schema and metadata, so concatenating them equals `to_arrow(select=...)`.
+Memory stays near one copy of the file plus about two batches, which must
+fit `max_memory_bytes`. The reader
 supports the Arrow C stream protocol, so Polars and DuckDB can read
 it without copying. It can be read once, and it stays valid after the `Ivt`
 is released. `batch_size` must be positive.
 
 `Ivt` itself does not implement `__arrow_c_stream__`; call `iter_batches()`.
 
-### `to_member_table(*, language="en", **dims)`
+### `to_member_table(*, select=None, language="en")`
 
 Returns one row per retained member. Columns are `dimension` (a
 dictionary-encoded slug), `code` (the 1-based position), `label` (nullable,
 in `language`, which is `"en"` or `"fr"`), then the file's native member
 attributes. A native `Code` field is kept as text, usually as `native_Code`.
-The same selection keywords pick the same members as `to_arrow()`. Join on
+The same `select` picks the same members as `to_arrow()`. Join on
 `dimension` and `code` to label a fact table.
 
 ## Metadata
@@ -143,6 +158,10 @@ The same selection keywords pick the same members as `to_arrow()`. Join on
 All metadata objects are read-only snapshots; none can be constructed
 directly except `LocalizedText` and `LocalizedLabels`. A missing field is
 `None`, except where noted below.
+
+Values keep the form decoded from the file. pyivt does not normalize them
+across fields, so related fields can mark "absent" differently, as
+`Footnote.number` and `MissingValue.code` do.
 
 ### `IvtMetadata`
 
@@ -171,9 +190,9 @@ full English and French titles from it; otherwise they keep the stored name.
 The geographic axis always has the slug `geography`. Other slugs come from
 the full English title: its ASCII letters and digits, lowercased, with
 every other run of characters replaced by `_`, cut to at most 40 characters
-and made unique within the table with a `_2`, `_3`, ... suffix. Slugs name the Arrow columns, the
-selection keywords, the member table's `dimension` values and the generated
-types.
+and made unique within the table with a `_2`, `_3`, ... suffix. Slugs name the
+Arrow columns, the `select` keys, the member table's `dimension` values and
+the generated types.
 
 ### `Geographies`
 
@@ -234,8 +253,14 @@ pyivt codegen table.ivt --output dimensions.py [--language en|fr]
 ```
 
 Writes one Python module per table: an `IntEnum` per dimension whose values
-are 1-based member codes, a `Dimensions` `TypedDict` for selection keywords,
+are 1-based member codes, a `Dimensions` `TypedDict` to pass as `select`,
 and `NATIVE_CODES[slug][code]`, the native code text or `None`.
+
+```python
+from dimensions import Dimensions, Geography
+
+table = ivt.to_arrow(select=Dimensions(geography=[Geography.CANADA]))
+```
 
 ## Version
 
@@ -284,12 +309,9 @@ for at least one minor release, and the changelog lists it under
 that was wrong, such as misread values or truncated names; those changes are
 marked **Breaking** in the changelog with migration steps.
 
-## Open decisions
+## Planned
 
-These questions are still open. Until they are settled, the parts below can
-change before 0.1.0.
-
-- Whether selection stays `to_arrow(**dims)` or becomes `to_arrow(select={...})`. Keyword selection collides with any future keyword option.
-- Whether per-cell statuses and footnotes, which are not in the public exports today, become public.
-- Whether missing markers become consistent: `Footnote.number` uses 0 and `MissingValue.code` uses `None`.
-- Whether a public `max_memory_bytes` option returns. Today the 2 GiB limit is internal.
+Per-cell statuses and footnotes are not in the public exports yet. The aim
+is for everything Beyond 20/20 shows for a table to be reachable from pyivt;
+the shape of that API is still being designed, so these parts can change
+before 0.1.0.

@@ -242,6 +242,16 @@ fn fill_codes<T: Copy>(out: &mut [MaybeUninit<T>], table: &[T], stride: usize, f
     }
 }
 
+/// `2 GiB` for whole binary gigabytes, otherwise the exact byte count.
+pub fn describe_bytes(bytes: usize) -> String {
+    const GIB: usize = 1 << 30;
+    if bytes >= GIB && bytes.is_multiple_of(GIB) {
+        format!("{} GiB", bytes / GIB)
+    } else {
+        format!("{bytes} bytes")
+    }
+}
+
 /// Refuse when `live_rows` of output plus the single held copy of the source
 /// would exceed `limit`. The source buffer is counted once.
 pub fn preflight(
@@ -257,8 +267,10 @@ pub fn preflight(
     if estimate.is_none_or(|n| n > limit) {
         return Err(IvtError::resource_limit(
             format!(
-                "memory estimate for {live_rows} rows exceeds the internal 2 GiB safety limit; \
-                 reduce the selection or stream it with iter_batches()"
+                "memory estimate for {live_rows} rows exceeds the max_memory_bytes limit of {}; \
+                 reduce the selection, stream it with iter_batches(), or raise \
+                 max_memory_bytes",
+                describe_bytes(limit)
             ),
             estimate.map(|n| n as u64),
             Some(limit as u64),
@@ -286,13 +298,14 @@ impl CompactReader {
         layout: Layout,
         plan: Plan,
         batch_size: usize,
+        limit: usize,
     ) -> Result<Self, IvtError> {
         if batch_size == 0 {
             return Err(IvtError::Parse("batch_size must be positive".into()));
         }
         // A consumer may keep the previous batch while the next one is built.
         let live = batch_size.min(plan.rows).saturating_mul(2);
-        preflight(live, plan.bytes_per_row(), data.len(), MEMORY_LIMIT)?;
+        preflight(live, plan.bytes_per_row(), data.len(), limit)?;
         Ok(Self {
             data,
             layout,

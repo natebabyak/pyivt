@@ -63,7 +63,7 @@ for dimension in ivt.metadata.dimensions:
     print(dimension.slug, dimension.name.en, dimension.items)
 ```
 
-Use the slugs as Arrow column names, selection keywords, and values in the
+Use the slugs as Arrow column names, `select` keys, and values in the
 member table's `dimension` column.
 The geography axis uses `geography`. Other axes follow their full IVT dimension
 titles, so a time dimension may be named `census_year`, `reference_period`, or `time`.
@@ -100,17 +100,17 @@ labeled = table.join(lookup, keys="geography", right_keys="code")
 On a table with `geography` and `census_year`, fix geography and keep two years.
 
 ```python
-table = ivt.to_arrow(geography=2, census_year=[1, 2])
-members = ivt.to_member_table(geography=2, census_year=[1, 2])
+selection = {"geography": 2, "census_year": [1, 2]}
+table = ivt.to_arrow(select=selection)
+members = ivt.to_member_table(select=selection)
 ```
 
 Use `Dimension.slug` when the dimensions depend on the input file.
 
 ```python
 slug = ivt.metadata.dimensions[0].slug
-selection = {slug: [1]}
-subset = ivt.to_arrow(**selection)
-subset_members = ivt.to_member_table(**selection)
+subset = ivt.to_arrow(select={slug: [1]})
+subset_members = ivt.to_member_table(select={slug: [1]})
 ```
 
 Both methods select by the members' 1-based positions in the file. An integer
@@ -118,6 +118,9 @@ fixes a dimension at one member and omits it from both outputs. A list retains
 the dimension and limits its members to the given codes. Omitted dimensions
 retain all members. An empty list gives zero fact rows and zero member rows
 for that dimension.
+
+Passing dimensions as keyword arguments, as in `to_arrow(geography=2)`, is
+deprecated: it still works for now but emits a `DeprecationWarning`.
 
 ### Pivot industry by occupation with Polars
 
@@ -129,7 +132,7 @@ per industry and one column per occupation code.
 ```python
 import polars as pl
 
-table = ivt.to_arrow(geography=5, labour_force=1)
+table = ivt.to_arrow(select={"geography": 5, "labour_force": 1})
 pivoted = pl.from_arrow(table).pivot(
     on="occupation",
     index="industry",
@@ -144,23 +147,24 @@ pyivt codegen data.ivt --output dimensions.py
 ```
 
 The generated module contains one `IntEnum` per dimension and a `Dimensions`
-typed dictionary for selection keywords. Enum values are 1-based member positions.
-Use enum members as codes when calling `to_arrow()` or `to_member_table()`.
+typed dictionary to pass as `select`. Enum values are 1-based member positions.
+Use enum members as codes when calling `to_arrow()` or `to_member_table()`,
+for example `ivt.to_arrow(select=Dimensions(geography=[Geography.CANADA]))`.
 `NATIVE_CODES[slug][member]` gives the original code as text, or `None` if it
 is missing. Add `--language fr` to use French labels for enum names.
 
 ## API Reference
 
 The full reference, including every public name, the stability policy and the
-API decisions still open before v0.1.0, is in [docs/api.md](docs/api.md). The
+parts still planned before v0.1.0, is in [docs/api.md](docs/api.md). The
 public API is exactly `pyivt.__all__` plus `pyivt.__version__`; names that
 start with an underscore are private.
 
 ### Opening and exporting
 
 - `open(source, *, member=None)` returns an `Ivt`. It accepts a path, IVT or ZIP bytes, a `bytearray`, an object with `__bytes__`, or a binary file object. `member` selects an IVT inside a ZIP with several tables.
-- `to_arrow()` returns rows in file order with unsigned member codes and a nullable `float64` column named `value`. It builds the whole table at once, so the result plus one copy of the file must fit an internal 2 GiB memory estimate; larger exports raise `pyivt.ResourceLimitError`.
-- `iter_batches(*, batch_size=1_048_576, **dims)` streams the same table as a `pyarrow.RecordBatchReader`. It takes the same selection keywords, keeps file order, and has the same schema and metadata, so its batches concatenate to `to_arrow(**dims)`. Batches are decoded on demand without the GIL, so memory stays near one copy of the file plus two batches. Use it for tables too large to materialize:
+- `to_arrow()` returns rows in file order with unsigned member codes and a nullable `float64` column named `value`. It builds the whole table at once, so the result plus one copy of the file must fit `max_memory_bytes` (an estimate in bytes, 2 GiB by default); larger exports raise `pyivt.ResourceLimitError`. Raise the limit with `to_arrow(max_memory_bytes=8 * 2**30)`, or stream the table.
+- `iter_batches(*, select=None, batch_size=1_048_576, max_memory_bytes=2**31)` streams the same table as a `pyarrow.RecordBatchReader`. It takes the same `select`, keeps file order, and has the same schema and metadata, so its batches concatenate to `to_arrow(select=...)`. Batches are decoded on demand without the GIL, so memory stays near one copy of the file plus two batches. Use it for tables too large to materialize:
 
   ```python
   import polars as pl
@@ -171,7 +175,7 @@ start with an underscore are private.
           for batch in reader:
               writer.write_batch(batch)
 
-  frame = pl.DataFrame(ivt.iter_batches(geography=[1, 2]))
+  frame = pl.DataFrame(ivt.iter_batches(select={"geography": [1, 2]}))
   ```
 
   The full 126,198,000-row 98100532 table (208 MB file) streams in about 3 seconds with a peak working set under 300 MB.
@@ -188,7 +192,7 @@ Files that cannot be read raise a subclass of `pyivt.IvtError`. `IvtError` subcl
 | --- | --- | --- |
 | `pyivt.CorruptFileError` | The file is truncated, its signature or header is damaged, or a record or directory points outside the file. | `IvtError` |
 | `pyivt.UnsupportedFormatError` | The file is an IVT, but its container version, descriptor, or record layout is not supported. | `IvtError` |
-| `pyivt.ResourceLimitError` | A memory estimate exceeds a safety limit. Narrow the export with a selection, or stream it with `iter_batches()`. | `IvtError`, `MemoryError` |
+| `pyivt.ResourceLimitError` | A memory estimate exceeds a safety limit. Narrow the export with `select`, raise `max_memory_bytes`, or stream it with `iter_batches()`. | `IvtError`, `MemoryError` |
 
 Messages lead with a plain explanation (`Corrupt IVT file: ...` or `Unsupported IVT file: ...`). Each exception also has location attributes, which are `None` when not known: `offset`, `length`, and `file_len` (bytes), `slot` (header slot), `entry` (directory entry), and `dimension` (zero-based axis). `ResourceLimitError` adds `estimate` and `limit` in bytes.
 

@@ -42,10 +42,13 @@ def sample(path: Path) -> None:
     assert_type(meta.missing_values, list[pyivt.MissingValue])
     assert_type(meta.missing_values[0].code, int | None)
 
-    assert_type(ivt.to_arrow(**selection), pa.Table)
-    with ivt.iter_batches(batch_size=1000, **selection) as reader:
+    assert_type(ivt.to_arrow(select=selection), pa.Table)
+    assert_type(ivt.to_arrow(max_memory_bytes=4 << 30), pa.Table)
+    with ivt.iter_batches(
+        batch_size=1000, max_memory_bytes=1 << 30, select=selection
+    ) as reader:
         assert_type(reader, pa.RecordBatchReader)
-    assert_type(ivt.to_member_table(language="en", **selection), pa.Table)
+    assert_type(ivt.to_member_table(language="en", select=selection), pa.Table)
 
     assert_type(pyivt.LocalizedText(en="a"), pyivt.LocalizedText)
     assert_type(pyivt.LocalizedLabels(fr=["a"]), pyivt.LocalizedLabels)

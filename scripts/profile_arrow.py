@@ -59,7 +59,7 @@ def worker(args):
                 raise ValueError("legacy baseline has no selection API")
             table = ivt._legacy_to_arrow(max_memory_bytes=args.max_memory_bytes)
         else:
-            table = ivt.to_arrow(**(select or {}))
+            table = ivt.to_arrow(select=select or {})
         result = {
             "rows": table.num_rows,
             "columns": table.num_columns,

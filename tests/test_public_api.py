@@ -212,17 +212,51 @@ def test_ivt_is_not_constructible_and_exposes_its_metadata(ivt):
 def test_exports_select_by_slug_with_one_based_codes(ivt):
     dims = ivt.metadata.dimensions
     first, second = dims[0].slug, dims[1].slug
-    table = ivt.to_arrow(**{first: 1, second: [1, 2]})
+    table = ivt.to_arrow(select={first: 1, second: [1, 2]})
     assert isinstance(table, pa.Table)
     assert table.column_names == [slug.slug for slug in dims[1:]] + ["value"]
     assert set(table[second].to_pylist()) == {1, 2}
     metadata = table.schema.metadata
     assert metadata[b"pyivt.dimension_encoding"] == b"one_based_index"
     assert b"pyivt.table_id" in metadata
-    assert ivt.to_arrow(**{first: []}).num_rows == 0
+    assert ivt.to_arrow(select={first: []}).num_rows == 0
     for bad in ({"no_such_axis": 1}, {first: 0}, {first: [1, 1]}, {first: "1"}):
         with pytest.raises(ValueError):
-            ivt.to_arrow(**bad)
+            ivt.to_arrow(select=bad)
+
+
+def test_keyword_selection_still_works_but_is_deprecated(ivt):
+    slug = ivt.metadata.dimensions[0].slug
+    for export in (ivt.to_arrow, ivt.to_member_table):
+        with pytest.warns(DeprecationWarning, match=r"select=\{") as record:
+            legacy = export(**{slug: [1, 2]})
+        # The warning points at the caller, not at pyivt.
+        assert record[0].filename == __file__
+        assert legacy.equals(export(select={slug: [1, 2]}))
+    with pytest.warns(DeprecationWarning):
+        legacy = ivt.iter_batches(batch_size=5, **{slug: [1]}).read_all()
+    assert legacy.equals(ivt.to_arrow(select={slug: [1]}))
+
+
+def test_select_rejects_mixed_forms_and_non_mappings(ivt):
+    slug = ivt.metadata.dimensions[0].slug
+    for export in (ivt.to_arrow, ivt.iter_batches, ivt.to_member_table):
+        with pytest.raises(TypeError, match="select="):
+            export(select={slug: 1}, **{slug: 1})
+        with pytest.raises(TypeError, match="mapping"):
+            export(select=[(slug, 1)])  # type: ignore[arg-type]
+        export(select={})
+        export(select=None)
+
+
+def test_max_memory_bytes_is_public(ivt):
+    for export in (ivt.to_arrow, ivt.iter_batches):
+        with pytest.raises(pyivt.ResourceLimitError) as raised:
+            export(max_memory_bytes=1024)
+        assert raised.value.limit == 1024
+        with pytest.raises(ValueError, match="positive"):
+            export(max_memory_bytes=0)
+    assert ivt.to_arrow(max_memory_bytes=1 << 26).equals(ivt.to_arrow())
 
 
 def test_iter_batches_streams_the_to_arrow_table(ivt):
@@ -232,8 +266,8 @@ def test_iter_batches_streams_the_to_arrow_table(ivt):
     assert all(batch.num_rows <= 7 for batch in batches)
     assert pa.Table.from_batches(batches, reader.schema).equals(ivt.to_arrow())
     slug = ivt.metadata.dimensions[0].slug
-    with ivt.iter_batches(**{slug: [2]}) as selected:
-        assert selected.read_all().equals(ivt.to_arrow(**{slug: [2]}))
+    with ivt.iter_batches(select={slug: [2]}) as selected:
+        assert selected.read_all().equals(ivt.to_arrow(select={slug: [2]}))
     with pytest.raises(ValueError, match="batch_size"):
         ivt.iter_batches(batch_size=0)
 
@@ -244,7 +278,7 @@ def test_member_table_labels_codes_in_both_languages(ivt):
     french = ivt.to_member_table(language="fr")
     assert english.column_names[:3] == ["dimension", "code", "label"]
     assert english.num_rows == french.num_rows == sum(dim.items for dim in dims)
-    lookup = ivt.to_member_table(**{dims[0].slug: [3]})
+    lookup = ivt.to_member_table(select={dims[0].slug: [3]})
     rows = [row for row in lookup.to_pylist() if row["dimension"] == dims[0].slug]
     assert [row["code"] for row in rows] == [3]
     assert rows[0]["label"] == dims[0].members.en[2]

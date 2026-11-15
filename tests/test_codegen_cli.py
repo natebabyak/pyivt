@@ -75,14 +75,19 @@ def test_codegen_writes_deterministic_ruff_clean_types(tmp_path, stored_codes):
     dims = module["Dimensions"](
         geography=[geography.ETE_2], reference_period=[period._1970_01_01]
     )
-    table = ivt.to_arrow(**dims)
+    table = ivt.to_arrow(select=dims)
     assert table["geography"].to_pylist() == [2] * 2
     assert table["reference_period"].to_pylist() == [1] * 2
-    assert ivt.to_member_table(**dims).select(["dimension", "code"]).to_pydict() == {
+    assert ivt.to_member_table(select=dims).select(
+        ["dimension", "code"]
+    ).to_pydict() == {
         "dimension": ["geography", "measure", "measure", "reference_period"],
         "code": [2, 1, 2, 1],
     }
-    assert "geography" not in ivt.to_arrow(geography=geography.ETE_2).column_names
+    assert (
+        "geography"
+        not in ivt.to_arrow(select={"geography": geography.ETE_2}).column_names
+    )
 
     _command(source, output, "--language", "fr")
     assert b"# Language: fr" in output.read_bytes()
@@ -112,7 +117,7 @@ def test_codegen_accepts_a_dimension_whose_class_name_is_a_keyword(tmp_path):
     _command(source, output)
     module = runpy.run_path(str(output))
     dimensions = module["Dimensions"](none=[module["None_2"].LEVEL])
-    assert pyivt.open(source).to_arrow(**dimensions)["none"].to_pylist() == [1] * 6
+    assert pyivt.open(source).to_arrow(select=dimensions)["none"].to_pylist() == [1] * 6
 
 
 def test_codegen_keeps_long_enum_names_and_matches_ruff(tmp_path):
@@ -143,8 +148,8 @@ import pyivt
 from table_types import Dimensions, Geography, Measure
 
 def check(ivt: pyivt.Ivt) -> None:
-    ivt.to_arrow(**Dimensions(geography=[Geography._CLASS], measure=[Measure.LEVEL]))
-    ivt.to_member_table(language="fr", **Dimensions(geography=Geography.WEST))
+    ivt.to_arrow(select=Dimensions(geography=[Geography._CLASS], measure=[Measure.LEVEL]))
+    ivt.to_member_table(language="fr", select=Dimensions(geography=Geography.WEST))
 """
     args = [command]
     if checker == "ty":
@@ -161,8 +166,8 @@ def check(ivt: pyivt.Ivt) -> None:
     subprocess.run(args, check=True, cwd=tmp_path, env=environment)
     script.write_text(
         good
-        + "    ivt.to_arrow(**Dimensions(unknown=Geography.WEST))\n"
-        + "    ivt.to_arrow(**Dimensions(geography=[Measure.LEVEL]))\n",
+        + "    ivt.to_arrow(select=Dimensions(unknown=Geography.WEST))\n"
+        + "    ivt.to_arrow(select=Dimensions(geography=[Measure.LEVEL]))\n",
         encoding="utf-8",
     )
     bad = subprocess.run(
