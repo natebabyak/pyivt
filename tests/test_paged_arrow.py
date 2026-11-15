@@ -80,10 +80,12 @@ def _official_csv_table() -> pa.Table:
     return pa.table(
         {
             "geography": pa.array(coordinates, pa.int64()),
-            "population_and": pa.array(members, pa.int64()),
+            "population_and_dwelling_counts_11": pa.array(members, pa.int64()),
             "geography_english_desc": pa.array(geographies, pa.string()),
             "geography_dguid_en": pa.array(dguids, pa.string()),
-            "population_and_english_desc": pa.array(labels, pa.string()),
+            "population_and_dwelling_counts_11_english_desc": pa.array(
+                labels, pa.string()
+            ),
             "value": pa.array(values, pa.float64()),
             "symbol": pa.array(symbols, pa.string()),
         }
@@ -92,7 +94,7 @@ def _official_csv_table() -> pa.Table:
 
 def test_paged_arrow_matches_complete_official_csv() -> None:
     ivt = pyivt.open(IVT_PATH)
-    assert ivt._layout.slugs == ["geography", "population_and"]
+    assert ivt._layout.slugs == ["geography", "population_and_dwelling_counts_11"]
     assert ivt._layout.counts == [105, 11]
     assert ivt.metadata.number_of_datapoints == 1155
     actual = plain_table(expanded_table(ivt))
@@ -100,7 +102,10 @@ def test_paged_arrow_matches_complete_official_csv() -> None:
     assert actual.num_rows == expected.num_rows == 1155
     for name in expected.column_names:
         column = actual[name]
-        if name in ("geography_english_desc", "population_and_english_desc"):
+        if name in (
+            "geography_english_desc",
+            "population_and_dwelling_counts_11_english_desc",
+        ):
             # Beyond stores hierarchy indentation; the public CSV omits it.
             column = pc.utf8_trim_whitespace(column)
         assert column.null_count == expected[name].null_count, name
@@ -134,10 +139,10 @@ def test_paged_arrow_schema_contract() -> None:
         ("geography_description", pa.string()),
         ("geography_itemnotes2", pa.string()),
         ("geography_decimals", pa.int64()),
-        ("population_and", pa.int64()),
-        ("population_and_code", pa.string()),
-        ("population_and_english_desc", pa.string()),
-        ("population_and_desc_fran_ais", pa.string()),
+        ("population_and_dwelling_counts_11", pa.int64()),
+        ("population_and_dwelling_counts_11_code", pa.string()),
+        ("population_and_dwelling_counts_11_english_desc", pa.string()),
+        ("population_and_dwelling_counts_11_desc_fran_ais", pa.string()),
         ("value", pa.float64()),
         ("status_code", pa.int64()),
         ("symbol", pa.string()),

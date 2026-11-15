@@ -88,7 +88,9 @@ class Dimension:
     spaces used by Beyond 20/20 to express hierarchy. None means unavailable.
     Use the slug as the Arrow column name, selection keyword, and member
     lookup key. The geography axis uses `geography`. Other axes use slugs
-    derived from their IVT dimension names.
+    derived from their full English dimension titles. `name` and
+    `description` hold the full titles from the table notes' variable list
+    when the file stores one, and the stored 15-character axis name otherwise.
 
     ```python
     for dim in ivt.metadata.dimensions:

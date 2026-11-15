@@ -23,6 +23,8 @@ pub struct Descriptor {
     #[allow(dead_code)]
     pub offset: u32,
     pub dims: Vec<DimDesc>,
+    /// Full English and French axis titles, when the file stores them.
+    pub titles: Vec<[Option<String>; 2]>,
     pub geo_dim: Option<usize>,
     pub member_slots: Vec<Option<Vec<usize>>>,
     pub allocation_bits: Option<Vec<u16>>,
@@ -189,8 +191,10 @@ pub fn structured_descriptor(data: &[u8]) -> Result<Descriptor, IvtError> {
             }
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let titles = crate::metadata::full_dimension_titles(data, &dims);
     Ok(Descriptor {
         offset,
+        titles,
         member_slots,
         allocation_bits: (data.first() == Some(&2)).then_some(allocation_bits),
         dims,
@@ -216,6 +220,8 @@ pub fn dim_slugs(names: &[String]) -> Vec<String> {
             .to_lowercase();
         if base.len() > 40 {
             base.truncate(40);
+            // Full titles are long; never leave a dangling separator.
+            base.truncate(base.trim_end_matches('_').len());
         }
         if base.is_empty() {
             base = "dim".into();
@@ -245,6 +251,22 @@ mod tests {
         assert_eq!(&slugs[..4], ["a", "a_2", "a_2_2", "a_3"]);
         assert!(slugs.iter().all(|slug| !slug.is_empty()));
         assert_eq!(slugs.iter().collect::<HashSet<_>>().len(), slugs.len());
+    }
+
+    #[test]
+    fn long_titles_truncate_to_forty_without_trailing_separator() {
+        let names = [
+            "Age (in single years), average age and median age (128)",
+            "abcdefghij abcdefghij abcdefghij abcdef (x)",
+        ]
+        .map(str::to_string);
+        assert_eq!(
+            dim_slugs(&names),
+            [
+                "age_in_single_years_average_age_and_medi",
+                "abcdefghij_abcdefghij_abcdefghij_abcdef"
+            ]
+        );
     }
 
     #[test]
