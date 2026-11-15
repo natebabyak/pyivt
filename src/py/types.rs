@@ -10,6 +10,7 @@ use crate::arrow_export::stream_capsule;
 use crate::compact::AxisProjection;
 use crate::decode::{build_descriptor_layout, Layout};
 use crate::error::{ErrorKind, IvtError};
+use crate::io::SharedBytes;
 use crate::metadata::{
     self, Dimension as CoreDimension, Footnote as CoreFootnote, Geographies as CoreGeographies,
     IvtMetadata as CoreMeta, LocalizedText as CoreLocalized, MissingValue as CoreMissing,
@@ -616,7 +617,7 @@ pub struct Ivt {
     layout: Layout,
     py_layout: PyLayout,
     /// Full file bytes when opened from memory, or filled lazily for path opens on `to_arrow`.
-    data: Mutex<Option<Arc<Vec<u8>>>>,
+    data: Mutex<Option<SharedBytes>>,
     path: Option<PathBuf>,
     cache: Mutex<Option<Vec<RecordBatch>>>,
     maps: Mutex<Option<Arc<TidySchema>>>,
@@ -861,24 +862,58 @@ impl Ivt {
 
 enum OpenSource {
     Path(PathBuf),
-    Bytes(Vec<u8>),
+    Bytes(SharedBytes),
+}
+
+/// Keeps a Python `bytes` object alive and exposes its buffer without the GIL.
+struct PyBytesOwner {
+    _object: Py<PyBytes>,
+    ptr: *const u8,
+    len: usize,
+}
+
+// SAFETY: a `bytes` object is immutable and its buffer never moves or is freed
+// while a strong reference (`_object`) is held, so the pointer stays valid and
+// may be read from any thread without the GIL. `Py<T>` itself is Send + Sync.
+unsafe impl Send for PyBytesOwner {}
+unsafe impl Sync for PyBytesOwner {}
+
+impl AsRef<[u8]> for PyBytesOwner {
+    fn as_ref(&self) -> &[u8] {
+        // SAFETY: see the Send/Sync justification above.
+        unsafe { std::slice::from_raw_parts(self.ptr, self.len) }
+    }
+}
+
+/// Borrow an immutable `bytes` object's buffer instead of copying it.
+fn borrow_bytes(b: &Bound<'_, PyBytes>) -> SharedBytes {
+    let view = b.as_bytes();
+    SharedBytes::from_owner(PyBytesOwner {
+        ptr: view.as_ptr(),
+        len: view.len(),
+        _object: b.clone().unbind(),
+    })
 }
 
 fn resolve_source(_py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<OpenSource> {
     if let Ok(b) = source.downcast::<PyBytes>() {
-        return Ok(OpenSource::Bytes(b.as_bytes().to_vec()));
+        return Ok(OpenSource::Bytes(borrow_bytes(b)));
     }
     if let Ok(ba) = source.downcast::<PyByteArray>() {
-        return Ok(OpenSource::Bytes(ba.to_vec()));
+        // A bytearray can change after open(); snapshot it once.
+        return Ok(OpenSource::Bytes(ba.to_vec().into()));
     }
     if source.hasattr("read")? {
         let data = source.call_method0("read")?;
         if let Ok(b) = data.downcast::<PyBytes>() {
-            return Ok(OpenSource::Bytes(b.as_bytes().to_vec()));
+            return Ok(OpenSource::Bytes(borrow_bytes(b)));
+        }
+        if let Ok(ba) = data.downcast::<PyByteArray>() {
+            return Ok(OpenSource::Bytes(ba.to_vec().into()));
         }
         if let Ok(bytes) = data.call_method0("__bytes__") {
             if let Ok(b) = bytes.downcast::<PyBytes>() {
-                return Ok(OpenSource::Bytes(b.as_bytes().to_vec()));
+                return Ok(OpenSource::Bytes(borrow_bytes(b)));
             }
         }
         return Err(PyTypeError::new_err(format!(
@@ -895,7 +930,7 @@ fn resolve_source(_py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<OpenSou
     }
     if let Ok(bytes) = source.call_method0("__bytes__") {
         if let Ok(b) = bytes.downcast::<PyBytes>() {
-            return Ok(OpenSource::Bytes(b.as_bytes().to_vec()));
+            return Ok(OpenSource::Bytes(borrow_bytes(b)));
         }
     }
     Err(PyTypeError::new_err(format!(
@@ -917,7 +952,7 @@ fn compact_preflight(file_size: usize, extra: usize) -> PyResult<()> {
 }
 
 impl Ivt {
-    fn compact_data(&self, py: Python<'_>, extra: usize) -> PyResult<Arc<Vec<u8>>> {
+    fn compact_data(&self, py: Python<'_>, extra: usize) -> PyResult<SharedBytes> {
         let size = self.file_size()?;
         compact_preflight(size, extra)?;
         py.allow_threads(|| self.ensure_data()).map_err(map_ivt_err)
@@ -981,21 +1016,20 @@ impl Ivt {
         BatchReader::new(data, self.layout.clone(), maps, limit).map_err(map_ivt_err)
     }
 
-    fn ensure_data(&self) -> Result<Arc<Vec<u8>>, IvtError> {
+    fn ensure_data(&self) -> Result<SharedBytes, IvtError> {
         {
             let guard = self.data.lock().unwrap();
             if let Some(d) = guard.as_ref() {
-                return Ok(Arc::clone(d));
+                return Ok(d.clone());
             }
         }
         let path = self
             .path
             .as_ref()
             .ok_or_else(|| IvtError::Parse("IVT has no in-memory data or path".into()))?;
-        let bytes = std::fs::read(path).map_err(IvtError::Io)?;
-        let arc = Arc::new(bytes);
-        *self.data.lock().unwrap() = Some(Arc::clone(&arc));
-        Ok(arc)
+        let bytes = SharedBytes::from(std::fs::read(path).map_err(IvtError::Io)?);
+        *self.data.lock().unwrap() = Some(bytes.clone());
+        Ok(bytes)
     }
 }
 
@@ -1030,8 +1064,9 @@ impl Ivt {
 ///
 /// Paths use selective metadata reads. Keep the file available and unchanged:
 /// the first export reads its full contents. Lazy metadata properties
-/// may read additional ranges. In-memory sources are copied when opened, so
-/// later changes to a bytearray do not affect the reader. This function does
+/// may read additional ranges. Immutable `bytes` are shared with the reader,
+/// not copied. Mutable contents such as a bytearray are copied once when
+/// opened, so later changes do not affect the reader. This function does
 /// not fetch URLs or decompress archives. Exceptions raised by a supplied
 /// read(), __fspath__() or __bytes__() method may also propagate.
 ///
@@ -1110,7 +1145,7 @@ pub fn open_ivt(
                 metadata,
                 layout,
                 py_layout,
-                data: Mutex::new(Some(Arc::new(data))),
+                data: Mutex::new(Some(data)),
                 path: None,
                 cache: Mutex::new(None),
                 maps: Mutex::new(None),

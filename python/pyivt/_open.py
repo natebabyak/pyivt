@@ -8,7 +8,7 @@ from os import PathLike, fspath
 from pathlib import Path
 from shutil import copyfileobj
 from tempfile import TemporaryDirectory
-from typing import BinaryIO, cast
+from typing import BinaryIO, SupportsBytes, cast
 from zipfile import BadZipFile, ZipFile
 
 from pyivt import _native
@@ -40,6 +40,30 @@ def _archive(archive: ZipFile, member: str | None) -> _native.Ivt:
     except BaseException:
         owner.cleanup()
         raise
+
+
+def _contents(
+    source: bytes | bytearray | memoryview | SupportsBytes,
+) -> bytes | bytearray:
+    """Return in-memory contents without copying immutable ``bytes``.
+
+    The native reader shares exact ``bytes`` objects and snapshots a
+    ``bytearray`` once. A read-only memoryview spanning a whole ``bytes``
+    object is the same immutable buffer, so that object is shared too. Other
+    memoryviews may expose mutable memory and are copied once here.
+    """
+    if type(source) is bytes or type(source) is bytearray:
+        return source
+    if isinstance(source, memoryview):
+        owner = source.obj
+        if (
+            type(owner) is bytes
+            and source.readonly
+            and source.c_contiguous
+            and source.nbytes == len(owner)
+        ):
+            return owner
+    return bytes(source)
 
 
 def open(
@@ -80,8 +104,8 @@ def open(
     elif isinstance(source, (bytes, bytearray, memoryview)) or hasattr(
         source, "__bytes__"
     ):
-        contents = bytes(source)
-        signature = contents[:4]
+        contents = _contents(source)
+        signature = bytes(contents[:4])
     else:
         return _native.open(source)
     if signature in {b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"}:

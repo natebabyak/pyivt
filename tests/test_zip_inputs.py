@@ -4,6 +4,7 @@ import csv
 import gc
 import hashlib
 import json
+import sys
 from io import BytesIO
 from pathlib import Path
 from zipfile import ZIP_STORED, ZipFile
@@ -98,6 +99,81 @@ def test_real_statcan_zip_matches_extracted_ivt_and_every_official_csv_cell(rout
     )
     assert len(actual) == len(expected) == 154
     assert actual == expected
+
+
+class _Reader:
+    """A file object whose read() hands out the caller's mutable buffer."""
+
+    def __init__(self, data):
+        self.data = data
+
+    def read(self):
+        return self.data
+
+
+def _ivt_routes(content, tmp_path):
+    path = tmp_path / "table.ivt"
+    path.write_bytes(content)
+    padded = b"pad" + content + b"pad"
+    return {
+        "path": path,
+        "bytes": content,
+        "bytearray": bytearray(content),
+        "memoryview": memoryview(content),
+        "memoryview_slice": memoryview(padded)[3:-3],
+        "memoryview_cast": memoryview(content).cast("B", (len(content),)),
+        "memoryview_writable": memoryview(bytearray(content)),
+        "memoryview_readonly_bytearray": memoryview(bytearray(content)).toreadonly(),
+        "file": BytesIO(content),
+        "zip": _zip([("table.ivt", content)]),
+        "zip_bytearray": bytearray(_zip([("table.ivt", content)])),
+    }
+
+
+def test_every_input_route_matches_path_metadata_and_exports(tmp_path):
+    content = (ROOT / "98100001.zip").read_bytes()
+    with ZipFile(BytesIO(content)) as archive:
+        extracted = archive.read(IDENTITY["member"])
+    routes = _ivt_routes(extracted, tmp_path)
+    reference = pyivt.open(routes["path"])
+    for route, source in routes.items():
+        ivt = pyivt.open(source)
+        assert _metadata(ivt.metadata) == _metadata(reference.metadata), route
+        assert ivt.to_member_table().equals(reference.to_member_table()), route
+        assert ivt.to_arrow().equals(reference.to_arrow()), route
+        assert ivt._legacy_to_arrow().equals(reference._legacy_to_arrow()), route
+
+
+def test_immutable_bytes_are_shared_not_copied():
+    content = cube((2, 3))
+    for source in (content, memoryview(content)):
+        references = sys.getrefcount(content)
+        ivt = pyivt.open(source)
+        assert sys.getrefcount(content) == references + 1
+        del ivt
+        gc.collect()
+        assert sys.getrefcount(content) == references
+
+
+@pytest.mark.parametrize(
+    "view",
+    [
+        lambda data: data,
+        memoryview,
+        lambda data: memoryview(data).toreadonly(),
+        lambda data: _Reader(data),
+    ],
+    ids=["bytearray", "memoryview", "readonly_memoryview", "file_read_bytearray"],
+)
+def test_mutating_bytearray_after_open_does_not_change_reader(view):
+    original = cube((2, 3))
+    data = bytearray(original)
+    ivt = pyivt.open(view(data))
+    expected = pyivt.open(original)
+    data[:] = bytes(len(data))
+    assert _metadata(ivt.metadata) == _metadata(expected.metadata)
+    assert ivt.to_member_table().equals(expected.to_member_table())
+    assert ivt.to_arrow().equals(expected.to_arrow())
 
 
 def test_zip_member_selection_and_case_insensitive_extension():

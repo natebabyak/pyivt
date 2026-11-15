@@ -2,6 +2,7 @@
 
 use crate::decode::{decode_range, row_count, Layout};
 use crate::error::IvtError;
+use crate::io::SharedBytes;
 use crate::tidy::TidySchema;
 use arrow::datatypes::SchemaRef;
 use arrow::error::ArrowError;
@@ -9,7 +10,7 @@ use arrow::record_batch::{RecordBatch, RecordBatchReader};
 use std::sync::Arc;
 
 pub struct BatchReader {
-    pub data: Arc<Vec<u8>>,
+    pub data: SharedBytes,
     pub layout: Layout,
     pub maps: Arc<TidySchema>,
     pub batch_size: usize,
@@ -44,7 +45,7 @@ pub fn preflight(
 
 impl BatchReader {
     pub fn new(
-        data: Arc<Vec<u8>>,
+        data: SharedBytes,
         layout: Layout,
         maps: Arc<TidySchema>,
         limit: usize,

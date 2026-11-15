@@ -1117,7 +1117,7 @@ fn summary_datapoints(desc: &Descriptor) -> i64 {
 
 /// Oracle / bytes path: build metadata from a complete in-memory IVT.
 pub fn build_metadata(
-    data: Vec<u8>,
+    data: impl Into<crate::io::SharedBytes>,
     desc: Option<Descriptor>,
     hdr: Option<HeaderLayout>,
 ) -> Result<IvtMetadata, IvtError> {
