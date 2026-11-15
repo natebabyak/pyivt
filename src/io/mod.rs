@@ -6,5 +6,5 @@ mod shared;
 mod source;
 
 pub use read_at::IoMetrics;
-pub use shared::SharedBytes;
+pub use shared::{SharedBytes, WeakSharedBytes};
 pub use source::IvtSource;

@@ -29,13 +29,32 @@ def test_stream_matches_independently_declared_typed_result():
     assert ivt.to_arrow()["value"].equals(_expected_table()["value"])
 
 
-def test_cached_exports_share_buffers():
+def test_repeated_exports_are_equal_and_independent():
     ivt = pyivt.open(_typed_fixture())
     first, second = ivt.to_arrow(), ivt.to_arrow()
+    assert first.equals(second)
     assert (
         first["value"].chunk(0).buffers()[1].address
-        == second["value"].chunk(0).buffers()[1].address
+        != second["value"].chunk(0).buffers()[1].address
     )
+
+
+def test_path_open_exports_do_not_depend_on_retained_file_bytes(tmp_path):
+    path = tmp_path / "typed.ivt"
+    path.write_bytes(_typed_fixture())
+    ivt = pyivt.open(path)
+    expected = _expected_table()["value"]
+    reader = stream_reader(ivt)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        tables = list(pool.map(lambda _: ivt.to_arrow(), range(8)))
+    assert all(table["value"].equals(expected) for table in tables)
+    del tables
+    gc.collect()
+    # A live stream keeps its own copy; later exports read the file again.
+    assert ivt.to_arrow()["value"].equals(expected)
+    assert plain_table(reader.read_all()).equals(_expected_table())
+    reader.close()
+    assert ivt.to_arrow()["value"].equals(expected)
 
 
 def test_dictionary_categories_dedupe_members_and_exclude_null_values():

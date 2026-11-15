@@ -10,7 +10,7 @@ use crate::arrow_export::stream_capsule;
 use crate::compact::AxisProjection;
 use crate::decode::{build_descriptor_layout, Layout};
 use crate::error::{ErrorKind, IvtError};
-use crate::io::SharedBytes;
+use crate::io::{SharedBytes, WeakSharedBytes};
 use crate::metadata::{
     self, Dimension as CoreDimension, Footnote as CoreFootnote, Geographies as CoreGeographies,
     IvtMetadata as CoreMeta, LocalizedText as CoreLocalized, MissingValue as CoreMissing,
@@ -600,7 +600,8 @@ impl From<&Layout> for PyLayout {
 ///
 /// Obtain an instance with pyivt.open(source); direct construction is not
 /// supported. Inspect metadata and members without decoding cells.
-/// to_arrow() returns a compact table, caching buffers for equivalent exports. No context
+/// to_arrow() returns a new compact table on each call; the reader keeps no
+/// reference to it, so dropping the table releases its buffers. No context
 /// manager or close() call is required. This reader does not modify the source file.
 ///
 /// ```python
@@ -616,14 +617,15 @@ pub struct Ivt {
     metadata: Py<IvtMetadata>,
     layout: Layout,
     py_layout: PyLayout,
-    /// Full file bytes when opened from memory, or filled lazily for path opens on `to_arrow`.
+    /// Full file bytes when opened from memory; held for the reader's lifetime.
     data: Mutex<Option<SharedBytes>>,
+    /// File bytes read for a path open. Held weakly, so they are freed once no
+    /// export or stream uses them; a later export reads the file again.
+    loaded: Mutex<Option<WeakSharedBytes>>,
     path: Option<PathBuf>,
-    cache: Mutex<Option<Vec<RecordBatch>>>,
     maps: Mutex<Option<Arc<TidySchema>>>,
     member_fields: Mutex<Option<Py<PyAny>>>,
     table_id: Mutex<Option<String>>,
-    compact_cache: Mutex<Option<(Vec<AxisProjection>, RecordBatch)>>,
 }
 
 #[pymethods]
@@ -657,8 +659,8 @@ impl Ivt {
         stream_capsule(py, Box::new(reader))
     }
 
-    /// Materialize the batches as a chunked pyarrow.Table. Subsequent calls
-    /// share cached Arrow buffers. Use the Arrow C stream to bound retained memory.
+    /// Materialize the batches as a chunked pyarrow.Table. Each call decodes
+    /// afresh and the reader retains no output buffers.
     /// The conservative pre-flight limit includes output and working buffers.
     #[pyo3(signature = (*, max_memory_bytes=2_147_483_648))]
     fn _legacy_to_arrow<'py>(
@@ -683,16 +685,7 @@ impl Ivt {
         let mut reader = reader;
         let batches = py
             .allow_threads(|| {
-                let mut cache = self.cache.lock().unwrap();
-                if cache.is_none() {
-                    *cache = Some(std::iter::from_fn(|| reader.next_batch()).collect::<Result<
-                        Vec<_>,
-                        IvtError,
-                    >>(
-                    )?);
-                }
-                // RecordBatch clones only Arc buffers.
-                Ok::<_, IvtError>(cache.as_ref().unwrap().clone())
+                std::iter::from_fn(|| reader.next_batch()).collect::<Result<Vec<_>, IvtError>>()
             })
             .map_err(map_ivt_err)?;
         let capsule = stream_capsule(
@@ -710,6 +703,8 @@ impl Ivt {
     }
 
     /// Export 1-based member positions and nullable float64 values in file order.
+    /// Each call builds new buffers that the reader does not retain. Path opens
+    /// read the file for the export and release it afterwards.
     #[pyo3(signature = (**dims))]
     fn to_arrow<'py>(
         slf: Bound<'py, Self>,
@@ -722,26 +717,15 @@ impl Ivt {
             .getattr("prepare")?
             .call1((&slf, dims.unwrap_or_else(|| PyDict::new(py))))?
             .extract()?;
-        let key = projection.clone();
         let data = this.compact_data(py, 0)?;
         let table_id = this.table_id(py)?;
         let batch = py
             .allow_threads(|| -> Result<RecordBatch, IvtError> {
-                let mut cache = this.compact_cache.lock().unwrap();
-                if let Some((cached_key, batch)) = cache.as_ref() {
-                    if cached_key == &key {
-                        return Ok(batch.clone());
-                    }
-                }
-                // Release cached output before allocating a different selection.
-                *cache = None;
                 let metadata = std::collections::HashMap::from([
                     ("pyivt.table_id".into(), table_id),
                     ("pyivt.dimension_encoding".into(), "one_based_index".into()),
                 ]);
-                let batch = crate::compact::export(&data, &this.layout, projection, metadata)?;
-                *cache = Some((key, batch.clone()));
-                Ok(batch)
+                crate::compact::export(&data, &this.layout, projection, metadata)
             })
             .map_err(map_ivt_err)?;
         let schema = batch.schema();
@@ -1017,18 +1001,20 @@ impl Ivt {
     }
 
     fn ensure_data(&self) -> Result<SharedBytes, IvtError> {
-        {
-            let guard = self.data.lock().unwrap();
-            if let Some(d) = guard.as_ref() {
-                return Ok(d.clone());
-            }
+        if let Some(d) = self.data.lock().unwrap().as_ref() {
+            return Ok(d.clone());
+        }
+        // Hold the lock while reading so concurrent exports share one copy.
+        let mut loaded = self.loaded.lock().unwrap();
+        if let Some(d) = loaded.as_ref().and_then(WeakSharedBytes::upgrade) {
+            return Ok(d);
         }
         let path = self
             .path
             .as_ref()
             .ok_or_else(|| IvtError::Parse("IVT has no in-memory data or path".into()))?;
         let bytes = SharedBytes::from(std::fs::read(path).map_err(IvtError::Io)?);
-        *self.data.lock().unwrap() = Some(bytes.clone());
+        *loaded = Some(bytes.downgrade());
         Ok(bytes)
     }
 }
@@ -1116,12 +1102,11 @@ pub fn open_ivt(
                 layout,
                 py_layout,
                 data: Mutex::new(None),
+                loaded: Mutex::new(None),
                 path: Some(path),
-                cache: Mutex::new(None),
                 maps: Mutex::new(None),
                 member_fields: Mutex::new(None),
                 table_id: Mutex::new(None),
-                compact_cache: Mutex::new(None),
             })
         }
         OpenSource::Bytes(data) => {
@@ -1146,12 +1131,11 @@ pub fn open_ivt(
                 layout,
                 py_layout,
                 data: Mutex::new(Some(data)),
+                loaded: Mutex::new(None),
                 path: None,
-                cache: Mutex::new(None),
                 maps: Mutex::new(None),
                 member_fields: Mutex::new(None),
                 table_id: Mutex::new(None),
-                compact_cache: Mutex::new(None),
             })
         }
     }

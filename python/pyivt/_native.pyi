@@ -350,8 +350,9 @@ class Ivt:
     """An opened Beyond 20/20 table with metadata and deferred cell decoding.
 
     Open a reader with pyivt.open(source). Metadata and member lookups are
-    available without decoding cells. to_arrow() caches Arrow buffers for
-    equivalent exports. The reader does not modify the source file.
+    available without decoding cells. Each to_arrow() call builds a new
+    table that the reader does not retain, so dropping the table releases
+    its buffers. The reader does not modify the source file.
 
     ```python
     import pyivt
@@ -380,6 +381,11 @@ class Ivt:
         drops its column. A list of integers keeps the column and limits its
         rows. Omitted dimensions include all members. An empty list gives zero
         rows. Invalid slugs and codes raise ValueError before decoding.
+
+        Each call decodes the selection into new buffers. The reader keeps no
+        reference to the result, so dropping it releases its memory; repeated
+        identical calls return equal but independent tables. A reader opened
+        from a path reads the file for each export and does not keep it.
         """
     def to_member_table(
         self, /, *, language: Literal["en", "fr"] = "en", **dims: object
