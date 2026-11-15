@@ -1,6 +1,6 @@
 //! Compact export: one unsigned code column per included axis and owned value
 //! buffers, materialized at once or streamed in row ranges.
-use crate::decode::{decode_selected, Layout};
+use crate::decode::{decode_selected, DataPages, Layout};
 use crate::error::{limit_exceeded, IvtError};
 use crate::io::SharedBytes;
 use arrow::array::{ArrayRef, UInt16Array, UInt32Array, UInt64Array, UInt8Array};
@@ -117,6 +117,7 @@ impl Plan {
         &self,
         data: &[u8],
         layout: &Layout,
+        pages: &DataPages,
         start: usize,
         end: usize,
     ) -> Result<RecordBatch, IvtError> {
@@ -124,20 +125,13 @@ impl Plan {
             return Err(IvtError::Parse("batch range outside the selection".into()));
         }
         let rows = end - start;
-        // Column buffers are independent. Bound native concurrency and transfer
-        // ownership into Arrow; no full-size dimension IDs or metadata columns.
+        // Column buffers are independent. Values decode on the bounded rayon
+        // pool while this thread builds code columns; ownership moves into
+        // Arrow with no full-size dimension IDs or metadata columns.
         let mut arrays: Vec<ArrayRef> = Vec::with_capacity(self.schema.fields().len());
         std::thread::scope(|scope| -> Result<(), IvtError> {
             let value_task = scope.spawn(|| {
-                decode_selected(
-                    data,
-                    layout,
-                    &self.choices,
-                    &self.counts,
-                    &self.strides,
-                    start,
-                    end,
-                )
+                decode_selected(data, layout, pages, &self.choices, &self.counts, start, end)
             });
             let columns_profile = crate::profile::Stage::new("build_dimension_columns");
             for axis in 0..layout.n_dim {
@@ -210,6 +204,8 @@ pub struct CompactReader {
     data: SharedBytes,
     layout: Layout,
     plan: Plan,
+    /// Parsed on the first batch and reused by every later one.
+    pages: Option<DataPages>,
     batch_size: usize,
     position: usize,
 }
@@ -231,6 +227,7 @@ impl CompactReader {
             data,
             layout,
             plan,
+            pages: None,
             batch_size,
             position: 0,
         })
@@ -244,9 +241,14 @@ impl CompactReader {
             .position
             .saturating_add(self.batch_size)
             .min(self.plan.rows);
-        let result = self
-            .plan
-            .batch(&self.data, &self.layout, self.position, end);
+        let result = match self.pages {
+            Some(ref pages) => Ok(pages),
+            None => DataPages::open(&self.data).map(|pages| &*self.pages.insert(pages)),
+        }
+        .and_then(|pages| {
+            self.plan
+                .batch(&self.data, &self.layout, pages, self.position, end)
+        });
         // An error ends the stream; later calls return None.
         self.position = if result.is_ok() { end } else { self.plan.rows };
         Some(result)

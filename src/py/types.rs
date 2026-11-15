@@ -722,7 +722,8 @@ impl Ivt {
                     data.len(),
                     crate::compact::MEMORY_LIMIT,
                 )?;
-                plan.batch(&data, &this.layout, 0, plan.rows)
+                let pages = crate::decode::DataPages::open(&data)?;
+                plan.batch(&data, &this.layout, &pages, 0, plan.rows)
             })
             .map_err(map_ivt_err)?;
         drop(data);

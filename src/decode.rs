@@ -594,6 +594,7 @@ fn entry_index(coords: &[i64], estride: &[i64]) -> Result<usize, IvtError> {
         })
 }
 
+#[cfg(test)]
 fn directory_page(
     data: &[u8],
     directory: &MetadataDirectory,
@@ -671,9 +672,321 @@ fn directory_page_impl(
         .map_err(|err| context(Some(position), err))
 }
 
+/// Data directory and missing-value mode, parsed once per export and shared
+/// by every batch and decode worker.
+pub struct DataPages {
+    directory: MetadataDirectory,
+    mode: u16,
+}
+
+impl DataPages {
+    pub fn open(data: &[u8]) -> Result<Self, IvtError> {
+        let slot = crate::header::slot_offset(data, HDR_DIR_PTR)
+            .ok_or_else(|| corrupt_record("missing data directory slot"))?;
+        let directory = MetadataDirectory::new(data, slot).map_err(|e| {
+            e.reword(|e| format!("invalid data directory: {e}"))
+                .with(Context::slot(HDR_DIR_PTR).and_file_len(data.len()))
+        })?;
+        if u16(data, slot + 12) & 1 != 0 && u16(data, 20) != 4096 {
+            return Err(unsupported_record(format!(
+                "invalid data directory: unsupported directory page size {}",
+                u16(data, 20)
+            )));
+        }
+        let capacity = u32(data, slot + 4) as usize;
+        if directory.count > capacity {
+            return Err(corrupt_record(format!("invalid data directory: expected_entry_count={}, allocated_capacity={capacity}; reason=entry count exceeds capacity", directory.count)));
+        }
+        let mode = missing_mode(data)?;
+        Ok(Self { directory, mode })
+    }
+
+    fn page(
+        &self,
+        data: &[u8],
+        index: usize,
+        lay: &Layout,
+        notes: bool,
+    ) -> Result<PageCells, IvtError> {
+        directory_page_impl(data, &self.directory, index, lay, self.mode, notes)
+    }
+}
+
+/// Selected rows factored into page addresses. Axes before the straddling
+/// axis only choose the directory entry, the straddling axis contributes to
+/// both, and later axes only choose the in-page cell. A block is one value
+/// of the outer axes (through the straddling one); its rows share one page
+/// and their cells are `block_bit + inner_bits[k]`.
+struct SelectionWalk {
+    /// Selected member count per outer axis.
+    outer_counts: Vec<usize>,
+    /// Directory entry contribution per outer axis and selected position.
+    entry: Vec<Vec<usize>>,
+    /// In-page cell contribution of each straddling-axis selected position.
+    block_bit: Vec<usize>,
+    /// In-page cell offsets of the rows within one block.
+    inner_bits: Vec<usize>,
+}
+
+impl SelectionWalk {
+    fn new(lay: &Layout, choices: &[Option<Vec<usize>>], selected_counts: &[usize]) -> Self {
+        let axis = lay.straddle - 1;
+        let physical = |dim: usize, index: usize| {
+            let member = choices[dim].as_ref().map_or(index, |codes| codes[index]);
+            lay.member_slots[dim]
+                .as_ref()
+                .map_or(member, |slots| slots[member])
+        };
+        let ipc = lay.ipc[0] as usize;
+        let mut entry_stride = vec![0usize; axis];
+        for (position, &dim) in lay.ent_idx.iter().enumerate().skip(1) {
+            entry_stride[dim - 1] = lay.estride[position] as usize;
+        }
+        let mut entry: Vec<Vec<usize>> = (0..axis)
+            .map(|dim| {
+                (0..selected_counts[dim])
+                    .map(|index| physical(dim, index) * entry_stride[dim])
+                    .collect()
+            })
+            .collect();
+        entry.push(
+            (0..selected_counts[axis])
+                .map(|index| physical(axis, index) / ipc * lay.estride[0] as usize)
+                .collect(),
+        );
+        let block_bit = (0..selected_counts[axis])
+            .map(|index| physical(axis, index) % ipc * lay.page_strides[0] as usize)
+            .collect();
+        let mut inner_bits = vec![0usize];
+        for (dim, &count) in selected_counts.iter().enumerate().skip(axis + 1) {
+            let stride = lay.page_strides[dim - axis] as usize;
+            let offsets: Vec<usize> = (0..count)
+                .map(|index| physical(dim, index) * stride)
+                .collect();
+            inner_bits = inner_bits
+                .iter()
+                .flat_map(|&base| offsets.iter().map(move |&offset| base + offset))
+                .collect();
+        }
+        Self {
+            outer_counts: selected_counts[..=axis].to_vec(),
+            entry,
+            block_bit,
+            inner_bits,
+        }
+    }
+
+    fn inner_rows(&self) -> usize {
+        self.inner_bits.len()
+    }
+
+    /// Selected positions of the outer axes for block `block`.
+    fn positions(&self, mut block: usize) -> Vec<usize> {
+        let mut positions = vec![0usize; self.outer_counts.len()];
+        for (position, &count) in positions.iter_mut().zip(&self.outer_counts).rev() {
+            *position = block % count;
+            block /= count;
+        }
+        positions
+    }
+
+    fn prefix_entry(&self, positions: &[usize]) -> usize {
+        positions
+            .iter()
+            .zip(&self.entry)
+            .map(|(&position, entry)| entry[position])
+            .sum()
+    }
+
+    fn block_entry(&self, block: usize) -> usize {
+        self.prefix_entry(&self.positions(block))
+    }
+
+    /// Split `[start, end)` into about `target` chunks whose interior bounds
+    /// fall where the page changes, so no page is decoded by two workers.
+    fn chunks(&self, start: usize, end: usize, target: usize, min_rows: usize) -> Vec<usize> {
+        let inner = self.inner_rows();
+        let step = (end - start).div_ceil(target.max(1)).max(min_rows).max(1);
+        let mut bounds = vec![start];
+        let mut candidate = start.saturating_add(step);
+        while candidate < end {
+            let mut block = candidate.div_ceil(inner);
+            let mut previous = self.block_entry(block - 1);
+            while block * inner < end {
+                let current = self.block_entry(block);
+                if current != previous {
+                    break;
+                }
+                previous = current;
+                block += 1;
+            }
+            let bound = block * inner;
+            if bound >= end {
+                break;
+            }
+            bounds.push(bound);
+            candidate = bound.saturating_add(step);
+        }
+        bounds.push(end);
+        bounds
+    }
+
+    /// Decode rows `[start, start + values.len())` in contiguous page runs.
+    fn decode(
+        &self,
+        data: &[u8],
+        lay: &Layout,
+        pages: &DataPages,
+        start: usize,
+        values: &mut [std::mem::MaybeUninit<f64>],
+        valid: &mut arrow::array::BooleanBufferBuilder,
+    ) -> Result<(), IvtError> {
+        let inner = self.inner_rows();
+        let last = self.outer_counts.len() - 1;
+        let mut positions = self.positions(start / inner);
+        let mut offset = start % inner;
+        let mut prefix = self.prefix_entry(&positions[..last]);
+        let mut cached: Option<(usize, PageCells)> = None;
+        let mut out = 0usize;
+        while out < values.len() {
+            let member = positions[last];
+            let index = prefix + self.entry[last][member];
+            if cached
+                .as_ref()
+                .is_none_or(|(previous, _)| *previous != index)
+            {
+                cached = Some((index, pages.page(data, index, lay, false)?));
+            }
+            let page = &cached.as_ref().unwrap().1;
+            let length = (inner - offset).min(values.len() - out);
+            let base = self.block_bit[member];
+            for (slot, &bit) in values[out..out + length]
+                .iter_mut()
+                .zip(&self.inner_bits[offset..offset + length])
+            {
+                let bit = base + bit;
+                let published = page.statuses[bit] == 0;
+                valid.append(published);
+                slot.write(if published { page.vals[bit] } else { 0.0 });
+            }
+            out += length;
+            if out == values.len() {
+                break;
+            }
+            offset = 0;
+            // Advance the outer odometer; the entry prefix changes only when
+            // an axis before the straddling one rolls over.
+            let mut dim = last;
+            loop {
+                positions[dim] += 1;
+                if positions[dim] < self.outer_counts[dim] || dim == 0 {
+                    break;
+                }
+                positions[dim] = 0;
+                dim -= 1;
+            }
+            if dim < last {
+                prefix = self.prefix_entry(&positions[..last]);
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Rows per decode chunk below which splitting costs more than it saves.
+const MIN_CHUNK_ROWS: usize = 32_768;
+
 /// Materialize only selected cells into the final value and validity buffers.
-/// The last decoded page is reused; sorted selections preserve native row order.
+/// Rows are split at page boundaries and decoded on the rayon pool (sized by
+/// `RAYON_NUM_THREADS`); each chunk owns a disjoint slice of the output.
+/// Output is identical for any thread count and preserves native row order.
 pub fn decode_selected(
+    data: &[u8],
+    lay: &Layout,
+    pages: &DataPages,
+    choices: &[Option<Vec<usize>>],
+    selected_counts: &[usize],
+    start: usize,
+    end: usize,
+) -> Result<arrow::array::Float64Array, IvtError> {
+    let _profile = crate::profile::Stage::new("decode_values");
+    let target_chunks = rayon::current_num_threads().saturating_mul(4);
+    decode_selected_chunked(
+        data,
+        lay,
+        pages,
+        choices,
+        selected_counts,
+        start..end,
+        target_chunks,
+        MIN_CHUNK_ROWS,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn decode_selected_chunked(
+    data: &[u8],
+    lay: &Layout,
+    pages: &DataPages,
+    choices: &[Option<Vec<usize>>],
+    selected_counts: &[usize],
+    range: std::ops::Range<usize>,
+    target_chunks: usize,
+    min_chunk_rows: usize,
+) -> Result<arrow::array::Float64Array, IvtError> {
+    use arrow::array::BooleanBufferBuilder;
+    use arrow::buffer::{NullBuffer, ScalarBuffer};
+    use rayon::prelude::*;
+    let rows = range.len();
+    let mut values: Vec<f64> = reserved(rows)?;
+    let mut parts = Vec::new();
+    if rows != 0 {
+        let walk = SelectionWalk::new(lay, choices, selected_counts);
+        let bounds = walk.chunks(range.start, range.end, target_chunks, min_chunk_rows);
+        let mut slices = Vec::with_capacity(bounds.len() - 1);
+        let mut rest = &mut values.spare_capacity_mut()[..rows];
+        for pair in bounds.windows(2) {
+            let (head, tail) = rest.split_at_mut(pair[1] - pair[0]);
+            slices.push((pair[0], head));
+            rest = tail;
+        }
+        let decode = |(first, slice): (usize, &mut [std::mem::MaybeUninit<f64>])| {
+            let mut valid = BooleanBufferBuilder::new(slice.len());
+            walk.decode(data, lay, pages, first, slice, &mut valid)
+                .map(|()| valid)
+        };
+        // One chunk runs on the calling thread without touching the pool.
+        let results: Vec<Result<BooleanBufferBuilder, IvtError>> = if slices.len() == 1 {
+            slices.into_iter().map(decode).collect()
+        } else {
+            slices.into_par_iter().map(decode).collect()
+        };
+        // Report the error a serial decode would reach first.
+        for result in results {
+            parts.push(result?);
+        }
+        // SAFETY: every chunk returned Ok, so each wrote its whole disjoint
+        // slice and together they initialize all `rows` elements.
+        unsafe { values.set_len(rows) };
+    }
+    let valid = if parts.len() == 1 {
+        parts.pop().unwrap().finish()
+    } else {
+        let mut valid = BooleanBufferBuilder::new(rows);
+        for part in &parts {
+            valid.append_packed_range(0..part.len(), part.as_slice());
+        }
+        valid.finish()
+    };
+    Ok(arrow::array::Float64Array::new(
+        ScalarBuffer::from(values),
+        Some(NullBuffer::new(valid)),
+    ))
+}
+
+/// The pre-parallel per-row decoder, kept as the byte-identity oracle.
+#[cfg(test)]
+fn decode_selected_reference(
     data: &[u8],
     lay: &Layout,
     choices: &[Option<Vec<usize>>],
@@ -682,7 +995,6 @@ pub fn decode_selected(
     start: usize,
     end: usize,
 ) -> Result<arrow::array::Float64Array, IvtError> {
-    let _profile = crate::profile::Stage::new("decode_values");
     use arrow::array::BooleanBufferBuilder;
     use arrow::buffer::{NullBuffer, ScalarBuffer};
     let slot = crate::header::slot_offset(data, HDR_DIR_PTR)
@@ -797,6 +1109,7 @@ fn reserved<T>(n: usize) -> Result<Vec<T>, IvtError> {
 pub fn decode_range(
     data: &[u8],
     lay: &Layout,
+    pages: &DataPages,
     start: usize,
     end: usize,
 ) -> Result<CellBatch, IvtError> {
@@ -805,23 +1118,6 @@ pub fn decode_range(
     if start > end || end > total {
         return Err(IvtError::Parse("cell batch range outside grid".into()));
     }
-    let slot = crate::header::slot_offset(data, HDR_DIR_PTR)
-        .ok_or_else(|| corrupt_record("missing data directory slot"))?;
-    let directory = MetadataDirectory::new(data, slot).map_err(|e| {
-        e.reword(|e| format!("invalid data directory: {e}"))
-            .with(Context::slot(HDR_DIR_PTR).and_file_len(data.len()))
-    })?;
-    if u16(data, slot + 12) & 1 != 0 && u16(data, 20) != 4096 {
-        return Err(unsupported_record(format!(
-            "invalid data directory: unsupported directory page size {}",
-            u16(data, 20)
-        )));
-    }
-    let capacity = u32(data, slot + 4) as usize;
-    if directory.count > capacity {
-        return Err(corrupt_record(format!("invalid data directory: expected_entry_count={}, allocated_capacity={capacity}; reason=entry count exceeds capacity", directory.count)));
-    }
-    let mode = missing_mode(data)?;
     let n = end - start;
     let mut strides = vec![1usize; lay.n_dim];
     for axis in (0..lay.n_dim - 1).rev() {
@@ -851,7 +1147,7 @@ pub fn decode_range(
                 .as_ref()
                 .is_none_or(|(previous, _)| *previous != entry)
             {
-                cached = Some((entry, directory_page(data, &directory, entry, lay, mode)?));
+                cached = Some((entry, pages.page(data, entry, lay, true)?));
             }
             let page = &cached.as_ref().unwrap().1;
             batch.values.push(page.vals[bit]);
@@ -875,7 +1171,7 @@ pub fn decode_range(
             coords.push((row / strides[dim - 1] % lay.counts[dim - 1] as usize) as i64);
         }
         let index = entry_index(&coords, &lay.estride)?;
-        let page = directory_page(data, &directory, index, lay, mode)?;
+        let page = pages.page(data, index, lay, true)?;
         let first = (member % lay.ipc[0] as usize) * inner + row % inner;
         let remaining = (lay.ipc[0] as usize - member % lay.ipc[0] as usize)
             .min(lay.counts[axis] as usize - member)
@@ -904,6 +1200,154 @@ pub fn decode_range(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use arrow::array::Array;
+
+    /// Selected positions per axis: everything, every other member, or a
+    /// sparse prefix/suffix mix that crosses page windows.
+    fn selections(counts: &[i64]) -> Vec<Vec<Option<Vec<usize>>>> {
+        let thin = |count: usize, step: usize| -> Option<Vec<usize>> {
+            Some((0..count).step_by(step).collect())
+        };
+        let ends = |count: usize| -> Option<Vec<usize>> {
+            let mut codes: Vec<usize> = (0..count.min(3)).collect();
+            codes.extend(count.saturating_sub(2).max(codes.len())..count);
+            Some(codes)
+        };
+        let counts: Vec<usize> = counts.iter().map(|&c| c as usize).collect();
+        vec![
+            vec![None; counts.len()],
+            counts.iter().map(|&c| thin(c, 2)).collect(),
+            counts
+                .iter()
+                .enumerate()
+                .map(|(axis, &c)| if axis % 2 == 0 { ends(c) } else { None })
+                .collect(),
+            counts
+                .iter()
+                .enumerate()
+                .map(|(axis, &c)| if axis % 2 == 1 { thin(c, 3) } else { None })
+                .collect(),
+        ]
+    }
+
+    fn assert_parallel_matches_serial(name: &str, data: &[u8], lay: &Layout) {
+        let pages = DataPages::open(data).unwrap();
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(4)
+            .build()
+            .unwrap();
+        for choices in selections(&lay.counts) {
+            let counts: Vec<usize> = choices
+                .iter()
+                .zip(&lay.counts)
+                .map(|(choice, &count)| choice.as_ref().map_or(count as usize, Vec::len))
+                .collect();
+            let mut strides = vec![1usize; counts.len()];
+            for axis in (0..counts.len() - 1).rev() {
+                strides[axis] = strides[axis + 1] * counts[axis + 1];
+            }
+            let rows: usize = counts.iter().product();
+            // Bounded windows keep the per-row debug-build oracle fast; odd
+            // offsets start and end mid-page.
+            const WINDOW: usize = 150_001;
+            let mut ranges = Vec::new();
+            ranges.push(0..rows.min(WINDOW));
+            if rows > WINDOW {
+                let middle = rows / 2 - 7;
+                ranges.push(middle..(middle + WINDOW).min(rows));
+                ranges.push(rows - WINDOW + 3..rows);
+            }
+            for range in ranges {
+                let expected = decode_selected_reference(
+                    data,
+                    lay,
+                    &choices,
+                    &counts,
+                    &strides,
+                    range.start,
+                    range.end,
+                )
+                .unwrap();
+                for (target, min_rows) in [(1, usize::MAX), (3, 1), (64, 1), (1024, 1)] {
+                    let actual = pool.install(|| {
+                        decode_selected_chunked(
+                            data,
+                            lay,
+                            &pages,
+                            &choices,
+                            &counts,
+                            range.clone(),
+                            target,
+                            min_rows,
+                        )
+                        .unwrap()
+                    });
+                    let context = format!("{name}: {choices:?} rows {range:?} chunks {target}");
+                    assert_eq!(actual.len(), expected.len(), "{context}");
+                    assert_eq!(actual.nulls(), expected.nulls(), "{context}");
+                    assert!(
+                        actual
+                            .values()
+                            .iter()
+                            .zip(expected.values().iter())
+                            .all(|(a, e)| a.to_bits() == e.to_bits()),
+                        "{context}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn parallel_selected_decode_matches_serial_on_training_corpus() {
+        for path in crate::test_data::files() {
+            let data = std::fs::read(&path).unwrap();
+            let descriptor = crate::descriptor::parse_descriptor(&data).unwrap();
+            let layout = build_descriptor_layout(&descriptor).unwrap();
+            assert_parallel_matches_serial(&path.display().to_string(), &data, &layout);
+        }
+    }
+
+    #[test]
+    fn page_aligned_chunks_never_split_a_page() {
+        for path in crate::test_data::files() {
+            let data = std::fs::read(&path).unwrap();
+            let descriptor = crate::descriptor::parse_descriptor(&data).unwrap();
+            let lay = build_descriptor_layout(&descriptor).unwrap();
+            let counts: Vec<usize> = lay.counts.iter().map(|&c| c as usize).collect();
+            let choices = vec![None; counts.len()];
+            let walk = SelectionWalk::new(&lay, &choices, &counts);
+            let rows: usize = counts.iter().product();
+            let bounds = walk.chunks(5, rows, 97, 1);
+            assert_eq!((bounds[0], *bounds.last().unwrap()), (5, rows));
+            let inner = walk.inner_rows();
+            for &bound in &bounds[1..bounds.len() - 1] {
+                assert_eq!(bound % inner, 0, "{}", path.display());
+                let block = bound / inner;
+                assert_ne!(
+                    walk.block_entry(block - 1),
+                    walk.block_entry(block),
+                    "{}",
+                    path.display()
+                );
+            }
+            assert!(bounds.windows(2).all(|pair| pair[0] < pair[1]));
+        }
+    }
+
+    #[test]
+    fn empty_selection_decodes_to_an_empty_array() {
+        if let Some(path) = crate::test_data::files().first() {
+            let data = std::fs::read(path).unwrap();
+            let descriptor = crate::descriptor::parse_descriptor(&data).unwrap();
+            let lay = build_descriptor_layout(&descriptor).unwrap();
+            let counts: Vec<usize> = lay.counts.iter().map(|&c| c as usize).collect();
+            let pages = DataPages::open(&data).unwrap();
+            let choices = vec![None; counts.len()];
+            let array = decode_selected(&data, &lay, &pages, &choices, &counts, 3, 3).unwrap();
+            assert_eq!(array.len(), 0);
+        }
+    }
 
     fn mapped_layout(counts: &[i64], slots: Vec<Option<Vec<usize>>>) -> Layout {
         let descriptor = crate::descriptor::Descriptor {
@@ -1289,7 +1733,7 @@ mod tests {
             let dims = &descriptor.dims;
             let layout = build_descriptor_layout(&descriptor).unwrap();
             let count = row_count(&layout).unwrap();
-            let columns = decode_range(&data, &layout, 0, count)
+            let columns = decode_range(&data, &layout, &DataPages::open(&data).unwrap(), 0, count)
                 .unwrap_or_else(|err| panic!("{}: {err}", path.display()));
             let count: usize = dims.iter().map(|dim| dim.count as usize).product();
             assert_eq!(columns.values.len(), count);
