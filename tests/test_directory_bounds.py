@@ -191,7 +191,9 @@ def test_truncated_slot_table_has_identical_error(tmp_path):
     path.write_bytes(data)
     message = _open_error(path)
     assert message == _open_error(data)
-    assert (
-        message
-        == "IVT slot table extends past EOF: expected bytes 544..992, file_len=991"
+    assert message == (
+        "Corrupt IVT file: the file appears truncated: its slot table needs at "
+        "least 992 bytes but the file is 991 bytes (likely an incomplete copy). "
+        "Details: IVT slot table extends past EOF: expected bytes 544..992, "
+        "file_len=991"
     )
