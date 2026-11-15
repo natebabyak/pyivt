@@ -11,6 +11,7 @@ use crate::compact::{AxisProjection, CompactReader, Plan};
 use crate::decode::{build_descriptor_layout, Layout};
 use crate::error::{ErrorKind, IvtError};
 use crate::io::{SharedBytes, WeakSharedBytes};
+use crate::member_table::{AxisMembers, MemberTableInput};
 use crate::metadata::{
     self, Dimension as CoreDimension, Footnote as CoreFootnote, Geographies as CoreGeographies,
     IvtMetadata as CoreMeta, LocalizedText as CoreLocalized, MissingValue as CoreMissing,
@@ -627,7 +628,7 @@ pub struct Ivt {
     /// Source length the metadata was parsed against.
     opened_len: u64,
     maps: Mutex<Option<Arc<TidySchema>>>,
-    member_fields: Mutex<Option<Py<PyAny>>>,
+    member_fields: Mutex<Option<Arc<Vec<AxisMembers>>>>,
     table_id: Mutex<Option<String>>,
 }
 
@@ -775,22 +776,95 @@ impl Ivt {
         language: &str,
         dims: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        if !matches!(language, "en" | "fr") {
-            return Err(PyValueError::new_err("language must be 'en' or 'fr'"));
-        }
-        let export = py.import("pyivt._export")?;
-        let prepared = export
+        let language = match language {
+            "en" => 0,
+            "fr" => 1,
+            _ => return Err(PyValueError::new_err("language must be 'en' or 'fr'")),
+        };
+        let projection: Vec<AxisProjection> = py
+            .import("pyivt._export")?
             .getattr("prepare")?
-            .call1((&slf, dims.unwrap_or_else(|| PyDict::new(py))))?;
-        export
-            .getattr("build_member_table")?
-            .call1((slf, prepared, language))
+            .call1((&slf, dims.unwrap_or_else(|| PyDict::new(py))))?
+            .extract()?;
+        let this: &Self = &slf.borrow();
+        // A lookup without retained dimensions needs no members or table id.
+        let (axes, table_id, legacy) = if projection.iter().any(|(included, _)| *included) {
+            let legacy = this.metadata.borrow(py).inner.lock().unwrap().signature == "02002000";
+            (this.member_axes(py)?, this.table_id(py)?, legacy)
+        } else {
+            (Arc::new(Vec::new()), String::new(), false)
+        };
+        let layout = &this.layout;
+        let table = py
+            .allow_threads(|| {
+                let _profile = crate::profile::Stage::new("member_table");
+                crate::member_table::build(MemberTableInput {
+                    slugs: &layout.slugs,
+                    counts: &layout.counts,
+                    projection: &projection,
+                    language,
+                    legacy,
+                    table_id: &table_id,
+                    axes: &axes,
+                })
+            })
+            .map_err(map_ivt_err)?;
+        let reader = RecordBatchIterator::new(table.batches.into_iter().map(Ok), table.schema);
+        let capsule = stream_capsule(py, Box::new(reader))?;
+        // Arrow-rs schema metadata is unordered; set it in pyarrow to keep key order.
+        let metadata = PyDict::new(py);
+        for (key, value) in table.metadata {
+            metadata.set_item(
+                PyBytes::new(py, key.as_bytes()),
+                PyBytes::new(py, value.as_bytes()),
+            )?;
+        }
+        py.import("pyarrow")?
+            .getattr("RecordBatchReader")?
+            .call_method1("_import_from_c_capsule", (capsule,))?
+            .call_method0("read_all")?
+            .call_method1("replace_schema_metadata", (metadata,))
     }
 
-    /// Private member-only bridge with Date32 day offsets and display references.
-    fn _member_fields<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        if let Some(fields) = self.member_fields.lock().unwrap().as_ref() {
-            return Ok(fields.bind(py).clone());
+    /// Private member bridge: table id, per-axis `(name, kind, values)` lists
+    /// with Date32 day offsets, and per-axis display references.
+    fn _member_fields<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
+        let axes = self.member_axes(py)?;
+        let digest = self.table_id(py)?;
+        let fields = PyList::empty(py);
+        let displays = PyList::empty(py);
+        for axis in axes.iter() {
+            displays.append((axis.is_time, axis.names.clone(), axis.references))?;
+            let converted = PyList::empty(py);
+            for (name, values) in &axis.fields {
+                use crate::members::MemberValues;
+                let (kind, values): (&str, Bound<'py, PyAny>) = match values {
+                    MemberValues::Utf8(v) => ("text", v.into_pyobject(py)?.into_any()),
+                    MemberValues::Int64(v) => ("integer", v.into_pyobject(py)?.into_any()),
+                    MemberValues::Float64(v) => ("float", v.into_pyobject(py)?.into_any()),
+                    MemberValues::Date32(v) => ("date", v.into_pyobject(py)?.into_any()),
+                };
+                converted.append((name, kind, values))?;
+            }
+            fields.append(converted)?;
+        }
+        PyTuple::new(
+            py,
+            [
+                digest.into_pyobject(py)?.into_any(),
+                fields.into_any(),
+                displays.into_any(),
+            ],
+        )
+    }
+}
+
+impl Ivt {
+    /// Member fields and display hints for every axis, read once from the
+    /// metadata catalog with the GIL released and shared by later calls.
+    fn member_axes(&self, py: Python<'_>) -> PyResult<Arc<Vec<AxisMembers>>> {
+        if let Some(axes) = self.member_fields.lock().unwrap().as_ref() {
+            return Ok(axes.clone());
         }
         let member_estimate = self.layout.counts.iter().fold(0usize, |n, &count| {
             n.saturating_add((count as usize).saturating_mul(128))
@@ -798,7 +872,7 @@ impl Ivt {
         compact_preflight(0, member_estimate)?;
         let metadata = self.metadata.borrow(py);
         let inner = &metadata.inner;
-        let fields = py
+        let axes = py
             .allow_threads(|| {
                 // Member records live in the metadata catalog built at open;
                 // value pages are never needed here.
@@ -823,48 +897,27 @@ impl Ivt {
                             )?;
                         let (names, references) = metadata::member_display(data, axis, &positions);
                         let is_time = axis_kinds.get(axis).copied().unwrap_or(false);
-                        Ok::<_, IvtError>((fields, (is_time, names, references)))
+                        Ok::<_, IvtError>(AxisMembers {
+                            fields,
+                            is_time,
+                            names,
+                            references,
+                        })
                     })
                     .collect::<Result<Vec<_>, _>>()
             })
             .map_err(map_ivt_err)?;
         drop(metadata);
-        let estimated = fields
+        let estimated = axes
             .iter()
-            .flat_map(|(fields, _)| fields)
+            .flat_map(|axis| &axis.fields)
             .fold(0usize, |n, (_, values)| {
                 n.saturating_add(values.len().saturating_mul(128))
             });
         compact_preflight(0, estimated)?;
-        let digest = self.table_id(py)?;
-        let axes = PyList::empty(py);
-        let displays = PyList::empty(py);
-        for (axis, display) in fields {
-            displays.append(display)?;
-            let converted = PyList::empty(py);
-            for (name, values) in axis {
-                use crate::members::MemberValues;
-                let (kind, values): (&str, Bound<'py, PyAny>) = match values {
-                    MemberValues::Utf8(v) => ("text", v.into_pyobject(py)?.into_any()),
-                    MemberValues::Int64(v) => ("integer", v.into_pyobject(py)?.into_any()),
-                    MemberValues::Float64(v) => ("float", v.into_pyobject(py)?.into_any()),
-                    MemberValues::Date32(v) => ("date", v.into_pyobject(py)?.into_any()),
-                };
-                converted.append((name, kind, values))?;
-            }
-            axes.append(converted)?;
-        }
-        let result = PyTuple::new(
-            py,
-            [
-                digest.into_pyobject(py)?.into_any(),
-                axes.into_any(),
-                displays.into_any(),
-            ],
-        )?
-        .into_any();
-        *self.member_fields.lock().unwrap() = Some(result.clone().unbind());
-        Ok(result)
+        let axes = Arc::new(axes);
+        *self.member_fields.lock().unwrap() = Some(axes.clone());
+        Ok(axes)
     }
 }
 

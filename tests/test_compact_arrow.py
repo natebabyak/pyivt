@@ -5,6 +5,7 @@ import os
 import struct
 import subprocess
 import sys
+import tracemalloc
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from itertools import product
@@ -17,6 +18,8 @@ import pyarrow.parquet as pq
 import pyivt
 import pytest
 from arrow_helpers import expanded_table
+from member_table_oracle import build_member_table
+from pyivt._export import prepare
 from test_streaming import _populated_cube
 from test_typed_arrow import _expected_table, _text_members, _typed_fixture
 
@@ -582,3 +585,63 @@ def test_parallel_value_decode_matches_serial_on_training_corpus():
     ]
     assert len(results[0]) == 3 * len(paths)
     assert results[0] == results[1]
+
+
+_FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def _member_sources():
+    data_dir = Path(
+        os.environ.get("PYIVT_DATA_DIR", Path(__file__).parents[1] / "data")
+    )
+    paths = [*sorted(data_dir.glob("*.ivt")), *sorted(_FIXTURES.rglob("*.ivt"))]
+    sort = _typed_fixture(measure_sort=(300, 1))
+    return [
+        *((path.name, path) for path in paths),
+        ("typed", _typed_fixture()),
+        ("typed-sort", sort),
+        ("typed-signed-sort", sort.replace(b"\x05Small\0", b"\x04Sort\0\0", 1)),
+        ("populated", _populated_cube()),
+        ("cube", cube((3, 4, 5))),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("name", "source"), _member_sources(), ids=[name for name, _ in _member_sources()]
+)
+def test_native_member_table_matches_pyarrow_oracle(name, source):
+    ivt = pyivt.open(source)
+    layout = ivt._layout
+    selections = [{}, {s: 1 for s in layout.slugs}]
+    for slug, count in zip(layout.slugs, layout.counts, strict=True):
+        selections += [{slug: 1}, {slug: list(range(count, 0, -2))}, {slug: []}]
+    for selection, language in product(selections, ("en", "fr")):
+        members = ivt.to_member_table(language=language, **selection)
+        projection = prepare(ivt, selection)
+        expected = build_member_table(ivt, projection, language)
+        assert members.schema.equals(expected.schema, check_metadata=True)
+        assert list(members.schema.metadata.items()) == list(
+            expected.schema.metadata.items()
+        )
+        assert members.equals(expected, check_metadata=True), (selection, language)
+        assert [c.num_chunks for c in members.columns] == [
+            c.num_chunks for c in expected.columns
+        ]
+
+
+def test_large_member_axis_builds_without_python_objects():
+    # 100,000 members with 8 text fields: the old path built 800,000 Python
+    # strings (~70 MiB traced); the native path builds Arrow buffers only.
+    ivt = pyivt.open(cube((100_000, 2), label_fields=8))
+    tracemalloc.start()
+    try:
+        members = ivt.to_member_table()
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert members.num_rows == 100_002
+    assert members.column_names[3:] == [f"Label {field}" for field in range(8)]
+    assert members["Label 7"][99_999].as_py() == (
+        "Axis 0 field 7 member 99999 with repeated text"
+    )
+    assert peak < 1 << 20

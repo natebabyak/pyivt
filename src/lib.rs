@@ -8,6 +8,7 @@ mod error;
 pub mod fuzzing;
 mod header;
 mod io;
+mod member_table;
 mod members;
 mod metadata;
 mod metadata_directory;
