@@ -36,7 +36,7 @@ def _archive(archive: ZipFile, member: str | None) -> _native.Ivt:
         path = Path(owner.name) / "table.ivt"
         with archive.open(candidates[0]) as source, path.open("wb") as target:
             copyfileobj(source, target, length=1024 * 1024)
-        return _native.open(path, _source_owner=owner)
+        return _native._open_owned(path, owner)
     except BaseException:
         owner.cleanup()
         raise
@@ -119,3 +119,7 @@ def open(
     if member is not None:
         raise ValueError("member= applies only to ZIP sources")
     return _native.open(contents)
+
+
+# Report the public location, as the native classes and exceptions do.
+open.__module__ = "pyivt"

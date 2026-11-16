@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
-    from pyivt._native import Ivt
+    from pyivt._native import Ivt, _IvtInternals
 
 _Axis = tuple[bool, list[int] | None]
 
 
+def internals(ivt: Ivt) -> _IvtInternals:
+    """Type the private hooks that the public Ivt stub leaves out."""
+    return cast("_IvtInternals", ivt)
+
+
 def prepare(ivt: Ivt, dims: dict[str, int | list[int]]) -> list[_Axis]:
-    layout = ivt._layout
+    layout = internals(ivt)._layout
     for slug in dims.keys() - set(layout.slugs):
         raise ValueError(
             f"unknown dimension {slug!r}; expected one of {layout.slugs!r}"

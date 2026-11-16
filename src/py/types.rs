@@ -274,7 +274,7 @@ impl From<CoreFootnote> for Footnote {
 
 /// A missing-value or status legend entry from IvtMetadata.missing_values.
 ///
-/// The optional numeric code links this entry to Arrow's status_code column.
+/// The optional numeric code is the status code stored in the file's cells.
 /// The symbol and localized description explain the file-defined status. Attributes
 /// are read-only; instances cannot be constructed directly.
 ///
@@ -536,7 +536,7 @@ impl IvtMetadata {
     ///
     /// Returns MissingValue entries linking numeric codes to symbols and
     /// localized descriptions, or an empty list if none are found. Raises
-    /// pyivt.IvtError on loading errors. Use the Arrow C stream for per-cell statuses.
+    /// pyivt.IvtError on loading errors. Per-cell statuses are not exported yet.
     fn missing_values(&self) -> PyResult<Vec<MissingValue>> {
         let mut guard = self.inner.lock().unwrap();
         let vals = guard.missing_values().map_err(map_ivt_err)?;
@@ -1176,8 +1176,21 @@ impl Ivt {
 /// ```
 #[pyfunction]
 #[pyo3(name = "open")]
-#[pyo3(signature = (source, *, _source_owner=None))]
-pub fn open_ivt(
+#[pyo3(signature = (source, /))]
+pub fn open_ivt(py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<Ivt> {
+    open_with_owner(py, source, None)
+}
+
+/// Private: open `source` and keep `owner` alive with the metadata, so a
+/// temporary file extracted from a ZIP outlives every lazy metadata read.
+#[pyfunction]
+#[pyo3(name = "_open_owned")]
+#[pyo3(signature = (source, owner, /))]
+pub fn open_ivt_owned(py: Python<'_>, source: Bound<'_, PyAny>, owner: Py<PyAny>) -> PyResult<Ivt> {
+    open_with_owner(py, source, Some(owner))
+}
+
+fn open_with_owner(
     py: Python<'_>,
     source: Bound<'_, PyAny>,
     _source_owner: Option<Py<PyAny>>,

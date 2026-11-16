@@ -11,7 +11,7 @@ members = ivt.to_member_table()
 """
 
 from os import PathLike
-from typing import Any, BinaryIO, Literal
+from typing import BinaryIO, Literal, Protocol
 
 import pyarrow as pa
 
@@ -154,7 +154,7 @@ class Footnote:
 class MissingValue:
     """A missing-value or status legend entry from IvtMetadata.missing_values.
 
-    The optional numeric code links this entry to Arrow's status_code column.
+    The optional numeric code is the status code stored in the file's cells.
     The symbol and localized description explain the file-defined status. Attributes
     are read-only; instances cannot be constructed directly.
 
@@ -311,15 +311,11 @@ class IvtMetadata:
 
         Returns MissingValue entries linking numeric codes to symbols and
         localized descriptions, or an empty list if none are found. Raises
-        pyivt.IvtError on loading errors. Use the Arrow C stream for per-cell statuses.
+        pyivt.IvtError on loading errors. Per-cell statuses are not exported yet.
         """
-    def _loaded(self, name: str) -> bool:
-        """Internal diagnostic: whether a named lazy metadata field is cached."""
-    def _io_metrics(self) -> tuple[int, int, int, bool]:
-        """Internal: bytes read / read ops during metadata I/O (for benchmarks)."""
 
 class _Layout:
-    """Read-only decoding layout, obtained from Ivt._layout.
+    """Private read-only decoding layout, obtained from Ivt._layout.
 
     counts and slugs follow file dimension order and describe the exported grid.
     geo_dim and straddle are one-based dimension indices; subtract 1 before
@@ -367,14 +363,6 @@ class Ivt:
     @property
     def metadata(self) -> IvtMetadata:
         """Shared metadata object; detailed member and legend fields load on demand."""
-    @property
-    def _layout(self) -> _Layout:
-        """Snapshot of dimension counts, Arrow column slugs and IVT paging details."""
-    def _arrow_c_stream(self, requested_schema: Any = None) -> Any:
-        """Export detailed batches in file order, including statuses and footnotes.
-
-        Each capsule owns an independent reader. Schema requests raise ValueError.
-        """
     def to_arrow(self, /, **dims: object) -> pa.Table:
         """Return 1-based member positions and nullable float64 values as a table.
 
@@ -429,6 +417,17 @@ class Ivt:
         language. Native attributes are null where absent. When present, the
         native Code is a separate text column. No cells are decoded.
         """
+
+class _IvtInternals(Protocol):  # noqa: PYI046 (used by pyivt._export)
+    """Private hooks on Ivt for pyivt's own modules and tests.
+
+    They exist at runtime but are not part of the public Ivt type. Reach them
+    with ``typing.cast("_IvtInternals", ivt)``.
+    """
+
+    @property
+    def _layout(self) -> _Layout:
+        """Snapshot of dimension counts, Arrow column slugs and IVT paging details."""
     def _member_fields(
         self,
     ) -> tuple[
@@ -437,10 +436,19 @@ class Ivt:
         list[tuple[bool, tuple[str | None, str | None], tuple[int | None, int | None]]],
     ]: ...
 
+__version__: str
+"""Package version the extension was built with (from Cargo.toml)."""
+
+def _open_owned(
+    source: str | PathLike[str] | bytes | bytearray | memoryview,
+    owner: object,
+    /,
+) -> Ivt:
+    """Open source and keep owner alive as long as the reader's metadata."""
+
 def open(
     source: str | PathLike[str] | bytes | bytearray | memoryview | BinaryIO,
-    *,
-    _source_owner: object | None = None,
+    /,
 ) -> Ivt:
     """Open a Beyond 20/20 IVT source without decoding its cell values.
 

@@ -1,7 +1,7 @@
 # pyivt
 
 > [!NOTE]
-> Before v0.1.0, the API is unstable and may change at any time. Production use is discouraged. If you use pyivt in production, pin it to an exact version.
+> Before v0.1.0, the API is unstable and may change at any time. Production use is discouraged. If you use pyivt in production, pin it to an exact version. From v0.1.0, changes follow the [stability and deprecation policy](docs/api.md#stability-and-deprecation-policy).
 
 ## About the Project
 
@@ -151,6 +151,11 @@ is missing. Add `--language fr` to use French labels for enum names.
 
 ## API Reference
 
+The full reference, including every public name, the stability policy and the
+API decisions still open before v0.1.0, is in [docs/api.md](docs/api.md). The
+public API is exactly `pyivt.__all__` plus `pyivt.__version__`; names that
+start with an underscore are private.
+
 ### Opening and exporting
 
 - `open(source, *, member=None)` returns an `Ivt`. It accepts a path, IVT or ZIP bytes, a `bytearray`, an object with `__bytes__`, or a binary file object. `member` selects an IVT inside a ZIP with several tables.
@@ -173,7 +178,7 @@ is missing. Add `--language fr` to use French labels for enum names.
 - Both exports decode values in parallel without the GIL. By default they use one worker per hardware thread. Set the `RAYON_NUM_THREADS` environment variable before the first export to use fewer, for example `RAYON_NUM_THREADS=1` in each process of a multi-process job. The output is the same for any number of workers.
 - Exports from a path memory-map the file, so a selection reads only the pages it needs. Do not modify or truncate the file while an export or stream uses it: on Unix, truncating a mapped file ends the process. Set `PYIVT_MMAP=0` to read the whole file into memory instead.
 - `to_member_table()` returns one PyArrow table of member attributes, without decoding cells.
-- `pyivt.__version__` gives the package version.
+- `pyivt.__version__` gives the installed package version, read from the package metadata.
 
 ### Errors
 
