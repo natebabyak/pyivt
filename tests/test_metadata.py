@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 import struct
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from math import prod
 from pathlib import Path
 from types import SimpleNamespace
@@ -48,7 +48,7 @@ def _load_expect(case: SimpleNamespace) -> dict:
     expect["directory"] = str(case.path.resolve().parent)
     # The copy's filesystem timestamp is not part of the hashed IVT contents.
     expect["last_update"] = datetime.fromtimestamp(
-        case.path.stat().st_mtime, timezone.utc
+        case.path.stat().st_mtime, UTC
     ).isoformat()
     return expect
 
@@ -125,7 +125,7 @@ def snapshot_comparable(meta: IvtMetadata, path: Path) -> dict:
         "keywords_fr": _keywords_list(meta.keywords.fr),
         "notes_en": _notes_sentences(meta.notes.en),
         "notes_fr": _notes_sentences(meta.notes.fr),
-        "last_update": datetime.fromtimestamp(stats.st_mtime, timezone.utc).isoformat(),
+        "last_update": datetime.fromtimestamp(stats.st_mtime, UTC).isoformat(),
         "file_size": stats.st_size,
         "number_of_datapoints": meta.number_of_datapoints,
         "frequency": meta.frequency,

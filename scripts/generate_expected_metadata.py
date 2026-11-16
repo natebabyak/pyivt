@@ -7,14 +7,14 @@ import tempfile
 import time
 from dataclasses import asdict, dataclass
 from dataclasses import field as dataclass_field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Self
 
 from bs4 import BeautifulSoup, Tag
 from bs4.element import PageElement
 from pywinauto import Application, Desktop, ElementNotFoundError
 from pywinauto.keyboard import send_keys
-from typing_extensions import Self
 
 
 @dataclass
@@ -493,7 +493,7 @@ def build_ivt_summary(beyond: Beyond, ivt_path: Path) -> IvtMetadata:
         ),
         notes_en=notes(english_summary),
         notes_fr=notes(french_summary),
-        last_update=datetime.fromtimestamp(file_stats.st_mtime, timezone.utc),
+        last_update=datetime.fromtimestamp(file_stats.st_mtime, UTC),
         file_size=file_stats.st_size,
         number_of_datapoints=int(datapoint_text),
         frequency=frequency,

@@ -1,5 +1,10 @@
-# Build abi3 wheels + sdist; publish to PyPI on version tags.
+# Build abi3 wheels + sdist, smoke-test every one of them on its own OS and
+# architecture, and publish to PyPI on version tags only if all of them pass.
 # Configure a Trusted Publisher on PyPI for this repo/workflow before the first tag.
+#
+# Supported Python: 3.11 (the abi3 floor, abi3-py311 in Cargo.toml) through
+# 3.15. Keep the Python versions below in sync with ci.yml, requires-python
+# and the classifiers in pyproject.toml, and the README.
 name: Release
 
 on:
@@ -17,25 +22,26 @@ jobs:
     strategy:
       matrix:
         target: [x86_64, aarch64]
+        libc: [manylinux, musllinux]
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist -i 3.10
-          manylinux: "2_28"
+          args: --release --out dist -i 3.11
+          manylinux: ${{ matrix.libc == 'musllinux' && 'musllinux_1_2' || '2_28' }}
           sccache: "true"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-linux-${{ matrix.target }}
+          name: wheels-${{ matrix.libc }}-${{ matrix.target }}
           path: dist
 
   windows:
@@ -45,13 +51,13 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           target: x64
-          args: --release --out dist -i 3.10
+          args: --release --out dist -i 3.11
           sccache: "true"
 
       - name: Upload wheels
@@ -70,13 +76,13 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist -i 3.10
+          args: --release --out dist -i 3.11
           sccache: "true"
 
       - name: Upload wheels
@@ -102,9 +108,106 @@ jobs:
           name: wheels-sdist
           path: dist
 
+  # Install each built wheel on the OS and architecture it targets, on the
+  # lowest and newest supported Python, and run scripts/smoke_test_wheel.py
+  # (open a fixture, to_arrow(), to_member_table()). Publishing needs every
+  # combination to pass.
+  smoke-wheels:
+    name: smoke (${{ matrix.wheel.artifact }}, Python ${{ matrix.python }})
+    needs: [linux, windows, macos]
+    runs-on: ${{ matrix.wheel.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.15"]
+        wheel:
+          - { artifact: manylinux-x86_64, runner: ubuntu-latest }
+          - { artifact: manylinux-aarch64, runner: ubuntu-24.04-arm }
+          # musllinux runs in an Alpine container started with docker run:
+          # JavaScript actions cannot run inside Alpine containers on arm64.
+          - { artifact: musllinux-x86_64, runner: ubuntu-latest, alpine: true }
+          - { artifact: musllinux-aarch64, runner: ubuntu-24.04-arm, alpine: true }
+          - { artifact: windows-x64, runner: windows-latest }
+          - { artifact: macos-x86_64, runner: macos-15-intel }
+          - { artifact: macos-aarch64, runner: macos-15 }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: wheels-${{ matrix.wheel.artifact }}
+          path: dist
+
+      - name: Smoke-test arguments
+        id: args
+        run: |
+          # On a version tag the installed package must report the tag's version.
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "expect=--expect-version ${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
+          ls dist
+          test "$(ls dist/*.whl | wc -l)" -eq 1
+
+      - uses: actions/setup-python@v5
+        if: ${{ !matrix.wheel.alpine }}
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install wheel and smoke-test
+        if: ${{ !matrix.wheel.alpine }}
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          if [[ "$RUNNER_OS" == Windows ]]; then py="$RUNNER_TEMP/venv/Scripts/python"; else py="$RUNNER_TEMP/venv/bin/python"; fi
+          "$py" -m pip install --only-binary :all: dist/*.whl
+          "$py" -I scripts/smoke_test_wheel.py tests/fixtures/98100018-paged.ivt ${{ steps.args.outputs.expect }}
+
+      - name: Install wheel and smoke-test (Alpine)
+        if: ${{ matrix.wheel.alpine }}
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src python:${{ matrix.python }}-alpine sh -ec '
+            python -m venv /tmp/venv
+            /tmp/venv/bin/python -m pip install --only-binary :all: dist/*.whl
+            /tmp/venv/bin/python -I scripts/smoke_test_wheel.py tests/fixtures/98100018-paged.ivt ${{ steps.args.outputs.expect }}
+          '
+
+  # Build the sdist from source on the lowest and newest Pythons (pyo3 0.23
+  # with abi3-py311) and smoke-test the result.
+  smoke-sdist:
+    name: smoke (sdist, Python ${{ matrix.python }})
+    needs: [sdist]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.14", "3.15"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Download sdist
+        uses: actions/download-artifact@v4
+        with:
+          name: wheels-sdist
+          path: dist
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Build from sdist and smoke-test
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/python" -m pip install --only-binary pyarrow dist/*.tar.gz
+          "$RUNNER_TEMP/venv/bin/python" -I scripts/smoke_test_wheel.py tests/fixtures/98100018-paged.ivt
+
   publish:
     name: Publish to PyPI
-    needs: [linux, windows, macos, sdist]
+    needs: [linux, windows, macos, sdist, smoke-wheels, smoke-sdist]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:

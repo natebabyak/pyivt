@@ -1,10 +1,9 @@
 """Editor-facing API contracts, checked by ty in CI."""
 
-from typing import Literal
+from typing import Literal, assert_type
 
 import pyarrow as pa
 import pyivt
-from typing_extensions import assert_type
 
 
 def check_metadata(ivt: pyivt.Ivt) -> None:

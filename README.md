@@ -11,7 +11,33 @@ Read Statistics Canada Beyond 20/20 (`.ivt`) files, inspect bilingual metadata, 
 
 ### Prerequisites
 
-Python 3.10+ and PyArrow 14+. Installation brings in PyArrow automatically.
+Python 3.11+ and PyArrow 14+. Installation brings in PyArrow automatically.
+PyArrow 14 has wheels for Python 3.11 and 3.12 only; newer Pythons need a newer
+PyArrow (18+ for 3.13, 22+ for 3.14, 26+ for 3.15).
+
+### Supported platforms
+
+pyivt publishes one abi3 wheel per platform, which installs on CPython 3.11
+and every later version. Each wheel is installed and smoke-tested on its own
+platform on Python 3.11 and 3.15 before release, and the test suite runs on
+Linux, Windows and macOS with Python 3.11, 3.14 and 3.15.
+
+| OS | Architectures | Wheel tag |
+| --- | --- | --- |
+| Linux (glibc 2.28+) | x86_64, aarch64 | `manylinux_2_28` |
+| Linux (musl 1.2+, e.g. Alpine) | x86_64, aarch64 | `musllinux_1_2` |
+| Windows | x64 | `win_amd64` |
+| macOS | x86_64, arm64 | `macosx` |
+
+Not supported for now:
+
+- Windows on ARM64. No wheel is published. Installing from the sdist needs a
+  Rust toolchain and is untested.
+- Free-threaded CPython (`3.14t`, `3.15t`). It would need a newer PyO3 and
+  separate non-abi3 builds.
+- Python 3.10 and older. Python 3.10 reached end of life in October 2026.
+
+Other platforms can try the sdist, which needs a Rust toolchain to build.
 
 ### Installation
 
