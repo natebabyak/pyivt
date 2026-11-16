@@ -1352,7 +1352,6 @@ mod tests {
 
     fn mapped_layout(counts: &[i64], slots: Vec<Option<Vec<usize>>>) -> Layout {
         let descriptor = crate::descriptor::Descriptor {
-            offset: 0,
             dims: counts
                 .iter()
                 .enumerate()
@@ -1770,7 +1769,7 @@ mod tests {
         page.extend_from_slice(&[2, 2, 1, 8, 0]);
         page.extend_from_slice(&missing);
         page.extend_from_slice(&notes);
-        if page.len() % 2 != 0 {
+        if !page.len().is_multiple_of(2) {
             page.push(0);
         }
         let count = ((page.len() - 4) / 2) as u16;
@@ -1780,8 +1779,8 @@ mod tests {
         assert_eq!(cells.statuses[2047], 1);
         assert_eq!(cells.footnotes[0], [0]);
         assert_eq!(cells.footnotes[2047], [u16::MAX]);
+        // The packed value splits into cell 2047 (high 11 bits) and ref 31 (low 5).
         assert_eq!(u16::MAX >> 5, 2047);
-        assert_eq!(u16::MAX & 31, 31);
         page[4100] = 3;
         assert!(decode_page(&page, 0, &lay, page.len(), 3)
             .err()
