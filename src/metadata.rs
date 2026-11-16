@@ -244,6 +244,57 @@ impl IvtMetadata {
     pub fn io_metrics(&self) -> crate::io::IoMetrics {
         self.source.metrics()
     }
+
+    /// Relocated image of the metadata directories and records selected at
+    /// open. Member parsers accept it in place of the complete file.
+    pub fn catalog(&self) -> Result<&[u8], IvtError> {
+        self.metadata_image
+            .as_deref()
+            .ok_or(IvtError::InvalidDirectory("metadata catalog"))
+    }
+
+    /// Hex SHA-256 identifying the source table without reading value pages.
+    ///
+    /// It covers the file length, the metadata catalog (header, slot table,
+    /// every metadata directory and record) and the value page directory, so
+    /// it changes when members, labels, notes or the page layout change. Path
+    /// and in-memory opens of the same bytes produce the same identity.
+    pub fn table_identity(&self) -> Result<String, IvtError> {
+        use sha2::{Digest, Sha256};
+        let catalog = self.catalog()?;
+        // A malformed value directory still identifies the file consistently.
+        let (status, values) = match value_directory(&self.source) {
+            Ok(values) => (0u8, values),
+            Err(_) => (1u8, Vec::new()),
+        };
+        let mut hasher = Sha256::new();
+        hasher.update(b"pyivt.table_id/2;");
+        hasher.update(self.source.len()?.to_le_bytes());
+        for part in [catalog, &values] {
+            hasher.update((part.len() as u64).to_le_bytes());
+            hasher.update(part);
+        }
+        hasher.update([status]);
+        Ok(hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect())
+    }
+}
+
+/// Flattened value page directory entries (offset, length and flags per page),
+/// read without touching the pages themselves.
+fn value_directory(source: &IvtSource) -> Result<Vec<u8>, IvtError> {
+    let mut header = source.read_prefix(576)?;
+    let table = crate::header::slot_table_range(&header)
+        .ok_or(IvtError::InvalidDirectory("metadata slot table"))?;
+    let slots = source.read_range(table.start as u64, table.len())?;
+    header.resize(HDR_MASTER_PTR + slots.len(), 0);
+    header[HDR_MASTER_PTR..].copy_from_slice(&slots);
+    header[12..16].copy_from_slice(&(HDR_MASTER_PTR as u32).to_le_bytes());
+    crate::metadata_directory::MetadataDirectory::new(&header, crate::header::HDR_DIR_PTR)?
+        .read(source)
 }
 
 fn master_dir_entries(data: &[u8], max_entries: usize) -> Vec<(u32, u16)> {

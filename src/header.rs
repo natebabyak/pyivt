@@ -209,8 +209,10 @@ pub fn dim_slots(data: &[u8], max_dims: usize) -> Vec<DimSlot> {
         let alloc = u32(data, base + 4);
         let n_entries = u32(data, base + 8);
         let flag = u16(data, base + 12);
+        // Axes keep their slot positions, so an empty slot must not hide the
+        // slots after it from the metadata catalog.
         if dir_ptr == 0 && alloc == 0 && n_entries == 0 {
-            break;
+            continue;
         }
         out.push(DimSlot {
             index: k,

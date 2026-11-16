@@ -1,7 +1,10 @@
 """Compact exports checked against independent native fixtures and CSV oracles."""
 
-import hashlib
+import json
+import os
 import struct
+import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from itertools import product
@@ -42,9 +45,13 @@ def test_typed_result_members_and_source_identity(tmp_path):
     )
     assert table.num_rows == 12
     assert table["value"].equals(_expected_table()["value"])
+    path_source = tmp_path / "source.ivt"
+    path_source.write_bytes(source)
+    table_id = table.schema.metadata[b"pyivt.table_id"]
+    assert len(table_id) == 64 and int(table_id, 16) >= 0
     assert (
-        table.schema.metadata[b"pyivt.table_id"]
-        == hashlib.sha256(source).hexdigest().encode()
+        pyivt.open(path_source).to_member_table().schema.metadata[b"pyivt.table_id"]
+        == table_id
     )
     assert table.schema.metadata[b"pyivt.dimension_encoding"] == b"one_based_index"
     for key in (b"pyivt.table_id", b"pyivt.dimension_encoding"):
@@ -252,6 +259,76 @@ def test_corpus_values_labels_and_metadata_match_detailed_reader(path):
         labels = ivt.metadata.dimensions[axis].members.en
         if labels is not None:
             assert [label or "" for label in lookup["label"].to_pylist()] == labels
+
+
+@pytest.mark.parametrize(
+    "path",
+    sorted(Path("data").glob("*.ivt")) + sorted(Path("tests/fixtures").rglob("*.ivt")),
+)
+def test_table_id_matches_between_exports_and_open_routes(path):
+    # Fresh readers, so neither export reuses the other's cached identity.
+    members = pyivt.open(path).to_member_table()
+    table = pyivt.open(path).to_arrow()
+    in_memory = pyivt.open(path.read_bytes()).to_member_table()
+    table_id = table.schema.metadata[b"pyivt.table_id"]
+    assert members.schema.metadata[b"pyivt.table_id"] == table_id
+    assert in_memory.schema.metadata[b"pyivt.table_id"] == table_id
+
+
+def test_table_id_tracks_metadata_and_value_layout():
+    source = _typed_fixture()
+    table_id = pyivt.open(source).to_arrow().schema.metadata[b"pyivt.table_id"]
+    longer = pyivt.open(source + b"\0").to_arrow().schema.metadata[b"pyivt.table_id"]
+    assert longer != table_id
+
+
+_HELDOUT = Path(os.environ.get("PYIVT_HELDOUT_DIR", ".cache/heldout"))
+_MEMBER_BUDGET = """
+import json, os, sys, time
+import psutil, pyarrow as pa, pyivt
+pa.array([0])  # pyarrow's one-time lazy import of pandas, not pyivt work
+path = sys.argv[1]
+process = psutil.Process()
+ivt = pyivt.open(path)
+before, rss = ivt.metadata._io_metrics()[0], process.memory_info().rss
+start = time.perf_counter()
+table = ivt.to_member_table()
+elapsed = time.perf_counter() - start
+print(json.dumps({
+    "rows": table.num_rows,
+    "seconds": elapsed,
+    "read": ivt.metadata._io_metrics()[0] - before,
+    "rss": process.memory_info().rss - rss,
+    "size": os.path.getsize(path),
+}))
+"""
+
+
+def test_heldout_member_table_reads_metadata_only():
+    """NAT-249 budget on 98100532 (208 MB), measured in a fresh process.
+
+    Recorded on Windows 11, Python 3.13, release build: 10.5-11.0 ms, 2.01%
+    of the file read (4.2 MB, mostly the value page directory hashed into
+    pyivt.table_id), +2.3 MB RSS. main measured 294-298 ms and +201 MB.
+    """
+    pytest.importorskip("psutil")
+    manifest = json.loads(Path("tests/corpus/heldout.json").read_text())
+    sha = next(f["sha256"] for f in manifest["files"] if f["product_id"] == "98100532")
+    path = _HELDOUT / f"{sha}.ivt"
+    if not path.is_file():
+        pytest.skip(f"held-out input {path} is not downloaded")
+    result = json.loads(
+        subprocess.run(
+            [sys.executable, "-c", _MEMBER_BUDGET, str(path)],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    assert result["rows"] == 906
+    assert result["read"] < 0.05 * result["size"]
+    assert result["rss"] < 50 * 2**20
+    assert result["seconds"] < 0.05
 
 
 def test_polars_retains_unsigned_codes():
