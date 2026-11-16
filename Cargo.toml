@@ -21,3 +21,12 @@ sha2 = "0.10"
 
 [dev-dependencies]
 encoding_rs = "0.8"
+
+# Smaller wheels. Measured in docs/benchmarks/release-profile.md (NAT-256).
+# codegen-units stays at the default (16): codegen-units = 1 made the value
+# decoder about 15% slower. panic stays "unwind" so PyO3 can turn a Rust
+# panic into PanicException, and the thread::scope join in compact.rs can
+# report a panicked value decoder, instead of aborting the interpreter.
+[profile.release]
+lto = "fat"
+strip = true
