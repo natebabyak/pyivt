@@ -2,7 +2,7 @@
 
 import json
 import platform
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -117,7 +117,7 @@ def pytest_sessionfinish(session):
         path.parent.mkdir(parents=True, exist_ok=True)
         report = {
             "schema_version": 1,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "platform": platform.platform(),
             "rounds": config.getoption("--ivt-rounds"),
             "sample_interval_seconds": config.getoption("--ivt-sample-interval"),

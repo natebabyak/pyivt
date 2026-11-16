@@ -7,13 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  ci:
+  lint:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        pyarrow: [latest, "14.0.2"]
-    env:
-      PYIVT_REQUIRE_DATA: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -21,10 +16,9 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      # PyO3 links Rust tests against this interpreter's shared libpython.
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - uses: astral-sh/setup-uv@v6
         with:
@@ -32,6 +26,8 @@ jobs:
 
       - name: Install package
         run: uv sync --group dev
+        env:
+          UV_PYTHON: "3.14"
 
       - name: Lint
         run: uv run ruff check .
@@ -43,14 +39,64 @@ jobs:
         run: uv run ty check python tests/typing
 
       - name: Install codegen type checkers
-        if: matrix.pyarrow == 'latest'
         run: uv pip install mypy==2.4.1 pyright==1.1.414
 
       - name: Verify Arrow return types
-        if: matrix.pyarrow == 'latest'
         run: |
           uv run --no-sync mypy tests/typing
           uv run --no-sync pyright tests/typing
+
+      - name: Compile native fuzz targets
+        run: cargo check --manifest-path fuzz/Cargo.toml --bins --locked
+
+  test:
+    name: test (${{ matrix.os }}, Python ${{ matrix.python }}, pyarrow ${{ matrix.pyarrow }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The lowest (3.11) and the two newest supported Pythons. Keep in
+        # sync with requires-python and the classifiers in pyproject.toml,
+        # and with release.yml.
+        os: [ubuntu-latest, windows-latest, macos-15]
+        python: ["3.11", "3.14", "3.15"]
+        pyarrow: [latest]
+        include:
+          # pyarrow 14.0.2 (the declared minimum) has wheels for 3.8-3.12 only.
+          # pyarrow first ships wheels for 3.13 in 18.0.0, 3.14 in 22.0.0 and
+          # 3.15 in 26.0.0.
+          - os: ubuntu-latest
+            python: "3.11"
+            pyarrow: "14.0.2"
+    env:
+      PYIVT_REQUIRE_DATA: "1"
+      UV_PYTHON: ${{ matrix.python }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: py${{ matrix.python }}
+
+      # PyO3 links Rust tests against this interpreter's libpython.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install package
+        run: uv sync --group dev
+
+      - name: Cache fixtures
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: fixtures-${{ hashFiles('tests/corpus/training.json', 'tests/corpus/legacy.json') }}
 
       - name: Download fixtures
         run: |
@@ -59,9 +105,6 @@ jobs:
 
       - name: Rust tests
         run: cargo test
-
-      - name: Compile native fuzz targets
-        run: cargo check --manifest-path fuzz/Cargo.toml --bins --locked
 
       - name: Install minimum supported Arrow
         if: matrix.pyarrow == '14.0.2'

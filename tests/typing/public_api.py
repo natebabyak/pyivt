@@ -2,10 +2,10 @@
 
 from io import BytesIO
 from pathlib import Path
+from typing import assert_type
 
 import pyarrow as pa
 import pyivt
-from typing_extensions import assert_type
 
 
 def sample(path: Path) -> None:

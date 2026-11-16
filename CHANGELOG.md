@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** pyivt requires Python 3.11 or later. Python 3.10 reached end of life in October 2026. Wheels are built for the `abi3-py311` stable ABI (tagged `cp311-abi3`), and Python 3.14 and 3.15 are now listed as supported.
+- Linux wheels for musl (`musllinux_1_2`, x86_64 and aarch64) are published, so pyivt installs on Alpine without building from source.
+- Every release wheel is installed and smoke-tested on its own OS and architecture, on Python 3.11 and 3.15, before anything is published; a tag build fails if any wheel fails. CI runs the test suite on Linux, Windows and macOS with Python 3.11, 3.14 and 3.15. Supported platforms are listed in the README. Windows ARM64 wheels and free-threaded CPython are not supported for now.
 - `to_arrow()`, `iter_batches()` and `to_member_table()` take the dimension selection as `select={slug: code_or_codes}`, for example `ivt.to_arrow(select={"geography": 2, "census_year": [1, 2]})`. Codes and their meaning are unchanged. Keyword selection could collide with options such as `batch_size`. Generated `Dimensions` typed dictionaries are passed the same way: `select=Dimensions(...)`. Combining `select` with keyword dimensions raises `TypeError`, and a `select` that is not a mapping raises `TypeError`.
 - `ResourceLimitError` messages for exports name the `max_memory_bytes` limit that was exceeded, for example `exceeds the max_memory_bytes limit of 2 GiB`.
 - The public API is now written down in [docs/api.md](docs/api.md): exactly the names in `pyivt.__all__` plus `pyivt.__version__`, with a quick start, a reference for every public item, and a stability and deprecation policy for v0.1.0 onward. A test keeps the documented list, `__all__` and the stubs in sync.
