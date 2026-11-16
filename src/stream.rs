@@ -1,6 +1,6 @@
 //! Bounded native reader for the detailed Arrow export.
 
-use crate::decode::{decode_range, row_count, Layout};
+use crate::decode::{decode_range, row_count, DataPages, Layout};
 use crate::error::IvtError;
 use crate::io::SharedBytes;
 use crate::tidy::TidySchema;
@@ -16,6 +16,8 @@ pub struct BatchReader {
     pub batch_size: usize,
     pub position: usize,
     pub total: usize,
+    /// Parsed on the first batch and reused by every later one.
+    pages: Option<DataPages>,
 }
 
 /// Include input, member maps, output and transient buffers, with headroom
@@ -72,6 +74,7 @@ impl BatchReader {
             batch_size,
             position: 0,
             total,
+            pages: None,
         })
     }
 }
@@ -86,8 +89,12 @@ impl BatchReader {
             .position
             .saturating_add(self.batch_size)
             .min(self.total);
-        let result = decode_range(&self.data, &self.layout, self.position, end)
-            .and_then(|cells| self.maps.record_batch(cells));
+        let result = match self.pages {
+            Some(ref pages) => Ok(pages),
+            None => DataPages::open(&self.data).map(|pages| &*self.pages.insert(pages)),
+        }
+        .and_then(|pages| decode_range(&self.data, &self.layout, pages, self.position, end))
+        .and_then(|cells| self.maps.record_batch(cells));
         self.position = if result.is_ok() { end } else { self.total };
         Some(result)
     }

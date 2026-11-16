@@ -535,3 +535,50 @@ def test_native_sort_attribute_uses_smallest_unsigned_type():
     sort = signed.to_member_table()["Sort"]
     assert sort.type == pa.int64()
     assert sort.to_pylist() == [-32768, 42, 300, 1, None, None, None]
+
+
+_PARALLEL_DIGESTS = """
+import hashlib, json, sys
+import pyivt
+
+digests = {}
+for name in sys.argv[1:]:
+    ivt = pyivt.open(name)
+    slugs, counts = ivt._layout.slugs, ivt._layout.counts
+    selections = {
+        "full": {},
+        "every_other": {s: list(range(1, c + 1, 2)) for s, c in zip(slugs, counts)},
+        "thirds": {
+            s: list(range(1, c + 1, 3)) for i, (s, c) in enumerate(zip(slugs, counts))
+            if i % 2
+        },
+    }
+    for label, select in selections.items():
+        values = ivt.to_arrow(**select)["value"].combine_chunks()
+        digest = hashlib.sha256()
+        digest.update(memoryview(values.buffers()[0] or b""))
+        digest.update(memoryview(values.buffers()[1]))
+        digests[f"{name}:{label}"] = [len(values), values.null_count, digest.hexdigest()]
+print(json.dumps(digests))
+"""
+
+
+def test_parallel_value_decode_matches_serial_on_training_corpus():
+    # The decode pool size is fixed per process, so compare fresh processes.
+    paths = [str(path) for path in sorted(Path("data").glob("*.ivt"))]
+    if not paths:
+        pytest.skip("training corpus is not downloaded")
+    results = [
+        json.loads(
+            subprocess.run(
+                [sys.executable, "-c", _PARALLEL_DIGESTS, *paths],
+                check=True,
+                capture_output=True,
+                text=True,
+                env={**os.environ, "RAYON_NUM_THREADS": str(threads)},
+            ).stdout
+        )
+        for threads in (1, 4)
+    ]
+    assert len(results[0]) == 3 * len(paths)
+    assert results[0] == results[1]
