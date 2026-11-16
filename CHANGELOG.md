@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Signature errors show the leading bytes and note files that start with zero bytes or look like HTML.
 - **Breaking:** `pyivt.table_id` is no longer the SHA-256 of the whole file. It is now a SHA-256 over the file length, the metadata records and the value page directory, computed in Rust without holding the GIL. `to_arrow()` and `to_member_table()` still carry the same value for the same file, and path and bytes opens agree. IDs saved by earlier versions will not match. `pyivt codegen` still writes the file's own SHA-256 in its `# Source SHA-256:` header.
 - `to_member_table()` on a path no longer reads the whole file. It reads members from the metadata catalog that `open()` already builds. On a 208 MB table (98100532) it reads 2% of the file and takes about 11 ms instead of about 300 ms, and adds about 2 MB of memory instead of about 200 MB.
+- `open()` on in-memory contents keeps one copy instead of two. `bytes`, and a read-only memoryview over a whole `bytes` object, are shared with the reader and not copied. A `bytearray` or writable memoryview is copied once, so later changes still do not affect the reader. On a 208 MB table (98100532), `open(bytes)` takes under 1 ms instead of about 110 ms, and adds under 2 MB of memory instead of about 400 MB.
 
 ### Added
 

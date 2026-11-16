@@ -331,6 +331,53 @@ def test_heldout_member_table_reads_metadata_only():
     assert result["seconds"] < 0.05
 
 
+_BYTES_BUDGET = """
+import gc, json, sys, time
+import psutil, pyarrow as pa, pyivt
+pa.array([0])  # pyarrow's one-time lazy import of pandas, not pyivt work
+with open(sys.argv[1], "rb") as stream:
+    data = stream.read()
+process = psutil.Process()
+gc.collect()
+rss, references = process.memory_info().rss, sys.getrefcount(data)
+start = time.perf_counter()
+ivt = pyivt.open(data)
+elapsed = time.perf_counter() - start
+gc.collect()
+print(json.dumps({
+    "seconds": elapsed,
+    "rss": process.memory_info().rss - rss,
+    "shared": sys.getrefcount(data) - references,
+}))
+"""
+
+
+def test_heldout_open_bytes_shares_caller_buffer():
+    """NAT-250 budget for open(bytes) of 98100532 (208 MB), in a fresh process.
+
+    Recorded on Windows 11, Python 3.13, release build: 0.4-2.4 ms and
+    +0.2-1.5 MB RSS beyond the caller's bytes. main measured 108-134 ms and
+    +398 MB (two full copies kept for the reader's lifetime).
+    """
+    pytest.importorskip("psutil")
+    manifest = json.loads(Path("tests/corpus/heldout.json").read_text())
+    sha = next(f["sha256"] for f in manifest["files"] if f["product_id"] == "98100532")
+    path = _HELDOUT / f"{sha}.ivt"
+    if not path.is_file():
+        pytest.skip(f"held-out input {path} is not downloaded")
+    result = json.loads(
+        subprocess.run(
+            [sys.executable, "-c", _BYTES_BUDGET, str(path)],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    assert result["shared"] == 1
+    assert result["rss"] < 10 * 2**20
+    assert result["seconds"] < 0.05
+
+
 def test_polars_retains_unsigned_codes():
     pl = pytest.importorskip("polars")
     table = pyivt.open(_typed_fixture()).to_arrow()

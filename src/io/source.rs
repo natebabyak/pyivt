@@ -1,11 +1,12 @@
 //! File- or memory-backed IVT byte source with a small range cache.
 
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 use crate::error::IvtError;
 use crate::io::planner::LoadedRange;
 use crate::io::read_at::{FileReadAt, IoMetrics, ReadAt};
+use crate::io::SharedBytes;
 
 const CACHE_CAP: usize = 32;
 
@@ -44,7 +45,7 @@ impl RangeCache {
 /// Byte source for metadata and (optionally) full-file decode.
 pub enum IvtSource {
     Memory {
-        data: Arc<[u8]>,
+        data: SharedBytes,
         metrics: Mutex<IoMetrics>,
     },
     File {
@@ -55,13 +56,13 @@ pub enum IvtSource {
 }
 
 impl IvtSource {
-    pub fn from_bytes(data: Vec<u8>) -> Self {
+    pub fn from_bytes(data: impl Into<SharedBytes>) -> Self {
         Self::from_bytes_with_metrics(data, IoMetrics::default())
     }
 
-    pub fn from_bytes_with_metrics(data: Vec<u8>, metrics: IoMetrics) -> Self {
+    pub fn from_bytes_with_metrics(data: impl Into<SharedBytes>, metrics: IoMetrics) -> Self {
         Self::Memory {
-            data: Arc::from(data.into_boxed_slice()),
+            data: data.into(),
             metrics: Mutex::new(metrics),
         }
     }

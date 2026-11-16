@@ -441,8 +441,9 @@ def open(
 
     Paths use selective metadata reads. Keep the file available and unchanged:
     the first export reads its full contents. Lazy metadata properties
-    may read additional ranges. In-memory sources are copied when opened, so
-    later changes to a bytearray do not affect the reader. This function does
+    may read additional ranges. Immutable `bytes` are shared with the reader,
+    not copied. Mutable contents such as a bytearray are copied once when
+    opened, so later changes do not affect the reader. This function does
     not fetch URLs or decompress archives. Exceptions raised by a supplied
     read(), __fspath__() or __bytes__() method may also propagate.
 
