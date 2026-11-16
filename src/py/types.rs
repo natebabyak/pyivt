@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::arrow_export::stream_capsule;
-use crate::compact::AxisProjection;
+use crate::compact::{AxisProjection, CompactReader, Plan};
 use crate::decode::{build_descriptor_layout, Layout};
 use crate::error::{ErrorKind, IvtError};
 use crate::io::{SharedBytes, WeakSharedBytes};
@@ -601,7 +601,8 @@ impl From<&Layout> for PyLayout {
 /// Obtain an instance with pyivt.open(source); direct construction is not
 /// supported. Inspect metadata and members without decoding cells.
 /// to_arrow() returns a new compact table on each call; the reader keeps no
-/// reference to it, so dropping the table releases its buffers. No context
+/// reference to it, so dropping the table releases its buffers. iter_batches()
+/// streams the same table in bounded memory. No context
 /// manager or close() call is required. This reader does not modify the source file.
 ///
 /// ```python
@@ -711,23 +712,20 @@ impl Ivt {
         py: Python<'py>,
         dims: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, PyAny>> {
+        let (plan, data) = Self::compact_plan(&slf, py, dims)?;
         let this: &Self = &slf.borrow();
-        let projection: Vec<AxisProjection> = py
-            .import("pyivt._export")?
-            .getattr("prepare")?
-            .call1((&slf, dims.unwrap_or_else(|| PyDict::new(py))))?
-            .extract()?;
-        let data = this.compact_data(py, 0)?;
-        let table_id = this.table_id(py)?;
         let batch = py
             .allow_threads(|| -> Result<RecordBatch, IvtError> {
-                let metadata = std::collections::HashMap::from([
-                    ("pyivt.table_id".into(), table_id),
-                    ("pyivt.dimension_encoding".into(), "one_based_index".into()),
-                ]);
-                crate::compact::export(&data, &this.layout, projection, metadata)
+                crate::compact::preflight(
+                    plan.rows,
+                    plan.bytes_per_row(),
+                    data.len(),
+                    crate::compact::MEMORY_LIMIT,
+                )?;
+                plan.batch(&data, &this.layout, 0, plan.rows)
             })
             .map_err(map_ivt_err)?;
+        drop(data);
         let schema = batch.schema();
         let capsule = stream_capsule(
             py,
@@ -741,6 +739,29 @@ impl Ivt {
             .getattr("RecordBatchReader")?
             .call_method1("_import_from_c_capsule", (capsule,))?
             .call_method0("read_all")
+    }
+
+    /// Stream the to_arrow() table as a pyarrow.RecordBatchReader of at most
+    /// batch_size rows per batch, in file order, with the same schema and
+    /// metadata. Batches are decoded on demand without the GIL; the stream
+    /// keeps one reference to the file contents and no earlier batches.
+    #[pyo3(signature = (*, batch_size=DEFAULT_BATCH_ROWS, **dims))]
+    fn iter_batches<'py>(
+        slf: Bound<'py, Self>,
+        py: Python<'py>,
+        batch_size: usize,
+        dims: Option<Bound<'py, PyDict>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if batch_size == 0 {
+            return Err(PyValueError::new_err("batch_size must be positive"));
+        }
+        let (plan, data) = Self::compact_plan(&slf, py, dims)?;
+        let layout = slf.borrow().layout.clone();
+        let reader = CompactReader::new(data, layout, plan, batch_size).map_err(map_ivt_err)?;
+        let capsule = stream_capsule(py, Box::new(reader))?;
+        py.import("pyarrow")?
+            .getattr("RecordBatchReader")?
+            .call_method1("_import_from_c_capsule", (capsule,))
     }
 
     /// Export one Arrow member lookup with a dictionary-encoded dimension column.
@@ -923,8 +944,12 @@ fn resolve_source(_py: Python<'_>, source: Bound<'_, PyAny>) -> PyResult<OpenSou
     )))
 }
 
+/// Rows per iter_batches() batch unless the caller chooses otherwise.
+const DEFAULT_BATCH_ROWS: usize = 1_048_576;
+
+/// Coarse check before reading a path open: one copy of the source plus `extra`.
 fn compact_preflight(file_size: usize, extra: usize) -> PyResult<()> {
-    let estimate = file_size.saturating_mul(4).saturating_add(extra);
+    let estimate = file_size.saturating_add(extra);
     if estimate > crate::compact::MEMORY_LIMIT {
         return Err(resource_limit(
             "memory estimate exceeds the internal 2 GiB safety limit",
@@ -936,6 +961,28 @@ fn compact_preflight(file_size: usize, extra: usize) -> PyResult<()> {
 }
 
 impl Ivt {
+    /// Validate `dims` and load the source for a compact export.
+    fn compact_plan<'py>(
+        slf: &Bound<'py, Self>,
+        py: Python<'py>,
+        dims: Option<Bound<'py, PyDict>>,
+    ) -> PyResult<(Plan, SharedBytes)> {
+        let projection: Vec<AxisProjection> = py
+            .import("pyivt._export")?
+            .getattr("prepare")?
+            .call1((slf, dims.unwrap_or_else(|| PyDict::new(py))))?
+            .extract()?;
+        let this: &Self = &slf.borrow();
+        let table_id = this.table_id(py)?;
+        let metadata = std::collections::HashMap::from([
+            ("pyivt.table_id".into(), table_id),
+            ("pyivt.dimension_encoding".into(), "one_based_index".into()),
+        ]);
+        let plan = Plan::new(&this.layout, projection, metadata).map_err(map_ivt_err)?;
+        let data = this.compact_data(py, 0)?;
+        Ok((plan, data))
+    }
+
     fn compact_data(&self, py: Python<'_>, extra: usize) -> PyResult<SharedBytes> {
         let size = self.file_size()?;
         compact_preflight(size, extra)?;
@@ -1031,8 +1078,9 @@ impl Ivt {
 ///
 /// ### Returns
 ///
-/// An `Ivt` reader exposing `metadata`, `to_member_table()`, and `to_arrow()`.
-/// Summary metadata is parsed immediately. Cells are decoded by `to_arrow()`.
+/// An `Ivt` reader exposing `metadata`, `to_member_table()`, `to_arrow()` and
+/// `iter_batches()`. Summary metadata is parsed immediately. Cells are decoded
+/// by `to_arrow()` or, in bounded batches, by `iter_batches()`.
 ///
 /// ### Raises
 ///

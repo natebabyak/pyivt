@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The compact export's memory estimate counts the source file once instead of three or four times, so `to_arrow()` accepts larger selections from large files.
 - **Breaking:** dimension names and slugs use the full dimension title. IVT axis names are stored cut to 15 characters (`Age (in single`). pyivt now reads the full English and French titles from the table notes' `Variable List` / `Liste de variables` line, so `Dimension.name` and `Dimension.description` read `Age (in single years), average age and median age (128)`, matching the StatCan CSV headers. Slugs come from the full English title with the same rules as before (lowercase ASCII, unique, at most 40 characters, now without a trailing `_` after truncation). This changes selection keywords, Arrow column names, member-lookup keys, and generated types. Axes without a full title in the file keep their stored name and slug. For example, in 98100020 `age_in_single` becomes `age_in_single_years_average_age_and_medi`, and in 98100001 `population_and` becomes `population_and_dwelling_counts_11`.
 
   **Migration:** check each table's new names with `[dim.slug for dim in ivt.metadata.dimensions]`. Then update selection keywords such as `ivt.to_arrow(population_and=...)`, any code that reads Arrow columns by name (including the `_code`, `_english_desc` and other member-field columns, which share the prefix), and regenerate typed modules with `pyivt codegen data.ivt --output dimensions.py`.
@@ -21,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Ivt.iter_batches(*, batch_size=1_048_576, **dims)` streams the compact `to_arrow()` table as a `pyarrow.RecordBatchReader`. Batches keep file order and the same schema and metadata, are decoded on demand without the GIL, and hold about one copy of the file plus two batches. The full 126,198,000-row 98100532 table, which `to_arrow()` refuses, streams in about 5 seconds with a peak working set of 286 MB. The 2 GiB limit stays internal.
 - Typed exceptions: `pyivt.IvtError` (a `ValueError`) and its subclasses `CorruptFileError`, `UnsupportedFormatError`, and `ResourceLimitError` (also a `MemoryError`). Each exception has `offset`, `length`, `file_len`, `slot`, `entry`, and `dimension` attributes when they are known. `ResourceLimitError` adds `estimate` and `limit`. Error kinds come from the Rust error type, not from the message text. Messages are unchanged, and `except ValueError` still catches every parse error.
 - `python -m scripts.triage_files PATH ...` records whether each IVT or ZIP opens, is corrupt, or is unsupported, with its size, SHA-256, header bytes and message.
 
