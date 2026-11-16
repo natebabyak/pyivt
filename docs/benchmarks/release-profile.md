@@ -40,6 +40,20 @@ Dependencies were fetched before the timer started, so build time is compile and
 
 `fat` LTO gives a wheel 8% smaller than `thin` (1.79 MB against 1.95 MB). It takes about 22 s longer on 16 CPUs and about 15 s longer on 4 CPUs, where it is close to the old default (61 s against 64 s). The release workflow builds each target in its own job, so this time is added once per job, not summed.
 
+## Release workflow on GitHub Actions
+
+`release.yml` passes `--release` to maturin, so it picks up the profile with no workflow change. The workflow was dispatched on `main` (run 43787663929) and on this branch (run 43787666788). Each job's "Build wheels" step was timed once. sccache was on, but its cache was cold for the LTO link.
+
+| Job | Wheel bytes, `main` | Wheel bytes, this branch | Change | Build step, `main` | Build step, branch |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| linux x86_64 | 2,291,047 | 1,784,771 | −22.1% | 133 s | 123 s |
+| linux aarch64 | 2,209,196 | 1,678,706 | −24.0% | 132 s | 135 s |
+| macOS x86_64 | 1,999,744 | 1,707,779 | −14.6% | 114 s | 139 s |
+| macOS arm64 | 1,890,450 | 1,575,670 | −16.7% | 88 s | 121 s |
+| Windows x64 | 1,806,781 | 1,814,474 | +0.4% | 147 s | 158 s |
+
+The jobs run in parallel, so the workflow's wall time is set by its slowest job. The slowest build step went from 147 s to 158 s (Windows in both runs).
+
 ## `decode_values` on 98100532
 
 Input: held-out file 98100532 (208,450,429 bytes) from `tests/corpus/heldout.json`. It was used only for timing, not to tune any parser rule.
