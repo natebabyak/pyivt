@@ -8,7 +8,7 @@ from os import PathLike, fspath
 from pathlib import Path
 from shutil import copyfileobj
 from tempfile import TemporaryDirectory
-from typing import BinaryIO, cast
+from typing import BinaryIO, SupportsBytes, cast
 from zipfile import BadZipFile, ZipFile
 
 from pyivt import _native
@@ -42,7 +42,9 @@ def _archive(archive: ZipFile, member: str | None) -> _native.Ivt:
         raise
 
 
-def _contents(source: object) -> bytes | bytearray:
+def _contents(
+    source: bytes | bytearray | memoryview | SupportsBytes,
+) -> bytes | bytearray:
     """Return in-memory contents without copying immutable ``bytes``.
 
     The native reader shares exact ``bytes`` objects and snapshots a
@@ -61,7 +63,7 @@ def _contents(source: object) -> bytes | bytearray:
             and source.nbytes == len(owner)
         ):
             return owner
-    return bytes(source)  # type: ignore[call-overload]
+    return bytes(source)
 
 
 def open(
