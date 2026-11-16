@@ -3,7 +3,7 @@
 
 use crate::bytes::{u16, u32};
 use crate::error::IvtError;
-use crate::io::IvtSource;
+use crate::io::{ByteRange, ReadAt};
 
 const HEADER_PAGE_ENTRIES: usize = 20;
 const ENTRY_SIZE: usize = 8;
@@ -97,8 +97,55 @@ impl MetadataDirectory {
         Ok(&data[offset..offset + ENTRY_SIZE])
     }
 
+    fn pointer_len(&self, size: usize) -> Option<usize> {
+        self.count.div_ceil(size).checked_mul(4)
+    }
+
+    /// The first range [`Self::read`] needs: the flat entries, or the page
+    /// index of a paged directory. `None` when nothing valid is declared.
+    pub(crate) fn index_range(&self, file_len: u64) -> Option<ByteRange> {
+        if self.count == 0 || self.offset == 0 {
+            return None;
+        }
+        let length = match self.page_entries {
+            None => self.byte_len().ok()?,
+            Some(size) => self.pointer_len(size)?,
+        };
+        let range = ByteRange::new(self.offset as u64, length);
+        range
+            .end()
+            .is_some_and(|end| end <= file_len)
+            .then_some(range)
+    }
+
+    /// Entry pages of a paged directory, read from its page index through
+    /// `source`. Empty for flat directories or a malformed index; the later
+    /// [`Self::read`] reports those errors.
+    pub(crate) fn page_ranges<R: ReadAt + ?Sized>(&self, source: &R) -> Vec<ByteRange> {
+        let Some(size) = self.page_entries else {
+            return Vec::new();
+        };
+        let Some(index) = source.len().ok().and_then(|len| self.index_range(len)) else {
+            return Vec::new();
+        };
+        let Ok(pointers) = source.read_range(index.offset, index.length) else {
+            return Vec::new();
+        };
+        pointers
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .enumerate()
+            .map(|(page, raw)| {
+                let count = size.min(self.count - page * size);
+                ByteRange::new(u64::from(u32(raw, 0)), count * ENTRY_SIZE)
+            })
+            .filter(|range| range.offset != 0)
+            .collect()
+    }
+
     /// Flatten only the declared entries for the selective metadata catalog.
-    pub(crate) fn read(&self, source: &IvtSource) -> Result<Vec<u8>, IvtError> {
+    pub(crate) fn read<R: ReadAt + ?Sized>(&self, source: &R) -> Result<Vec<u8>, IvtError> {
         let file_len = usize::try_from(source.len()?)
             .map_err(|_| IvtError::InvalidDirectory("metadata file size"))?;
         let length = self.byte_len()?;
@@ -114,9 +161,7 @@ impl MetadataDirectory {
             return Err(IvtError::InvalidDirectory("metadata directory size"));
         }
         let pointer_length = self
-            .count
-            .div_ceil(size)
-            .checked_mul(4)
+            .pointer_len(size)
             .ok_or(IvtError::InvalidDirectory("metadata page index size"))?;
         Self::range(self.offset, pointer_length, file_len)?;
         let pointers = source.read_range(self.offset as u64, pointer_length)?;
@@ -146,6 +191,7 @@ pub(crate) fn record(data: &[u8], slot: usize, index: usize) -> Option<&[u8]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::io::IvtSource;
 
     const SLOT: usize = 32;
     const PAGE_SIZE: usize = 4096;

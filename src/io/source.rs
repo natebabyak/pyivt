@@ -1,46 +1,15 @@
-//! File- or memory-backed IVT byte source with a small range cache.
+//! File- or memory-backed IVT byte source.
+//!
+//! Reads are not cached here. Callers that follow metadata pointers plan their
+//! reads with [`crate::io::PlannedReader`], which batches nearby ranges for one
+//! parse and then drops them; records are rarely read twice.
 
 use std::path::Path;
 use std::sync::Mutex;
 
 use crate::error::IvtError;
-use crate::io::planner::LoadedRange;
 use crate::io::read_at::{FileReadAt, IoMetrics, ReadAt};
 use crate::io::SharedBytes;
-
-const CACHE_CAP: usize = 32;
-
-#[derive(Debug)]
-pub(crate) struct RangeCache {
-    entries: Vec<LoadedRange>,
-}
-
-impl RangeCache {
-    fn new() -> Self {
-        Self {
-            entries: Vec::new(),
-        }
-    }
-
-    fn find(&self, offset: u64, length: usize) -> Option<&[u8]> {
-        for e in &self.entries {
-            if let Some(s) = e.slice_at(offset, length) {
-                return Some(s);
-            }
-        }
-        None
-    }
-
-    fn insert(&mut self, lr: LoadedRange) {
-        // Prefer covering existing entries that are subsets.
-        self.entries
-            .retain(|e| !(lr.offset <= e.offset && lr.end() >= e.end()));
-        if self.entries.len() >= CACHE_CAP {
-            self.entries.remove(0);
-        }
-        self.entries.push(lr);
-    }
-}
 
 /// Byte source for metadata and (optionally) full-file decode.
 pub enum IvtSource {
@@ -50,7 +19,6 @@ pub enum IvtSource {
     },
     File {
         reader: FileReadAt,
-        cache: Mutex<RangeCache>,
         metrics: Mutex<IoMetrics>,
     },
 }
@@ -72,7 +40,6 @@ impl IvtSource {
         let reader = FileReadAt::open(&path)?;
         Ok(Self::File {
             reader,
-            cache: Mutex::new(RangeCache::new()),
             metrics: Mutex::new(IoMetrics::default()),
         })
     }
@@ -99,7 +66,7 @@ impl IvtSource {
         }
     }
 
-    /// Read exactly `length` bytes at `offset`, using the cache when possible.
+    /// Read exactly `buffer.len()` bytes at `offset`.
     pub fn read_exact_at(&self, offset: u64, buffer: &mut [u8]) -> Result<(), IvtError> {
         let length = buffer.len();
         match self {
@@ -123,41 +90,21 @@ impl IvtSource {
                 metrics.lock().unwrap().record(length);
                 Ok(())
             }
-            Self::File {
-                reader,
-                cache,
-                metrics,
-                ..
-            } => {
-                {
-                    let cache = cache.lock().unwrap();
-                    if let Some(s) = cache.find(offset, length) {
-                        buffer.copy_from_slice(s);
-                        return Ok(());
-                    }
-                }
+            Self::File { reader, metrics } => {
                 reader.read_exact_at(offset, buffer)?;
                 metrics.lock().unwrap().record(length);
-                let mut cache = cache.lock().unwrap();
-                cache.insert(LoadedRange {
-                    offset,
-                    data: buffer.to_vec(),
-                });
                 Ok(())
             }
         }
     }
+}
 
-    pub fn read_range(&self, offset: u64, length: usize) -> Result<Vec<u8>, IvtError> {
-        let mut buf = vec![0u8; length];
-        self.read_exact_at(offset, &mut buf)?;
-        Ok(buf)
+impl ReadAt for IvtSource {
+    fn len(&self) -> Result<u64, IvtError> {
+        IvtSource::len(self)
     }
 
-    /// Ensure a contiguous prefix of the file is available as a Vec (header region).
-    pub fn read_prefix(&self, nbytes: usize) -> Result<Vec<u8>, IvtError> {
-        let len = self.len()? as usize;
-        let n = nbytes.min(len);
-        self.read_range(0, n)
+    fn read_exact_at(&self, offset: u64, buffer: &mut [u8]) -> Result<(), IvtError> {
+        IvtSource::read_exact_at(self, offset, buffer)
     }
 }

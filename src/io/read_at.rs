@@ -2,10 +2,8 @@
 
 use std::fs::File;
 use std::path::Path;
+#[cfg(test)]
 use std::sync::Mutex;
-
-#[cfg(not(windows))]
-use std::io::{Read, Seek, SeekFrom};
 
 use crate::error::IvtError;
 
@@ -30,7 +28,6 @@ pub trait ReadAt {
     fn len(&self) -> Result<u64, IvtError>;
     fn read_exact_at(&self, offset: u64, buffer: &mut [u8]) -> Result<(), IvtError>;
 
-    #[cfg(test)]
     fn read_range(&self, offset: u64, length: usize) -> Result<Vec<u8>, IvtError> {
         let mut buf = vec![0u8; length];
         self.read_exact_at(offset, &mut buf)?;
@@ -86,21 +83,31 @@ impl ReadAt for MemoryReadAt {
 }
 
 /// File-backed positional reader.
+///
+/// Reads use `pread` (Unix) or `ReadFile` with an explicit offset (Windows),
+/// so concurrent readers share the handle without a lock.
 pub struct FileReadAt {
-    file: Mutex<File>,
+    file: File,
     len: u64,
 }
 
 impl FileReadAt {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, IvtError> {
-        let path = path.as_ref().to_path_buf();
-        let file = File::open(&path)?;
+        let file = File::open(path.as_ref())?;
         let len = file.metadata()?.len();
-        Ok(Self {
-            file: Mutex::new(file),
-            len,
-        })
+        Ok(Self { file, len })
     }
+}
+
+#[cfg(unix)]
+fn read_at(file: &File, buffer: &mut [u8], offset: u64) -> std::io::Result<usize> {
+    std::os::unix::fs::FileExt::read_at(file, buffer, offset)
+}
+
+#[cfg(windows)]
+fn read_at(file: &File, buffer: &mut [u8], offset: u64) -> std::io::Result<usize> {
+    // Each call carries its own offset; the handle's cursor is not relied on.
+    std::os::windows::fs::FileExt::seek_read(file, buffer, offset)
 }
 
 impl ReadAt for FileReadAt {
@@ -110,44 +117,23 @@ impl ReadAt for FileReadAt {
 
     fn read_exact_at(&self, offset: u64, buffer: &mut [u8]) -> Result<(), IvtError> {
         check_bounds(offset, buffer.len(), self.len)?;
-        #[cfg(windows)]
-        {
-            use std::os::windows::fs::FileExt;
-            let file = self.file.lock().unwrap();
-            let mut read = 0usize;
-            while read < buffer.len() {
-                let n = file
-                    .seek_read(&mut buffer[read..], offset + read as u64)
-                    .map_err(IvtError::Io)?;
-                if n == 0 {
-                    return Err(IvtError::UnexpectedEof {
-                        offset: offset + read as u64,
-                        expected: buffer.len() - read,
-                        actual: 0,
-                    });
-                }
-                read += n;
+        let mut read = 0usize;
+        while read < buffer.len() {
+            let n = match read_at(&self.file, &mut buffer[read..], offset + read as u64) {
+                Ok(n) => n,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(e) => return Err(IvtError::Io(e)),
+            };
+            if n == 0 {
+                return Err(IvtError::UnexpectedEof {
+                    offset: offset + read as u64,
+                    expected: buffer.len() - read,
+                    actual: 0,
+                });
             }
-            Ok(())
+            read += n;
         }
-        #[cfg(not(windows))]
-        {
-            let mut file = self.file.lock().unwrap();
-            file.seek(SeekFrom::Start(offset))?;
-            let mut read = 0usize;
-            while read < buffer.len() {
-                let n = file.read(&mut buffer[read..])?;
-                if n == 0 {
-                    return Err(IvtError::UnexpectedEof {
-                        offset: offset + read as u64,
-                        expected: buffer.len() - read,
-                        actual: 0,
-                    });
-                }
-                read += n;
-            }
-            Ok(())
-        }
+        Ok(())
     }
 }
 
