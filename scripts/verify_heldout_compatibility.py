@@ -131,7 +131,7 @@ def partition_result(ivt, counts, slugs):
     digests = []
     rows = 0
     for member in range(1, counts[0] + 1):
-        table = ivt.to_arrow(**{slugs[0]: [member]})
+        table = ivt.to_arrow(select={slugs[0]: [member]})
         rows += table.num_rows
         digests.append(arrow_digest(table))
         del table

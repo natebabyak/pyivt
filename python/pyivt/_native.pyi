@@ -10,10 +10,12 @@ members = ivt.to_member_table()
 ```
 """
 
+from collections.abc import Mapping
 from os import PathLike
-from typing import Any, BinaryIO, Literal
+from typing import BinaryIO, Literal, Protocol, overload
 
 import pyarrow as pa
+from typing_extensions import deprecated
 
 from pyivt._types import DimensionType, Frequency
 
@@ -154,7 +156,7 @@ class Footnote:
 class MissingValue:
     """A missing-value or status legend entry from IvtMetadata.missing_values.
 
-    The optional numeric code links this entry to Arrow's status_code column.
+    The optional numeric code is the status code stored in the file's cells.
     The symbol and localized description explain the file-defined status. Attributes
     are read-only; instances cannot be constructed directly.
 
@@ -311,15 +313,11 @@ class IvtMetadata:
 
         Returns MissingValue entries linking numeric codes to symbols and
         localized descriptions, or an empty list if none are found. Raises
-        pyivt.IvtError on loading errors. Use the Arrow C stream for per-cell statuses.
+        pyivt.IvtError on loading errors. Per-cell statuses are not exported yet.
         """
-    def _loaded(self, name: str) -> bool:
-        """Internal diagnostic: whether a named lazy metadata field is cached."""
-    def _io_metrics(self) -> tuple[int, int, int, bool]:
-        """Internal: bytes read / read ops during metadata I/O (for benchmarks)."""
 
 class _Layout:
-    """Read-only decoding layout, obtained from Ivt._layout.
+    """Private read-only decoding layout, obtained from Ivt._layout.
 
     counts and slugs follow file dimension order and describe the exported grid.
     geo_dim and straddle are one-based dimension indices; subtract 1 before
@@ -367,68 +365,119 @@ class Ivt:
     @property
     def metadata(self) -> IvtMetadata:
         """Shared metadata object; detailed member and legend fields load on demand."""
-    @property
-    def _layout(self) -> _Layout:
-        """Snapshot of dimension counts, Arrow column slugs and IVT paging details."""
-    def _arrow_c_stream(self, requested_schema: Any = None) -> Any:
-        """Export detailed batches in file order, including statuses and footnotes.
-
-        Each capsule owns an independent reader. Schema requests raise ValueError.
-        """
-    def to_arrow(self, /, **dims: object) -> pa.Table:
+    @overload
+    def to_arrow(
+        self,
+        /,
+        *,
+        select: Mapping[str, object] | None = None,
+        max_memory_bytes: int = 2_147_483_648,
+    ) -> pa.Table:
         """Return 1-based member positions and nullable float64 values as a table.
 
-        Pass dimension slugs as keywords. An integer fixes a dimension and
-        drops its column. A list of integers keeps the column and limits its
-        rows. Omitted dimensions include all members. An empty list gives zero
-        rows. Invalid slugs and codes raise ValueError before decoding.
+        `select` maps dimension slugs to member codes, which are 1-based
+        positions in file order. An integer fixes a dimension and drops its
+        column. A list of integers keeps the column and limits its rows.
+        Omitted dimensions include all members. An empty list gives zero rows.
+        Invalid slugs and codes raise ValueError before decoding.
 
         Each call decodes the selection into new buffers. The reader keeps no
         reference to the result, so dropping it releases its memory; repeated
         identical calls return equal but independent tables. A reader opened
         from a path reads the file for each export and does not keep it.
 
-        The whole result must fit an internal 2 GiB memory estimate, which
-        counts the output and one copy of the file. Larger selections raise
-        pyivt.ResourceLimitError; stream them with iter_batches() instead.
+        The result plus one copy of the file must fit `max_memory_bytes`
+        (default 2 GiB). Larger selections raise pyivt.ResourceLimitError:
+        raise the limit, or stream them with iter_batches(). A limit that is
+        not positive raises ValueError.
+
+        ```python
+        table = ivt.to_arrow(select={"geography": 1, "census_year": [1, 2]})
+        ```
         """
+    @overload
+    @deprecated("Pass dimensions as select={...} instead of keyword arguments.")
+    def to_arrow(
+        self, /, *, max_memory_bytes: int = 2_147_483_648, **dims: object
+    ) -> pa.Table:
+        """Deprecated: pass dimensions as `select={...}`."""
+    @overload
     def iter_batches(
-        self, /, *, batch_size: int = 1_048_576, **dims: object
+        self,
+        /,
+        *,
+        select: Mapping[str, object] | None = None,
+        batch_size: int = 1_048_576,
+        max_memory_bytes: int = 2_147_483_648,
     ) -> pa.RecordBatchReader:
         """Stream the to_arrow() table as record batches of at most batch_size rows.
 
-        Takes the same dimension keywords as to_arrow(). Batches arrive in file
-        order and share to_arrow()'s schema and metadata, so concatenating them
-        equals to_arrow(**dims). Each batch is decoded when the consumer asks
-        for it, without holding the GIL. Memory stays near one copy of the file
-        plus about two batches, whatever the total row count.
+        Takes the same `select` as to_arrow(). Batches arrive in file order
+        and share to_arrow()'s schema and metadata, so concatenating them
+        equals to_arrow(select=...). Each batch is decoded when the consumer
+        asks for it, without holding the GIL. Memory stays near one copy of
+        the file plus about two batches, whatever the total row count.
 
         The reader implements the Arrow C stream protocol, so pyarrow,
         polars.DataFrame(reader), DuckDB and other consumers read it without
         copying. A stream can be read once. It keeps its own reference to
         the file contents, so it outlives the Ivt and later changes to the
         path. A corrupt page raises when its batch is read and ends the
-        stream. batch_size must be positive; a batch too large for the
-        internal 2 GiB estimate raises pyivt.ResourceLimitError.
+        stream. batch_size must be positive. One copy of the file plus two
+        batches must fit `max_memory_bytes` (default 2 GiB), or
+        pyivt.ResourceLimitError is raised.
 
         ```python
-        with ivt.iter_batches(geography=[1, 2]) as reader:
+        with ivt.iter_batches(select={"geography": [1, 2]}) as reader:
             for batch in reader:
                 ...
         frame = polars.DataFrame(ivt.iter_batches())
         ```
         """
+    @overload
+    @deprecated("Pass dimensions as select={...} instead of keyword arguments.")
+    def iter_batches(
+        self,
+        /,
+        *,
+        batch_size: int = 1_048_576,
+        max_memory_bytes: int = 2_147_483_648,
+        **dims: object,
+    ) -> pa.RecordBatchReader:
+        """Deprecated: pass dimensions as `select={...}`."""
+    @overload
     def to_member_table(
-        self, /, *, language: Literal["en", "fr"] = "en", **dims: object
+        self,
+        /,
+        *,
+        select: Mapping[str, object] | None = None,
+        language: Literal["en", "fr"] = "en",
     ) -> pa.Table:
         """Return one Arrow table with a dictionary-encoded dimension column first.
 
-        The same keyword arguments select the same codes as to_arrow().
-        Each row identifies a retained dimension by slug and a member by its
-        unsigned 1-based code. The label is nullable and uses the requested
-        language. Native attributes are null where absent. When present, the
-        native Code is a separate text column. No cells are decoded.
+        The same `select` picks the same codes as to_arrow(). Each row
+        identifies a retained dimension by slug and a member by its unsigned
+        1-based code. The label is nullable and uses the requested language.
+        Native attributes are null where absent. When present, the native
+        Code is a separate text column. No cells are decoded.
         """
+    @overload
+    @deprecated("Pass dimensions as select={...} instead of keyword arguments.")
+    def to_member_table(
+        self, /, *, language: Literal["en", "fr"] = "en", **dims: object
+    ) -> pa.Table:
+        """Deprecated: pass dimensions as `select={...}`."""
+
+class _IvtInternals(Protocol):  # noqa: PYI046 (used by pyivt._export)
+    """Private hooks on Ivt for pyivt's own modules and tests.
+
+    They exist at runtime but are not part of the public Ivt type. Reach them
+    with ``typing.cast("_IvtInternals", ivt)``.
+    """
+
+    @property
+    def _layout(self) -> _Layout:
+        """Snapshot of dimension counts, Arrow column slugs and IVT paging details."""
     def _member_fields(
         self,
     ) -> tuple[
@@ -437,10 +486,19 @@ class Ivt:
         list[tuple[bool, tuple[str | None, str | None], tuple[int | None, int | None]]],
     ]: ...
 
+__version__: str
+"""Package version the extension was built with (from Cargo.toml)."""
+
+def _open_owned(
+    source: str | PathLike[str] | bytes | bytearray | memoryview,
+    owner: object,
+    /,
+) -> Ivt:
+    """Open source and keep owner alive as long as the reader's metadata."""
+
 def open(
     source: str | PathLike[str] | bytes | bytearray | memoryview | BinaryIO,
-    *,
-    _source_owner: object | None = None,
+    /,
 ) -> Ivt:
     """Open a Beyond 20/20 IVT source without decoding its cell values.
 

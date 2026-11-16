@@ -217,7 +217,7 @@ def test_full_grid_and_repeatable_export(ivt_path: Path, tmp_path: Path) -> None
     with pa.ipc.open_file(arrow_path) as reader:
         assert table.equals(reader.read_all())
     with pytest.raises(ValueError, match="unknown dimension .complete."):
-        ivt.to_arrow(complete=False)
+        ivt.to_arrow(select={"complete": False})
 
 
 @pytest.mark.parametrize(

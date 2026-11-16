@@ -12,6 +12,7 @@ from typing import Literal
 
 from pyivt import __version__
 from pyivt import open as open_ivt
+from pyivt._export import internals
 
 _RUFF_LINE_LENGTH = 88
 
@@ -49,7 +50,7 @@ def _write_types(source: Path, output: Path, language: Literal["en", "fr"]) -> N
         raise ValueError("the output must differ from the input file")
     ivt = open_ivt(source)
     members = ivt.to_member_table(language=language)
-    _, native_fields, _ = ivt._member_fields()
+    _, native_fields, _ = internals(ivt)._member_fields()
     # The file digest pins the exact source bytes; pyivt.table_id does not.
     hasher = hashlib.sha256()
     with source.open("rb") as file:
@@ -68,7 +69,7 @@ def _write_types(source: Path, output: Path, language: Literal["en", "fr"]) -> N
     classes = {"Dimensions", "IntEnum", "TypedDict", *kwlist}
     dimensions = []
     native_codes = []
-    layout = ivt._layout
+    layout = internals(ivt)._layout
     offset = 0
     for slug, count, fields in zip(
         layout.slugs, layout.counts, native_fields, strict=True
