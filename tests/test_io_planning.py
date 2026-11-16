@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import os
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pyivt
@@ -106,3 +108,50 @@ def test_file_truncated_after_open_is_read_not_mapped(tmp_path):
         stream.truncate(len(source) // 2)
     with pytest.raises(pyivt.IvtError):
         ivt.to_arrow()
+
+
+def _concurrently(ivt, export, workers=2):
+    """Run ``export(ivt)`` on several threads released at the same moment."""
+    barrier = threading.Barrier(workers)
+
+    def run(_):
+        barrier.wait()
+        return export(ivt)
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return list(pool.map(run, range(workers)))
+
+
+@pytest.mark.parametrize("mmap", ["1", "0"])
+def test_concurrent_first_exports_load_the_file_once(mmap, monkeypatch):
+    monkeypatch.setenv("PYIVT_MMAP", mmap)
+    path = _FIXTURES / "heldout" / "98100042.ivt"
+    ivt = pyivt.open(path)
+    assert ivt._full_loads() == 0
+    tables = _concurrently(ivt, lambda ivt: ivt.to_arrow())
+    assert tables[0].equals(tables[1])
+    assert ivt._full_loads() == 1
+
+
+def test_concurrent_streams_share_one_load():
+    ivt = pyivt.open(_FIXTURES / "98100018-paged.ivt")
+    barrier = threading.Barrier(2)
+
+    def stream(ivt):
+        # Each thread holds its stream open until both have started one, so
+        # the second load request always overlaps the first one's bytes.
+        batches = ivt.iter_batches()
+        barrier.wait()
+        return sum(batch.num_rows for batch in batches)
+
+    assert len(set(_concurrently(ivt, stream))) == 1
+    assert ivt._full_loads() == 1
+    # Once no export holds the bytes, a later export loads the file again.
+    ivt.to_arrow()
+    assert ivt._full_loads() == 2
+
+
+def test_in_memory_open_never_loads_from_disk():
+    ivt = pyivt.open((_FIXTURES / "98100018-paged.ivt").read_bytes())
+    _concurrently(ivt, lambda ivt: ivt.to_arrow())
+    assert ivt._full_loads() == 0

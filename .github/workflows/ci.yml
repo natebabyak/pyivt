@@ -13,6 +13,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
 
       - uses: Swatinem/rust-cache@v2
 
@@ -46,8 +48,16 @@ jobs:
           uv run --no-sync mypy tests/typing
           uv run --no-sync pyright tests/typing
 
-      - name: Compile native fuzz targets
-        run: cargo check --manifest-path fuzz/Cargo.toml --bins --locked
+      - name: Rust format
+        run: |
+          cargo fmt --check
+          cargo fmt --check --manifest-path fuzz/Cargo.toml
+
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Clippy native fuzz targets
+        run: cargo clippy --manifest-path fuzz/Cargo.toml --bins --locked -- -D warnings
 
   test:
     name: test (${{ matrix.os }}, Python ${{ matrix.python }}, pyarrow ${{ matrix.pyarrow }})
@@ -103,8 +113,9 @@ jobs:
           uv run python scripts/download_test_inputs.py --manifest tests/corpus/training.json
           uv run python scripts/download_test_inputs.py --manifest tests/corpus/legacy.json
 
+      # The same entry point CONTRIBUTING.md documents for local runs.
       - name: Rust tests
-        run: cargo test
+        run: uv run --no-sync python scripts/cargo_test.py
 
       - name: Install minimum supported Arrow
         if: matrix.pyarrow == '14.0.2'

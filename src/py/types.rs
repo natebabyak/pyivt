@@ -4,6 +4,7 @@ use pyo3::exceptions::{PyKeyError, PyOSError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes, PyDict, PyList, PyString, PyTuple};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::arrow_export::stream_capsule;
@@ -624,6 +625,9 @@ pub struct Ivt {
     /// File bytes read for a path open. Held weakly, so they are freed once no
     /// export or stream uses them; a later export reads the file again.
     loaded: Mutex<Option<WeakSharedBytes>>,
+    /// Full-file loads from `path`, for tests that check concurrent exports
+    /// share one load.
+    full_loads: AtomicU64,
     path: Option<PathBuf>,
     /// Source length the metadata was parsed against.
     opened_len: u64,
@@ -842,6 +846,11 @@ impl Ivt {
             .call_method1("_import_from_c_capsule", (capsule,))?
             .call_method0("read_all")?
             .call_method1("replace_schema_metadata", (metadata,))
+    }
+
+    /// Private: how many times the whole file has been loaded from its path.
+    fn _full_loads(&self) -> u64 {
+        self.full_loads.load(Ordering::Relaxed)
     }
 
     /// Private member bridge: table id, per-axis `(name, kind, values)` lists
@@ -1162,6 +1171,7 @@ impl Ivt {
             .ok_or_else(|| IvtError::Parse("IVT has no in-memory data or path".into()))?;
         // Memory-mapped when the file still has the length parsed at open.
         let bytes = crate::io::load_file(path, self.opened_len)?;
+        self.full_loads.fetch_add(1, Ordering::Relaxed);
         *loaded = Some(bytes.downgrade());
         Ok(bytes)
     }
@@ -1266,6 +1276,7 @@ fn open_with_owner(
                 py_layout,
                 data: Mutex::new(None),
                 loaded: Mutex::new(None),
+                full_loads: AtomicU64::new(0),
                 path: Some(path),
                 opened_len,
                 maps: Mutex::new(None),
@@ -1297,6 +1308,7 @@ fn open_with_owner(
                 py_layout,
                 data: Mutex::new(Some(data)),
                 loaded: Mutex::new(None),
+                full_loads: AtomicU64::new(0),
                 path: None,
                 opened_len,
                 maps: Mutex::new(None),

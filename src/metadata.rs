@@ -82,8 +82,6 @@ pub struct Dimension {
     /// Beyond File Summary "Items": the declared dimension member count.
     pub count: i64,
     pub dimension_type: DimensionType,
-    /// Internal: geo dim flag for tidy export (not exposed to Python).
-    pub is_geography: bool,
     pub description_en: Option<String>,
     pub description_fr: Option<String>,
     pub members_en: Option<Vec<String>>,
@@ -157,8 +155,6 @@ pub struct IvtMetadata {
     source: IvtSource,
     metadata_image: Option<Vec<u8>>,
     desc: Descriptor,
-    #[allow(dead_code)]
-    master_entries: Vec<(u32, u16)>,
     dimensions: Option<Vec<Dimension>>,
     geographies: Option<Geographies>,
     footnotes: Option<Vec<Footnote>>,
@@ -352,31 +348,6 @@ fn plan_directories(planned: &mut PlannedReader<'_, IvtSource>, header: &[u8], s
         .flat_map(|directory| directory.page_ranges(&*planned))
         .collect();
     planned.prefetch(&pages, METADATA_MERGE_GAP);
-}
-
-fn master_dir_entries(data: &[u8], max_entries: usize) -> Vec<(u32, u16)> {
-    let mut out = Vec::new();
-    let Some(master) = crate::header::slot_offset(data, HDR_MASTER_PTR) else {
-        return out;
-    };
-    let Ok(directory) = crate::metadata_directory::MetadataDirectory::new(data, master) else {
-        return out;
-    };
-    for index in 0..max_entries.min(directory.count) {
-        let Ok(raw) = directory.entry(data, index) else {
-            break;
-        };
-        let off = u32(raw, 0);
-        let s1 = u16(raw, 4);
-        if off == 0 && s1 == 0 {
-            continue;
-        }
-        if s1 == 0 || (off as usize) + (s1 as usize) > data.len() {
-            continue;
-        }
-        out.push((off, s1));
-    }
-    out
 }
 
 /// Indexed master entries retain holes: language references are entry ordinals.
@@ -1150,7 +1121,6 @@ pub fn build_dimensions(data: &[u8], desc: &Descriptor) -> Vec<Dimension> {
             name_fr,
             count: items,
             dimension_type: dimension_type_for(d),
-            is_geography: is_geo,
             description_en,
             description_fr,
             members_en,
@@ -1210,7 +1180,6 @@ fn build_metadata_memory(
         Some(d) => d,
         None => parse_descriptor(data)?,
     };
-    let master_entries = master_dir_entries(data, 32);
     let info = parse_table_identity(data);
     let (notes_en, notes_fr, notes_pid) = parse_identity_notes(data);
     let product_id = info.get("product_id").cloned().flatten().or(notes_pid);
@@ -1248,7 +1217,6 @@ fn build_metadata_memory(
         read_only: Some(read_only_flag(data)),
         source,
         desc,
-        master_entries,
         metadata_image: None,
         dimensions: None,
         geographies: None,

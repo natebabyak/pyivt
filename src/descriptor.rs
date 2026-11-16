@@ -14,14 +14,11 @@ pub struct DimDesc {
     pub name: String,
     pub count: i64,
     pub type_code: i64,
-    #[allow(dead_code)]
     pub double01: bool,
 }
 
 #[derive(Debug, Clone)]
 pub struct Descriptor {
-    #[allow(dead_code)]
-    pub offset: u32,
     pub dims: Vec<DimDesc>,
     /// Full English and French axis titles, when the file stores them.
     pub titles: Vec<[Option<String>; 2]>,
@@ -193,7 +190,6 @@ pub fn structured_descriptor(data: &[u8]) -> Result<Descriptor, IvtError> {
         .collect::<Result<Vec<_>, _>>()?;
     let titles = crate::metadata::full_dimension_titles(data, &dims);
     Ok(Descriptor {
-        offset,
         titles,
         member_slots,
         allocation_bits: (data.first() == Some(&2)).then_some(allocation_bits),

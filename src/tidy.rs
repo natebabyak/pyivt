@@ -16,47 +16,6 @@ use arrow::record_batch::RecordBatch;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-#[allow(dead_code)]
-pub fn label_depth(labels: &[String], unit: usize) -> Vec<i64> {
-    labels
-        .iter()
-        .map(|lab| {
-            let lead = lab.len() - lab.trim_start_matches(' ').len();
-            if unit < 1 {
-                0
-            } else {
-                (lead / unit) as i64
-            }
-        })
-        .collect()
-}
-
-#[allow(dead_code)]
-pub fn label_parent(labels: &[String], unit: usize) -> Vec<Option<i64>> {
-    let depths = label_depth(labels, unit);
-    let mut parent: Vec<Option<i64>> = vec![None; depths.len()];
-    let mut last_at: Vec<Option<i64>> = Vec::new();
-    for (i, &di) in depths.iter().enumerate() {
-        let di = di as usize;
-        if di > 0 && !last_at.is_empty() {
-            for k in (0..di.min(last_at.len())).rev() {
-                if last_at[k].is_some() {
-                    parent[i] = last_at[k];
-                    break;
-                }
-            }
-        }
-        if last_at.len() > di + 1 {
-            last_at[di + 1..].fill(None);
-        }
-        while last_at.len() <= di {
-            last_at.push(None);
-        }
-        last_at[di] = Some((i + 1) as i64);
-    }
-    parent
-}
-
 /// Member arrays are allocated once and shared by every exported batch.
 pub struct TidySchema {
     pub schema: SchemaRef,
@@ -350,19 +309,5 @@ mod tests {
             indices.values().as_ptr(),
             dictionary.keys().values().as_ptr()
         );
-    }
-
-    #[test]
-    fn test_label_hierarchy() {
-        let labels = ["Total", "  With", "    Low", "  Without"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<_>>();
-        assert_eq!(label_depth(&labels, 2), vec![0, 1, 2, 1]);
-        let parents = label_parent(&labels, 2);
-        assert_eq!(parents[0], None);
-        assert_eq!(parents[1], Some(1));
-        assert_eq!(parents[2], Some(2));
-        assert_eq!(parents[3], Some(1));
     }
 }

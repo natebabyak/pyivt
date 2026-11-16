@@ -38,6 +38,7 @@ PUBLIC = {
 # Private hooks that exist at runtime for pyivt's own code and tests only.
 PRIVATE_MEMBERS = {
     "_arrow_c_stream",
+    "_full_loads",
     "_io_metrics",
     "_layout",
     "_legacy_to_arrow",
