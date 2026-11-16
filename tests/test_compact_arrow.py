@@ -223,15 +223,16 @@ def test_selection_precedes_row_allocation_and_members_do_not_decode():
         ivt.to_arrow()
 
 
-def test_cached_buffers_threading_and_lifetime():
+def test_uncached_exports_threading_and_lifetime():
     ivt = pyivt.open(_typed_fixture())
     first = ivt.to_arrow()
     with ThreadPoolExecutor(max_workers=4) as pool:
         tables = list(pool.map(lambda _: ivt.to_arrow(), range(8)))
     assert all(t.equals(first) for t in tables)
+    # The reader keeps no output, so each export owns its own buffers.
     assert (
         first["value"].chunk(0).buffers()[1].address
-        == tables[0]["value"].chunk(0).buffers()[1].address
+        != tables[0]["value"].chunk(0).buffers()[1].address
     )
     ivt = None
     assert first["value"].equals(_expected_table()["value"])
@@ -387,13 +388,14 @@ def test_polars_retains_unsigned_codes():
         assert frame[name].to_list() == table[name].to_pylist()
 
 
-def test_equivalent_selections_share_buffers():
+def test_equivalent_selections_are_equal_and_independent():
     ivt = pyivt.open(_typed_fixture())
     table = ivt.to_arrow(time=[3, 1], geography=[2])
     equivalent = ivt.to_arrow(geography=[2], time=[1, 3])
+    assert table.equals(equivalent)
     assert (
         table["geography"].chunk(0).buffers()[1].address
-        == equivalent["geography"].chunk(0).buffers()[1].address
+        != equivalent["geography"].chunk(0).buffers()[1].address
     )
     fixed = ivt.to_arrow(geography=2, time=[3, 1])
     assert fixed.column_names == ["measure", "time", "value"]

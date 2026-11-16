@@ -2,7 +2,7 @@
 
 use std::fmt;
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 /// Immutable file contents shared by the metadata source and the reader.
 ///
@@ -15,6 +15,22 @@ impl SharedBytes {
     /// Share the immutable buffer of `owner` without copying it.
     pub fn from_owner(owner: impl AsRef<[u8]> + Send + Sync + 'static) -> Self {
         Self(Arc::new(owner))
+    }
+
+    /// A non-owning handle that stays valid only while another clone lives.
+    pub fn downgrade(&self) -> WeakSharedBytes {
+        WeakSharedBytes(Arc::downgrade(&self.0))
+    }
+}
+
+/// Weak counterpart of [`SharedBytes`]; it never keeps the contents alive.
+#[derive(Clone)]
+pub struct WeakSharedBytes(Weak<dyn AsRef<[u8]> + Send + Sync>);
+
+impl WeakSharedBytes {
+    /// The contents, if some strong owner still holds them.
+    pub fn upgrade(&self) -> Option<SharedBytes> {
+        self.0.upgrade().map(SharedBytes)
     }
 }
 
