@@ -2,6 +2,8 @@
 
 import struct
 
+_TEXT_CHUNK = 512
+
 
 def cube(counts: tuple[int, ...], label_fields: int = 8) -> bytes:
     data = bytearray(1024)
@@ -43,16 +45,18 @@ def cube(counts: tuple[int, ...], label_fields: int = 8) -> bytes:
             struct.pack_into("<H", definition, 18, 1)
             struct.pack_into("<I", definition, 26, len(records))
             definitions.extend(definition)
-            text = bytearray(struct.pack("<H", count))
-            for member in range(count):
-                label = f"Axis {axis} field {field} member {member:04d} with repeated text".encode()
-                text.extend(bytes([len(label)]) + label + b"\0")
-            records.extend(
-                [
-                    struct.pack("<BBHI", 4, 1, 1, len(records) + 1),
-                    struct.pack("<BBH", 1, 1, len(text)) + text,
-                ]
-            )
+            # Split text into chunks so large axes fit 64 KiB records.
+            chunks = []
+            for start in range(0, max(count, 1), _TEXT_CHUNK):
+                text = bytearray(struct.pack("<H", min(count - start, _TEXT_CHUNK)))
+                for member in range(start, min(count, start + _TEXT_CHUNK)):
+                    label = f"Axis {axis} field {field} member {member:04d} with repeated text".encode()
+                    text.extend(bytes([len(label)]) + label + b"\0")
+                chunks.append(struct.pack("<BBH", 1, 1, len(text)) + text)
+            first = len(records) + 1
+            index = struct.pack("<BBH", 4, 1, len(chunks))
+            index += struct.pack(f"<{len(chunks)}I", *range(first, first + len(chunks)))
+            records.extend([index, *chunks])
         records[0] = bytes(definitions)
         directory(824 + 14 * axis, records)
     settings = bytearray(32)
