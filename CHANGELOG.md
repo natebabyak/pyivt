@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.11] - 2026-11-15
+
 ### Changed
 
 - **Breaking:** pyivt requires Python 3.11 or later. Python 3.10 reached end of life in October 2026. Wheels are built for the `abi3-py311` stable ABI (tagged `cp311-abi3`), and Python 3.14 and 3.15 are now listed as supported.
@@ -20,7 +22,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pyivt.open.__module__` is `"pyivt"`, like the public classes and exceptions.
 - The docstrings of the private `DimensionType` and `Frequency` type aliases no longer suggest importing them from `pyivt`, which does not export them.
 - Release builds use fat LTO and strip symbols (`[profile.release]` in `Cargo.toml`). The Linux x86_64 wheel is 22% smaller: 1.79 MB instead of 2.29 MB, with the extension module at 4.6 MB instead of 8.1 MB. macOS and Linux aarch64 wheels are 15–24% smaller. The Windows wheel stays the same size. Value decoding is no slower. `codegen-units = 1` was left out because it made value decoding about 15% slower. Panics still unwind, so a Rust panic raises `PanicException` instead of ending the interpreter. See [docs/benchmarks/release-profile.md](docs/benchmarks/release-profile.md).
-
 - `open()` on a path plans its metadata reads and coalesces nearby ranges, instead of issuing one read per record. On 98100532 it issues 4 reads instead of 206, and the first `pyivt.table_id` issues 3 instead of 131. Metadata is unchanged. Reads no longer take a lock or go through a copying range cache. This mainly helps on network shares, where each read is a round trip.
 - Exports from a path memory-map the file instead of reading it fully, when the file still has the length it had at `open()`. Otherwise, and when mapping fails, it is read fully as before. On 98100532, `to_arrow(geography=[1])` takes 0.025 s instead of 0.123 s and peaks at 45 MB instead of 249 MB. Streaming the whole table commits 23 MB of private memory instead of 232 MB, in the same time. Do not modify or truncate a file while an export or stream uses it: on Unix, truncating a mapped file ends the process with `SIGBUS`. Set `PYIVT_MMAP=0` to always read files fully. See [docs/benchmarks/mmap-export.md](docs/benchmarks/mmap-export.md).
 - `to_arrow()` and `iter_batches()` build dimension code columns from runs and copied patterns instead of dividing per row, in parallel chunks on the same worker pool as value decoding. Output is unchanged. On 98100532, `to_arrow(geography=list(range(1, 41)))` (88.56M rows) builds its code columns in 0.31 s, against 2.91 s before, and the whole export takes about 0.42 s instead of 3.05 s. With one worker the columns take 1.91 s instead of 2.82 s. See [docs/benchmarks/code-columns.md](docs/benchmarks/code-columns.md).
@@ -276,7 +277,8 @@ First public release: Rust/PyO3 reader for Statistics Canada Beyond 20/20 `.ivt`
 - Demo IVT tests skip in CI unless Beyond sample files are linked locally
 - No CLI or catalogue download; write Parquet yourself via `pyarrow` / Polars / pandas
 
-[Unreleased]: https://github.com/natebabyak/pyivt/compare/v0.0.10...HEAD
+[Unreleased]: https://github.com/natebabyak/pyivt/compare/v0.0.11...HEAD
+[0.0.11]: https://github.com/natebabyak/pyivt/compare/v0.0.10...v0.0.11
 [0.0.10]: https://github.com/natebabyak/pyivt/compare/v0.0.9...v0.0.10
 [0.0.9]: https://github.com/natebabyak/pyivt/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/natebabyak/pyivt/compare/v0.0.7...v0.0.8
